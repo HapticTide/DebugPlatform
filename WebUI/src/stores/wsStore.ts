@@ -198,9 +198,10 @@ export const useWSStore = create<WSStore>((set, get) => ({
     }))
   },
 
-  addRealtimeFrame: (frame: WSFrame) => {
+  addRealtimeFrame: (frame: WSFrame & { sessionId?: string }) => {
     const { selectedSessionId } = get()
-    if (frame.id.startsWith(selectedSessionId || '')) {
+    // 只有当前选中的会话的帧才添加到列表
+    if (frame.sessionId === selectedSessionId) {
       set((state) => ({
         frames: [...state.frames, frame],
         totalFrames: state.totalFrames + 1,

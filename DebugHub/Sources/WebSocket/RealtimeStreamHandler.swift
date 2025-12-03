@@ -163,6 +163,20 @@ final class RealtimeStreamHandler: @unchecked Sendable {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
 
+        // 统计事件类型
+        var httpCount = 0, wsCount = 0, logCount = 0, statsCount = 0
+        for event in events {
+            switch event {
+            case .http: httpCount += 1
+            case .webSocket: wsCount += 1
+            case .log: logCount += 1
+            case .stats: statsCount += 1
+            }
+        }
+        if wsCount > 0 {
+            print("[RealtimeStream] Broadcasting events: http=\(httpCount), ws=\(wsCount), log=\(logCount), stats=\(statsCount), subscribers=\(currentSubscribers.count)")
+        }
+
         for event in events {
             let messageType: RealtimeMessage.MessageType
             let payloadJSON: String
@@ -176,6 +190,7 @@ final class RealtimeStreamHandler: @unchecked Sendable {
                 case let .webSocket(wsEvent):
                     messageType = .wsEvent
                     payloadJSON = try String(data: encoder.encode(wsEvent), encoding: .utf8) ?? "{}"
+                    print("[RealtimeStream] WS event payload: \(payloadJSON.prefix(200))...")
 
                 case let .log(logEvent):
                     messageType = .logEvent

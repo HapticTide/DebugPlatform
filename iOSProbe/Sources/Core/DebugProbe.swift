@@ -288,6 +288,7 @@ public final class DebugProbe {
         onMessageReceived: WSMessageHook
     ) {
         let onSessionCreated: WSSessionCreatedHook = { sessionId, url, headers in
+            DebugLog.info(.webSocket, "Hook: Session created - \(url)")
             let session = WSEvent.Session(
                 id: sessionId,
                 url: url,
@@ -299,6 +300,7 @@ public final class DebugProbe {
         }
 
         let onSessionClosed: WSSessionClosedHook = { sessionId, closeCode, reason in
+            DebugLog.info(.webSocket, "Hook: Session closed - \(sessionId), code: \(closeCode ?? -1)")
             var session = WSEvent.Session(id: sessionId, url: "", requestHeaders: [:], subprotocols: [])
             session.disconnectTime = Date()
             session.closeCode = closeCode
@@ -308,6 +310,7 @@ public final class DebugProbe {
         }
 
         let onMessageSent: WSMessageHook = { sessionId, data in
+            DebugLog.debug(.webSocket, "Hook: Message sent - \(sessionId), size: \(data.count)")
             let frame = WSEvent.Frame(
                 sessionId: sessionId,
                 direction: .send,
@@ -321,6 +324,7 @@ public final class DebugProbe {
         }
 
         let onMessageReceived: WSMessageHook = { sessionId, data in
+            DebugLog.debug(.webSocket, "Hook: Message received - \(sessionId), size: \(data.count)")
             let frame = WSEvent.Frame(
                 sessionId: sessionId,
                 direction: .receive,

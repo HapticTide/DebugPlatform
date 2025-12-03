@@ -223,6 +223,7 @@ export function DeviceDetailPage() {
             }
             wsStore.addRealtimeFrame({
               id: frame.id,
+              sessionId: frame.sessionId,
               direction: frame.direction,
               opcode: frame.opcode,
               payloadPreview: frame.payloadPreview ?? null,

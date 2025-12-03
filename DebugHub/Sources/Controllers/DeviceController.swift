@@ -178,6 +178,11 @@ struct DeviceController: RouteCollection {
             .filter(\.$deviceId == deviceId)
             .delete()
 
+        // 删除设备连接会话记录
+        try await DeviceSessionModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .delete()
+
         return .ok
     }
 }

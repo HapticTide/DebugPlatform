@@ -85,7 +85,17 @@ final class DebugBridgeHandler: @unchecked Sendable {
 
             case let .events(events):
                 if let deviceId = deviceIdHolder.deviceId {
-                    print("[DebugBridge] Received \(events.count) events from \(deviceId)")
+                    // 统计事件类型
+                    var httpCount = 0, wsCount = 0, logCount = 0, statsCount = 0
+                    for event in events {
+                        switch event {
+                        case .http: httpCount += 1
+                        case .webSocket: wsCount += 1
+                        case .log: logCount += 1
+                        case .stats: statsCount += 1
+                        }
+                    }
+                    print("[DebugBridge] Received \(events.count) events from \(deviceId): http=\(httpCount), ws=\(wsCount), log=\(logCount), stats=\(statsCount)")
                     handleEvents(events: events, deviceId: deviceId, req: req)
                 }
 

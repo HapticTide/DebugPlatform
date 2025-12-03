@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { DeviceListItem, DeviceDetail } from '@/types'
 import * as api from '@/services/api'
+import { useHTTPStore } from './httpStore'
+import { useLogStore } from './logStore'
 
 interface DeviceState {
   devices: DeviceListItem[]
@@ -65,6 +67,9 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
 
     try {
       await api.clearDeviceData(currentDeviceId)
+      // 清除前端 store 状态（包括会话分隔符）
+      useHTTPStore.getState().clearEvents()
+      useLogStore.getState().clearEvents()
     } catch (error) {
       set({ error: (error as Error).message })
     }

@@ -146,7 +146,7 @@ func routes(_ app: Application) throws {
     try api.register(collection: CleanupController())
 
     // Debug Bridge WebSocket 端点
-    app.webSocket("debug-bridge") { req, ws in
+    app.webSocket("debug-bridge", maxFrameSize: WebSocketMaxFrameSize(integerLiteral: 50 * 1024 * 1024)) { req, ws in
         // 设置 ping 间隔保持连接活跃（每 10 秒发送 ping）
         ws.pingInterval = .seconds(10)
         print("[DebugBridge] WebSocket configured with ping interval")
@@ -156,7 +156,7 @@ func routes(_ app: Application) throws {
     }
 
     // 实时流 WebSocket 端点
-    app.webSocket("ws", "live") { req, ws in
+    app.webSocket("ws", "live", maxFrameSize: WebSocketMaxFrameSize(integerLiteral: 50 * 1024 * 1024)) { req, ws in
         ws.pingInterval = .seconds(10)
         RealtimeStreamHandler.shared.handleConnection(req: req, ws: ws)
     }

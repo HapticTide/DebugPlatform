@@ -87,6 +87,7 @@ public final class DebugBridgeClient: NSObject {
 
     /// 是否正在重连中
     private var isReconnecting = false
+    private var isFlushing = false
 
     // MARK: - Lifecycle
 
@@ -250,7 +251,7 @@ public final class DebugBridgeClient: NSObject {
         send(.breakpointHit(hit))
     }
 
-    private func send(_ message: BridgeMessage) {
+    private func send(_ message: BridgeMessage, completion: ((Error?) -> Void)? = nil) {
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -260,9 +261,11 @@ public final class DebugBridgeClient: NSObject {
                 if let error {
                     self?.handleError(error)
                 }
+                completion?(error)
             }
         } catch {
             DebugLog.error(.bridge, "Failed to encode message: \(error)")
+            completion?(error)
         }
     }
 
@@ -295,19 +298,33 @@ public final class DebugBridgeClient: NSObject {
     /// 批量发送事件
     private func flushEvents() {
         guard let configuration else { return }
+        guard !isFlushing else { return }
 
         let events = DebugEventBus.shared.peek(count: configuration.batchSize)
         guard !events.isEmpty else { return }
 
         // 如果已连接，直接发送
         if state == .registered {
+            isFlushing = true
             DebugLog.debug(.bridge, "Flushing \(events.count) events to hub")
-            send(.events(events))
-            DebugEventBus.shared.removeFirst(events.count)
+            
+            send(.events(events)) { [weak self] error in
+                guard let self else { return }
+                if error == nil {
+                    DebugEventBus.shared.removeFirst(events.count)
+                } else {
+                    DebugLog.error(.bridge, "Failed to flush events, keeping in queue")
+                }
+                
+                self.workQueue.async {
+                    self.isFlushing = false
+                }
+            }
         } else {
             DebugLog.debug(.bridge, "Not registered (state=\(state)), events pending: \(events.count)")
             if configuration.enablePersistence {
                 // 未连接时，将事件存入持久化队列
+                // 注意：这里假设持久化是可靠的，所以直接取出并保存
                 let eventsToSave = DebugEventBus.shared.dequeueAll()
                 if !eventsToSave.isEmpty {
                     EventPersistenceQueue.shared.enqueue(eventsToSave)

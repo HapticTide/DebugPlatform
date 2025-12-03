@@ -144,6 +144,7 @@ export interface WSSessionDetail {
 
 export interface WSFrame {
   id: string
+  sessionId?: string
   direction: 'send' | 'receive'
   opcode: string
   payloadPreview: string | null

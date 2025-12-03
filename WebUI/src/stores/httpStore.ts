@@ -69,11 +69,20 @@ interface HTTPState {
   batchFavorite: (deviceId: string, isFavorite: boolean) => Promise<void>
 }
 
+// 检查是否有任何筛选条件激活
+function hasActiveFilters(filters: HTTPState['filters']): boolean {
+  return !!(filters.method || filters.urlContains || filters.mockedOnly || filters.favoritesOnly)
+}
+
 // 过滤逻辑
 function filterItems(items: ListItem[], filters: HTTPState['filters']): ListItem[] {
+  const filtersActive = hasActiveFilters(filters)
+
   return items.filter((item) => {
-    // 会话分隔符始终显示
-    if (isSessionDivider(item)) return true
+    // 当有筛选条件时，过滤掉会话分隔符
+    if (isSessionDivider(item)) {
+      return !filtersActive
+    }
 
     const event = item as HTTPEventSummary
 

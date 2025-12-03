@@ -80,6 +80,7 @@ final class EventIngestor: @unchecked Sendable {
 
         switch event.kind {
         case let .sessionCreated(session):
+            print("[EventIngestor] WS sessionCreated: id=\(session.id), url=\(session.url.prefix(80))...")
             let model = try WSSessionModel(
                 id: session.id,
                 deviceId: deviceId,
