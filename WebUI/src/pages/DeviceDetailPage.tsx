@@ -18,6 +18,7 @@ import { WSSessionList } from '@/components/WSSessionList'
 import { WSSessionDetail } from '@/components/WSSessionDetail'
 import { MockRuleList } from '@/components/MockRuleList'
 import { MockRuleEditor } from '@/components/MockRuleEditor'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { getExportHTTPUrl, getExportLogsUrl, getExportHARUrl } from '@/services/api'
 import clsx from 'clsx'
@@ -42,6 +43,8 @@ export function DeviceDetailPage() {
   const [networkCapture, setNetworkCapture] = useState(true)
   const [logCapture, setLogCapture] = useState(true)
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
+  const [showClearDeviceDialog, setShowClearDeviceDialog] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
 
   const { currentDevice, selectDevice, clearSelection, toggleCapture, clearDeviceData } =
     useDeviceStore()
@@ -271,12 +274,12 @@ export function DeviceDetailPage() {
     toggleCapture(networkCapture, checked)
   }, [toggleCapture, networkCapture])
 
-  const handleClearData = useCallback(async () => {
-    if (!confirm('确定要清空该设备的所有数据吗？此操作不可恢复。')) return
+  const handleClearDeviceData = useCallback(async () => {
     await clearDeviceData()
     httpStore.clearEvents()
     logStore.clearEvents()
     wsStore.clearSessions()
+    setShowClearDeviceDialog(false)
   }, [clearDeviceData])
 
   const handleSelectHTTPEvent = useCallback(
@@ -379,12 +382,37 @@ export function DeviceDetailPage() {
             >
               ⌨️
             </button>
-            <button
-              onClick={handleClearData}
-              className="btn bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-            >
-              🗑️ 清空
-            </button>
+            
+            {/* More Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                className="btn btn-ghost px-3"
+                title="更多操作"
+              >
+                ⋯
+              </button>
+              {showMoreMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowMoreMenu(false)} 
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-bg-dark border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={() => {
+                        setShowMoreMenu(false)
+                        setShowClearDeviceDialog(true)
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2 transition-colors"
+                    >
+                      <span>🗑️</span>
+                      <span>清空设备数据</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -434,6 +462,18 @@ export function DeviceDetailPage() {
 
       {/* Keyboard Shortcuts Help Modal */}
       <KeyboardShortcutsHelp isOpen={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
+
+      {/* Clear Device Data Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showClearDeviceDialog}
+        onClose={() => setShowClearDeviceDialog(false)}
+        onConfirm={handleClearDeviceData}
+        title="清空设备数据"
+        message={`确定要清空 "${currentDevice?.deviceInfo.deviceName || '该设备'}" 的所有数据吗？\n\n这将删除：\n• 所有 HTTP 请求记录\n• 所有日志事件\n• 所有 WebSocket 会话\n\n此操作不可恢复。`}
+        confirmText="确认清空"
+        cancelText="取消"
+        type="danger"
+      />
     </div>
   )
 }
@@ -545,12 +585,7 @@ function NetworkTab({
             自动滚动
           </label>
           
-          <button
-            onClick={() => httpStore.clearEvents()}
-            className="btn btn-ghost text-text-secondary"
-          >
-            清空
-          </button>
+          <div className="h-6 w-px bg-border" />
           
           <a
             href={getExportHTTPUrl(deviceId)}
@@ -560,6 +595,14 @@ function NetworkTab({
           >
             📤 导出
           </a>
+          
+          <button
+            onClick={() => httpStore.clearEvents()}
+            className="btn btn-ghost text-text-muted hover:text-red-400 hover:bg-red-500/10"
+            title="清空列表 (Ctrl+L)"
+          >
+            🧹
+          </button>
         </div>
       </div>
 
@@ -636,12 +679,9 @@ function LogsTab({
             />
             自动滚动
           </label>
-          <button
-            onClick={() => logStore.clearEvents()}
-            className="btn btn-ghost text-text-secondary"
-          >
-            清空
-          </button>
+          
+          <div className="h-6 w-px bg-border" />
+          
           <a
             href={getExportLogsUrl(deviceId)}
             target="_blank"
@@ -650,6 +690,14 @@ function LogsTab({
           >
             📤 导出
           </a>
+          
+          <button
+            onClick={() => logStore.clearEvents()}
+            className="btn btn-ghost text-text-muted hover:text-red-400 hover:bg-red-500/10"
+            title="清空列表 (Ctrl+L)"
+          >
+            🧹
+          </button>
         </div>
       </div>
 

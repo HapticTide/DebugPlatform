@@ -219,16 +219,26 @@ private struct WebSocketSessionInfo {
 extension URLSession {
     @objc dynamic func debugProbe_webSocketTask(with url: URL) -> URLSessionWebSocketTask {
         let task = debugProbe_webSocketTask(with: url) // 调用原始实现
-        WebSocketInstrumentation.shared.registerSession(task: task, url: url, headers: [:])
+
+        // 排除 DebugProbe 自己的 debug-bridge 连接
+        if !url.absoluteString.contains("debug-bridge") {
+            WebSocketInstrumentation.shared.registerSession(task: task, url: url, headers: [:])
+        }
+
         return task
     }
 
     @objc dynamic func debugProbe_webSocketTask(withRequest request: URLRequest) -> URLSessionWebSocketTask {
         let task = debugProbe_webSocketTask(withRequest: request) // 调用原始实现
+
         if let url = request.url {
-            let headers = request.allHTTPHeaderFields ?? [:]
-            WebSocketInstrumentation.shared.registerSession(task: task, url: url, headers: headers)
+            // 排除 DebugProbe 自己的 debug-bridge 连接
+            if !url.absoluteString.contains("debug-bridge") {
+                let headers = request.allHTTPHeaderFields ?? [:]
+                WebSocketInstrumentation.shared.registerSession(task: task, url: url, headers: headers)
+            }
         }
+
         return task
     }
 }

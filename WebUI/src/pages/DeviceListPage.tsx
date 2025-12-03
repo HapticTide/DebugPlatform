@@ -79,11 +79,12 @@ function EmptyState({ isLoading }: { isLoading: boolean }) {
             <p className="text-sm text-text-muted mb-6">
               请确保 iOS App 已集成 DebugProbe 并连接到 Debug Hub
             </p>
-            <div className="text-left bg-bg-medium rounded-xl p-4 text-xs font-mono text-text-secondary">
+            <div className="text-left bg-bg-medium rounded-xl p-4 text-xs font-mono text-text-secondary overflow-x-auto">
               <p className="text-text-muted mb-2">// 在 AppDelegate 中初始化</p>
-              <p className="text-primary">DebugProbe</p>
-              <p className="pl-4">.configure(hubURL: "ws://your-hub:8080")</p>
-              <p className="pl-4">.start()</p>
+              <p><span className="text-purple-400">let</span> config = <span className="text-primary">DebugProbe.Configuration</span>(</p>
+              <p className="pl-4">hubURL: <span className="text-green-400">"ws://{'<'}host{'>'}:8080/debug-bridge"</span></p>
+              <p>)</p>
+              <p className="mt-1"><span className="text-primary">DebugProbe</span>.shared.start(configuration: config)</p>
             </div>
           </>
         )}

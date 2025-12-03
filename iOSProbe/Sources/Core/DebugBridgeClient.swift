@@ -14,8 +14,19 @@ public final class DebugBridgeClient: NSObject {
     public struct Configuration {
         public let hubURL: URL
         public let token: String
-        public var reconnectInterval: TimeInterval = 3.0 // 重连间隔缩短
-        public var heartbeatInterval: TimeInterval = 15.0 // 心跳间隔缩短，保持连接活跃
+
+        /// 初始重连间隔（秒）
+        public var reconnectInterval: TimeInterval = 5.0
+
+        /// 最大重连间隔（秒）- 指数退避上限
+        public var maxReconnectInterval: TimeInterval = 60.0
+
+        /// 最大重连尝试次数（0 = 无限）
+        public var maxReconnectAttempts: Int = 0
+
+        /// 心跳间隔
+        public var heartbeatInterval: TimeInterval = 30.0
+
         public var batchSize: Int = 100
         public var flushInterval: TimeInterval = 1.0
 
@@ -67,6 +78,15 @@ public final class DebugBridgeClient: NSObject {
     private var eventBusSubscriptionId: String?
     private var isRecovering = false
     private var pendingEventIds: [String] = [] // 正在发送中的事件ID
+
+    /// 重连尝试次数
+    private var reconnectAttempts = 0
+
+    /// 当前重连间隔（指数退避）
+    private var currentReconnectInterval: TimeInterval = 5.0
+
+    /// 是否正在重连中
+    private var isReconnecting = false
 
     // MARK: - Lifecycle
 
@@ -180,6 +200,9 @@ public final class DebugBridgeClient: NSObject {
             updateState(.registered)
             startTimers()
 
+            // 连接成功，重置重连状态
+            resetReconnectState()
+
             // 连接成功后，开始恢复发送持久化的事件
             if configuration?.enablePersistence == true {
                 startRecovery()
@@ -205,11 +228,17 @@ public final class DebugBridgeClient: NSObject {
     }
 
     private func handleError(_ error: Error) {
-        DispatchQueue.main.async { [weak self] in
-            self?.onError?(error)
+        // 过滤掉预期的断开错误，减少日志噪音
+        let nsError = error as NSError
+        let isExpectedDisconnect = nsError.domain == NSPOSIXErrorDomain && nsError.code == 57 // Socket is not connected
+
+        if !isExpectedDisconnect {
+            DispatchQueue.main.async { [weak self] in
+                self?.onError?(error)
+            }
         }
 
-        if !isManualDisconnect {
+        if !isManualDisconnect, state != .disconnected {
             scheduleReconnect()
         }
     }
@@ -388,20 +417,49 @@ public final class DebugBridgeClient: NSObject {
     }
 
     private func scheduleReconnect() {
-        guard let configuration, !isManualDisconnect else { return }
+        guard let configuration, !isManualDisconnect, !isReconnecting else { return }
+
+        // 检查是否超过最大重试次数
+        if configuration.maxReconnectAttempts > 0, reconnectAttempts >= configuration.maxReconnectAttempts {
+            DebugLog.error(.bridge, "Max reconnect attempts (\(configuration.maxReconnectAttempts)) reached, giving up")
+            return
+        }
+
+        isReconnecting = true
+        reconnectAttempts += 1
+
+        // 计算当前重连间隔（指数退避）
+        if reconnectAttempts > 1 {
+            currentReconnectInterval = min(
+                currentReconnectInterval * 2,
+                configuration.maxReconnectInterval
+            )
+        } else {
+            currentReconnectInterval = configuration.reconnectInterval
+        }
+
+        DebugLog.debug(.bridge, "Scheduling reconnect in \(currentReconnectInterval)s (attempt \(reconnectAttempts))")
 
         internalDisconnect()
 
         DispatchQueue.main.async { [weak self] in
             self?.reconnectTimer = Timer.scheduledTimer(
-                withTimeInterval: configuration.reconnectInterval,
+                withTimeInterval: self?.currentReconnectInterval ?? 5.0,
                 repeats: false
             ) { [weak self] _ in
+                self?.isReconnecting = false
                 self?.workQueue.async {
                     self?.internalConnect()
                 }
             }
         }
+    }
+
+    /// 重置重连状态（连接成功后调用）
+    private func resetReconnectState() {
+        reconnectAttempts = 0
+        currentReconnectInterval = configuration?.reconnectInterval ?? 5.0
+        isReconnecting = false
     }
 
     // MARK: - State Management

@@ -1,6 +1,6 @@
 # Debug Platform - 网络和日志一体化调试平台
 
-一套专为内部 iOS App 设计的「生产级」调试系统，类似于内部版的 Proxyman + Log Viewer。
+一套专为内部 iOS App 设计的调试系统，类似于内部版的 Proxy Tool + Log Viewer。
 
 ## ✨ 功能特性
 
