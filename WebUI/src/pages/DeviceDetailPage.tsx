@@ -454,7 +454,13 @@ export function DeviceDetailPage() {
           <WebSocketTab deviceId={deviceId} wsStore={wsStore} />
         )}
 
-        {activeTab === 'logs' && <LogsTab deviceId={deviceId} logStore={logStore} />}
+        {activeTab === 'logs' && (
+          <LogsTab
+            deviceId={deviceId}
+            logStore={logStore}
+            onRefresh={() => logStore.fetchEvents(deviceId)}
+          />
+        )}
 
         {activeTab === 'mock' && (
           <MockTab deviceId={deviceId} mockStore={mockStore} />
@@ -658,27 +664,45 @@ function HTTPTab({
 function LogsTab({
   deviceId,
   logStore,
+  onRefresh,
 }: {
   deviceId: string
   logStore: ReturnType<typeof useLogStore.getState>
+  onRefresh: () => void
 }) {
+  // 计算过滤后的数量
+  const filteredCount = logStore.filteredEvents.length
+  const totalCount = logStore.events.length
+
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
       <div className="px-4 py-3 bg-bg-medium/50 border-b border-border flex items-center justify-between gap-4">
-        <LogFilters
-          levels={logStore.filters.levels}
-          subsystems={logStore.subsystems}
-          categories={logStore.categories}
-          selectedSubsystem={logStore.filters.subsystem}
-          selectedCategory={logStore.filters.category}
-          searchText={logStore.filters.text}
-          onToggleLevel={logStore.toggleLevel}
-          onSubsystemChange={(v) => logStore.setFilter('subsystem', v)}
-          onCategoryChange={(v) => logStore.setFilter('category', v)}
-          onSearchChange={(v) => logStore.setFilter('text', v)}
-        />
         <div className="flex items-center gap-3">
+          <button onClick={onRefresh} className="btn btn-secondary" title="刷新列表 (Ctrl+R)">
+            刷新
+          </button>
+
+          <div className="h-6 w-px bg-border" />
+
+          <LogFilters
+            levels={logStore.filters.levels}
+            subsystems={logStore.subsystems}
+            categories={logStore.categories}
+            selectedSubsystem={logStore.filters.subsystem}
+            selectedCategory={logStore.filters.category}
+            searchText={logStore.filters.text}
+            onToggleLevel={logStore.toggleLevel}
+            onSubsystemChange={(v) => logStore.setFilter('subsystem', v)}
+            onCategoryChange={(v) => logStore.setFilter('category', v)}
+            onSearchChange={(v) => logStore.setFilter('text', v)}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-text-muted bg-bg-light px-2 py-1 rounded-lg">
+            {filteredCount !== totalCount ? `${filteredCount} / ${totalCount}` : `${totalCount}`} 条记录
+          </span>
+
           <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer hover:text-text-primary transition-colors">
             <input
               type="checkbox"
@@ -688,9 +712,9 @@ function LogsTab({
             />
             自动滚动
           </label>
-          
+
           <div className="h-6 w-px bg-border" />
-          
+
           <a
             href={getExportLogsUrl(deviceId)}
             target="_blank"
@@ -699,7 +723,7 @@ function LogsTab({
           >
             导出
           </a>
-          
+
           <button
             onClick={() => logStore.clearEvents()}
             className="btn btn-ghost text-text-muted hover:text-text-secondary"
@@ -711,7 +735,7 @@ function LogsTab({
       </div>
 
       {/* Log List */}
-      <LogList events={logStore.events} autoScroll={logStore.autoScroll} />
+      <LogList events={logStore.filteredEvents} autoScroll={logStore.autoScroll} />
     </div>
   )
 }
