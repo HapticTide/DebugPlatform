@@ -6,6 +6,7 @@ import { useHTTPStore } from '@/stores/httpStore'
 import { useWSStore } from '@/stores/wsStore'
 import { useRuleStore } from '@/stores/ruleStore'
 import { getPlatformIcon, SIMULATOR_ICON } from '@/utils/deviceIcons'
+import { ServerStatsPanel } from './ServerStatsPanel'
 import clsx from 'clsx'
 
 export function Sidebar() {
@@ -509,6 +510,9 @@ export function Sidebar() {
           </div>
         )}
       </div>
+
+      {/* Server Stats Panel */}
+      <ServerStatsPanel />
 
       {/* Footer Status */}
       <div className="p-4 bg-bg-darker border-t border-border text-xs text-text-muted flex justify-between items-center">

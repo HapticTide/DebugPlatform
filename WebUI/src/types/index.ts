@@ -410,3 +410,21 @@ export interface DBQueryResponse {
   rowCount: number
   executionTimeMs: number
 }
+
+// ============================================================================
+// 服务器统计
+// ============================================================================
+
+export interface ServerStats {
+  httpEventCount: number
+  logEventCount: number
+  wsSessionCount: number
+  wsFrameCount: number
+  mockRuleCount: number
+  breakpointRuleCount: number
+  chaosRuleCount: number
+  trafficRuleCount: number
+  deviceSessionCount: number
+  onlineDeviceCount: number
+  databaseSizeBytes: number | null
+}

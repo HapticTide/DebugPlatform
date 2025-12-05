@@ -161,6 +161,9 @@ func routes(_ app: Application) throws {
     
     // 流量规则 API
     try api.register(collection: TrafficRuleController())
+    
+    // 服务器统计 API
+    try api.register(collection: StatsController())
 
     // Debug Bridge WebSocket 端点
     app.webSocket("debug-bridge", maxFrameSize: WebSocketMaxFrameSize(integerLiteral: 50 * 1024 * 1024)) { req, ws in

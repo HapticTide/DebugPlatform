@@ -542,3 +542,13 @@ export async function executeQuery(
     body: JSON.stringify({ query }),
   })
 }
+
+// ============================================================================
+// 服务器统计 API
+// ============================================================================
+
+import type { ServerStats } from '@/types'
+
+export async function getServerStats(): Promise<ServerStats> {
+  return fetchJSON(`${API_BASE}/stats`)
+}
