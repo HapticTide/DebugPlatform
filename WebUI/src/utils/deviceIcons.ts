@@ -9,11 +9,11 @@
  * 根据平台获取设备图标
  */
 export const platformIcons: Record<string, string> = {
-  iOS: '📱',
-  iPadOS: '📱',
-  macOS: '💻',
-  watchOS: '⌚',
-  tvOS: '📺',
+    iOS: '📱',
+    iPadOS: '📱',
+    macOS: '💻',
+    watchOS: '⌚',
+    tvOS: '📺',
 }
 
 /**
@@ -22,7 +22,7 @@ export const platformIcons: Record<string, string> = {
  * @returns 对应的 emoji 图标
  */
 export function getPlatformIcon(platform: string): string {
-  return platformIcons[platform] || '📱'
+    return platformIcons[platform] || '📱'
 }
 
 /**
