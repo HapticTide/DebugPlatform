@@ -339,7 +339,7 @@ export function GroupedHTTPEventList({
                 className={clsx(
                     'flex items-center cursor-pointer transition-all duration-150 group border-b border-border-light pl-8',
                     isError && !isSelected && !isHighlighted && 'bg-red-500/5 hover:bg-red-500/10',
-                    isSelected && 'bg-primary text-white shadow-sm shadow-primary/20',
+                    isSelected && 'bg-primary text-bg-darkest shadow-sm shadow-primary/20',
                     isChecked && !isSelected && 'bg-primary/15',
                     isHighlighted && !isSelected && 'bg-yellow-500/10 hover:bg-yellow-500/20 border-l-4 border-l-yellow-500',
                     isMarked && !isSelected && !isHighlighted && 'border-l-4',
@@ -369,7 +369,7 @@ export function GroupedHTTPEventList({
                 {/* Time */}
                 <div className={clsx(
                     'px-3 py-3.5 w-[90px] flex-shrink-0',
-                    isSelected ? 'text-white/80' : 'text-text-muted'
+                    isSelected ? 'text-bg-darkest/80' : 'text-text-muted'
                 )}>
                     <span className="text-sm font-mono">{formatSmartTime(event.startTime)}</span>
                 </div>
@@ -379,7 +379,7 @@ export function GroupedHTTPEventList({
                     <span
                         className={clsx(
                             'inline-flex items-center justify-center px-2 py-1 rounded-lg text-xs font-mono font-bold min-w-[50px] shadow-sm',
-                            isSelected ? 'bg-white/20 text-white' : getMethodClass(event.method)
+                            isSelected ? 'bg-bg-darkest/20 text-bg-darkest' : getMethodClass(event.method)
                         )}
                     >
                         {event.method}
@@ -391,7 +391,7 @@ export function GroupedHTTPEventList({
                     <span
                         className={clsx(
                             'inline-flex items-center justify-center px-2 py-1 rounded-lg text-xs font-mono font-semibold min-w-[40px] shadow-sm',
-                            isSelected ? 'bg-white/20 text-white' : getStatusClass(event.statusCode)
+                            isSelected ? 'bg-bg-darkest/20 text-bg-darkest' : getStatusClass(event.statusCode)
                         )}
                     >
                         {event.statusCode ?? 'ERR'}
@@ -402,7 +402,7 @@ export function GroupedHTTPEventList({
                 <div className="px-3 py-3.5 flex-1 min-w-0 overflow-hidden">
                     <span className={clsx(
                         'text-sm truncate',
-                        isSelected ? 'text-white' : 'text-text-primary'
+                        isSelected ? 'text-bg-darkest' : 'text-text-primary'
                     )} title={event.url}>
                         {(() => {
                             try {
@@ -418,7 +418,7 @@ export function GroupedHTTPEventList({
                 <div className="px-3 py-3.5 w-[80px] flex-shrink-0">
                     <span className={clsx(
                         'text-sm font-mono font-medium',
-                        isSelected ? 'text-white' : getDurationClass(event.duration)
+                        isSelected ? 'text-bg-darkest' : getDurationClass(event.duration)
                     )}>
                         {formatDuration(event.duration)}
                     </span>

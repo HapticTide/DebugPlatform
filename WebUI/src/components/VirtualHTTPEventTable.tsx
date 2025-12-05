@@ -173,7 +173,7 @@ export function VirtualHTTPEventTable({
                     // 错误状态
                     isError && !isSelected && !isHighlighted && 'bg-red-500/5 hover:bg-red-500/10',
                     // 选中状态
-                    isSelected && 'bg-primary text-white shadow-sm shadow-primary/20',
+                    isSelected && 'bg-primary text-bg-darkest shadow-sm shadow-primary/20',
                     // 批量选中
                     isChecked && !isSelected && 'bg-primary/15',
                     // 高亮规则
@@ -207,7 +207,7 @@ export function VirtualHTTPEventTable({
                 {/* Time */}
                 <div className={clsx(
                     'px-4 py-3.5 w-[100px] flex-shrink-0',
-                    isSelected ? 'text-white/80' : 'text-text-muted'
+                    isSelected ? 'text-bg-darkest/80' : 'text-text-muted'
                 )}>
                     <span className="text-sm font-mono">{formatSmartTime(event.startTime)}</span>
                 </div>
@@ -217,7 +217,7 @@ export function VirtualHTTPEventTable({
                     <span
                         className={clsx(
                             'inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-mono font-bold min-w-[60px] shadow-sm',
-                            isSelected ? 'bg-white/20 text-white' : getMethodClass(event.method)
+                            isSelected ? 'bg-bg-darkest/20 text-bg-darkest' : getMethodClass(event.method)
                         )}
                     >
                         {event.method}
@@ -229,7 +229,7 @@ export function VirtualHTTPEventTable({
                     <span
                         className={clsx(
                             'inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-mono font-semibold min-w-[44px] shadow-sm',
-                            isSelected ? 'bg-white/20 text-white' : getStatusClass(event.statusCode)
+                            isSelected ? 'bg-bg-darkest/20 text-bg-darkest' : getStatusClass(event.statusCode)
                         )}
                     >
                         {event.statusCode ?? 'ERR'}
@@ -241,13 +241,13 @@ export function VirtualHTTPEventTable({
                     <div className="flex flex-col gap-0.5">
                         <span className={clsx(
                             'text-sm truncate transition-colors',
-                            isSelected ? 'text-white' : 'text-text-primary group-hover:text-primary'
+                            isSelected ? 'text-bg-darkest' : 'text-text-primary group-hover:text-primary'
                         )} title={event.url}>
                             {truncateUrl(event.url)}
                         </span>
                         <span className={clsx(
                             'text-xs truncate font-mono',
-                            isSelected ? 'text-white/70' : 'text-text-muted opacity-70'
+                            isSelected ? 'text-bg-darkest/70' : 'text-text-muted opacity-70'
                         )}>
                             {extractDomain(event.url)}
                         </span>
@@ -258,7 +258,7 @@ export function VirtualHTTPEventTable({
                 <div className="px-4 py-3.5 w-[90px] flex-shrink-0">
                     <span className={clsx(
                         'text-sm font-mono font-medium',
-                        isSelected ? 'text-white' : getDurationClass(event.duration)
+                        isSelected ? 'text-bg-darkest' : getDurationClass(event.duration)
                     )}>
                         {formatDuration(event.duration)}
                     </span>

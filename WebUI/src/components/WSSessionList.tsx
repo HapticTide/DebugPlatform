@@ -111,7 +111,7 @@ const SessionItem = memo(function SessionItem({
         'px-4 py-3 cursor-pointer transition-all',
         'hover:bg-bg-light/50',
         isSelected && !isSelectMode
-          ? 'bg-primary text-white shadow-sm shadow-primary/20'
+          ? 'bg-primary text-bg-darkest shadow-sm shadow-primary/20'
           : '',
         !isSelected && 'border-l-2 border-l-transparent',
         isSelectMode && isChecked && 'bg-primary/15'
@@ -138,7 +138,7 @@ const SessionItem = memo(function SessionItem({
         </span>
         <span className={clsx(
           'text-xs',
-          isSelected && !isSelectMode ? 'text-white/70' : 'text-text-muted'
+          isSelected && !isSelectMode ? 'text-bg-darkest/70' : 'text-text-muted'
         )}>
           {formatSmartTime(session.connectTime)}
         </span>
@@ -147,7 +147,7 @@ const SessionItem = memo(function SessionItem({
       {/* 第二行：完整 URL */}
       <div className={clsx(
         'text-xs truncate font-mono ml-5',
-        isSelected && !isSelectMode ? 'text-white/70' : 'text-text-muted'
+        isSelected && !isSelectMode ? 'text-bg-darkest/70' : 'text-text-muted'
       )}>
         {session.url}
       </div>
@@ -157,11 +157,11 @@ const SessionItem = memo(function SessionItem({
         {session.isOpen ? (
           <span className={clsx(
             'inline-flex items-center gap-1 text-xs',
-            isSelected && !isSelectMode ? 'text-green-200' : 'text-green-400'
+            isSelected && !isSelectMode ? 'text-green-700' : 'text-green-400'
           )}>
             <span className={clsx(
               'w-1.5 h-1.5 rounded-full animate-pulse',
-              isSelected && !isSelectMode ? 'bg-green-200' : 'bg-green-400'
+              isSelected && !isSelectMode ? 'bg-green-700' : 'bg-green-400'
             )} />
             连接中
           </span>
@@ -169,14 +169,14 @@ const SessionItem = memo(function SessionItem({
           <>
             <span className={clsx(
               'text-xs',
-              isSelected && !isSelectMode ? 'text-white/70' : 'text-text-muted'
+              isSelected && !isSelectMode ? 'text-bg-darkest/70' : 'text-text-muted'
             )}>
               已关闭{session.closeCode ? ` (${session.closeCode})` : ''}
             </span>
             {duration && (
               <span className={clsx(
                 'text-xs',
-                isSelected && !isSelectMode ? 'text-white/70' : 'text-text-muted'
+                isSelected && !isSelectMode ? 'text-bg-darkest/70' : 'text-text-muted'
               )}>
                 持续 {duration}
               </span>
