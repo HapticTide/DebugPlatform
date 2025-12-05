@@ -23,20 +23,29 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { SessionActivityIndicator } from '@/components/SessionActivityIndicator'
 import { BreakpointManager } from '@/components/BreakpointManager'
 import { ChaosManager } from '@/components/ChaosManager'
+import { DBInspector } from '@/components/DBInspector'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { getExportHTTPUrl, getExportLogsUrl, getExportHARUrl, getWSSessionDetail } from '@/services/api'
 import type { BreakpointHit } from '@/types'
 import clsx from 'clsx'
 
-type Tab = 'http' | 'logs' | 'websocket' | 'mock' | 'breakpoint' | 'chaos'
+type Tab = 'http' | 'logs' | 'websocket' | 'mock' | 'breakpoint' | 'chaos' | 'database'
 
-const tabConfig = [
-  { id: 'http' as Tab, label: 'HTTP', icon: '🌐', description: 'HTTP/HTTPS 请求' },
-  { id: 'websocket' as Tab, label: 'WebSocket', icon: '🔌', description: 'WS 连接' },
-  { id: 'logs' as Tab, label: '日志', icon: '📝', description: '应用日志' },
-  { id: 'mock' as Tab, label: 'Mock', icon: '🎭', description: '接口模拟' },
-  { id: 'breakpoint' as Tab, label: '断点', icon: '⏸️', description: '请求断点' },
-  { id: 'chaos' as Tab, label: '混沌', icon: '🎲', description: '故障注入' },
+// 标签配置：按功能分组
+// 1. 核心监控: HTTP, WebSocket, 日志（最常用）
+// 2. 调试干预: 断点, Mock, 故障注入（主动操作）
+// 3. 数据查看: 数据库（独立功能）
+const tabConfig: Array<{ id: Tab; label: string; icon: string; description: string; group?: 'monitor' | 'debug' | 'data' }> = [
+  // 核心监控功能
+  { id: 'http', label: 'HTTP', icon: '🌐', description: 'HTTP/HTTPS 请求', group: 'monitor' },
+  { id: 'websocket', label: 'WebSocket', icon: '🔌', description: 'WS 连接', group: 'monitor' },
+  { id: 'logs', label: '日志', icon: '📝', description: '应用日志', group: 'monitor' },
+  // 调试干预功能
+  { id: 'breakpoint', label: '断点', icon: '⏸️', description: '请求断点', group: 'debug' },
+  { id: 'mock', label: 'Mock', icon: '🎭', description: '接口模拟', group: 'debug' },
+  { id: 'chaos', label: '故障注入', icon: '🎲', description: '故障注入', group: 'debug' },
+  // 数据查看功能
+  { id: 'database', label: '数据库', icon: '🗃️', description: 'SQLite 浏览', group: 'data' },
 ]
 
 export function DeviceDetailPage() {
@@ -84,6 +93,13 @@ export function DeviceDetailPage() {
 
   // 键盘快捷键
   useKeyboardShortcuts([
+    // 标签切换快捷键 (⌘1-7)
+    ...tabConfig.map((tab, index) => ({
+      key: String(index + 1),
+      ctrl: true,
+      description: `切换到${tab.label}`,
+      action: () => setActiveTab(tab.id),
+    })),
     {
       key: 'k',
       ctrl: true,
@@ -513,30 +529,41 @@ export function DeviceDetailPage() {
         </div>
       </header>
 
-      {/* Tabs */}
+      {/* Tabs - 按功能分组显示 */}
       <div className="px-6 py-4 bg-bg-dark border-b border-border">
-        <div className="flex gap-1 p-1 bg-bg-medium rounded-lg border border-border w-fit">
-          {tabConfig.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={clsx(
-                'flex items-center gap-2 px-5 py-2.5 rounded text-sm font-medium transition-colors relative',
-                activeTab === tab.id
-                  ? 'bg-primary text-bg-darkest'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-light'
-              )}
-            >
-              <span className="text-base">{tab.icon}</span>
-              <span>{tab.label}</span>
-              {/* Breakpoint pending count badge */}
-              {tab.id === 'breakpoint' && breakpointStore.pendingHits.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
-                  {breakpointStore.pendingHits.length}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="flex items-center gap-1 p-1 bg-bg-medium rounded-lg border border-border w-fit">
+          {tabConfig.map((tab, index) => {
+            // 在不同分组之间添加分隔线
+            const prevTab = tabConfig[index - 1]
+            const showSeparator = prevTab && prevTab.group !== tab.group
+
+            return (
+              <div key={tab.id} className="flex items-center">
+                {showSeparator && (
+                  <div className="w-px h-6 bg-border mx-1" />
+                )}
+                <button
+                  onClick={() => setActiveTab(tab.id)}
+                  title={`${tab.description} (⌘${index + 1})`}
+                  className={clsx(
+                    'flex items-center gap-2 px-5 py-2.5 rounded text-sm font-medium transition-colors relative',
+                    activeTab === tab.id
+                      ? 'bg-primary text-bg-darkest'
+                      : 'text-text-secondary hover:text-text-primary hover:bg-bg-light'
+                  )}
+                >
+                  <span className="text-base">{tab.icon}</span>
+                  <span>{tab.label}</span>
+                  {/* Breakpoint pending count badge */}
+                  {tab.id === 'breakpoint' && breakpointStore.pendingHits.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                      {breakpointStore.pendingHits.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -579,6 +606,10 @@ export function DeviceDetailPage() {
 
         {activeTab === 'chaos' && (
           <ChaosManager deviceId={deviceId} />
+        )}
+
+        {activeTab === 'database' && (
+          <DBInspector deviceId={deviceId} />
         )}
       </div>
 
@@ -871,13 +902,13 @@ function LogsTab({
           <div className="h-6 w-px bg-border" />
 
           <LogFilters
-            levels={logStore.filters.levels}
+            minLevel={logStore.filters.minLevel}
             subsystems={logStore.subsystems}
             categories={logStore.categories}
             selectedSubsystem={logStore.filters.subsystem}
             selectedCategory={logStore.filters.category}
             searchText={logStore.filters.text}
-            onToggleLevel={logStore.toggleLevel}
+            onMinLevelChange={logStore.setMinLevel}
             onSubsystemChange={(v) => logStore.setFilter('subsystem', v)}
             onCategoryChange={(v) => logStore.setFilter('category', v)}
             onSearchChange={(v) => logStore.setFilter('text', v)}

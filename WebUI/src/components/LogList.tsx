@@ -9,11 +9,11 @@ interface Props {
 }
 
 const levelLabels: Record<LogLevel, string> = {
+  verbose: 'VERBOSE',
   debug: 'DEBUG',
   info: 'INFO',
   warning: 'WARN',
   error: 'ERROR',
-  fault: 'FAULT',
 }
 
 export function LogList({ events, autoScroll }: Props) {

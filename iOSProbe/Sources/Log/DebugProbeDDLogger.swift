@@ -55,8 +55,11 @@
         // MARK: - Helpers
 
         /// 将 DDLogFlag 映射为 LogEvent.Level
+        /// CocoaLumberjack DDLogFlag: verbose, debug, info, warning, error
         private func mapDDLogFlagToLevel(_ flag: DDLogFlag) -> LogEvent.Level {
             switch flag {
+            case .verbose:
+                .verbose
             case .debug:
                 .debug
             case .info:

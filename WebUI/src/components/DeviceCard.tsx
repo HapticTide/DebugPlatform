@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import type { DeviceListItem } from '@/types'
 import { formatRelativeTime } from '@/utils/format'
+import { useDeviceStore } from '@/stores/deviceStore'
 import clsx from 'clsx'
 import type { CSSProperties } from 'react'
 
@@ -19,6 +20,13 @@ const platformIcons: Record<string, string> = {
 
 export function DeviceCard({ device, style }: Props) {
   const navigate = useNavigate()
+  const { favoriteDeviceIds, toggleFavorite } = useDeviceStore()
+  const isFavorite = favoriteDeviceIds.has(device.deviceId)
+
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    toggleFavorite(device.deviceId)
+  }
 
   return (
     <div
@@ -52,19 +60,33 @@ export function DeviceCard({ device, style }: Props) {
           </div>
         </div>
 
-        {/* Status Badge */}
-        <span
-          className={clsx(
-            'badge',
-            device.isOnline ? 'badge-success' : 'badge-danger'
-          )}
-        >
-          <span className={clsx(
-            'w-1.5 h-1.5 rounded-full mr-1.5',
-            device.isOnline ? 'bg-green-400 status-dot-online' : 'bg-red-400'
-          )} />
-          {device.isOnline ? '在线' : '离线'}
-        </span>
+        {/* Status & Favorite */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleToggleFavorite}
+            className={clsx(
+              'p-1.5 rounded transition-all',
+              isFavorite
+                ? 'text-yellow-400 hover:text-yellow-300'
+                : 'text-text-muted opacity-0 group-hover:opacity-100 hover:text-yellow-400'
+            )}
+            title={isFavorite ? '取消收藏' : '收藏设备'}
+          >
+            {isFavorite ? '⭐' : '☆'}
+          </button>
+          <span
+            className={clsx(
+              'badge',
+              device.isOnline ? 'badge-success' : 'badge-danger'
+            )}
+          >
+            <span className={clsx(
+              'w-1.5 h-1.5 rounded-full mr-1.5',
+              device.isOnline ? 'bg-green-400 status-dot-online' : 'bg-red-400'
+            )} />
+            {device.isOnline ? '在线' : '离线'}
+          </span>
+        </div>
       </div>
 
       {/* App Info */}

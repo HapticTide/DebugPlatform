@@ -71,9 +71,9 @@ export function HTTPEventTable({
         onClick={(e) => handleRowClick(event, e)}
         className={clsx(
           'cursor-pointer transition-all duration-150 group',
-          isError && 'bg-red-500/5 hover:bg-red-500/10',
-          isSelected && 'bg-primary/10 border-l-2 border-l-primary shadow-sm shadow-primary/5',
-          isChecked && 'bg-primary/15',
+          isError && !isSelected && 'bg-red-500/5 hover:bg-red-500/10',
+          isSelected && 'bg-primary text-white shadow-sm shadow-primary/20',
+          isChecked && !isSelected && 'bg-primary/15',
           !isSelected && !isChecked && !isError && 'hover:bg-bg-light/60'
         )}
       >
@@ -89,7 +89,10 @@ export function HTTPEventTable({
         )}
 
         {/* Time */}
-        <td className="px-4 py-3.5 text-text-muted whitespace-nowrap">
+        <td className={clsx(
+          'px-4 py-3.5 whitespace-nowrap',
+          isSelected ? 'text-white/80' : 'text-text-muted'
+        )}>
           <span className="text-sm font-mono">{formatSmartTime(event.startTime)}</span>
         </td>
 
@@ -98,7 +101,7 @@ export function HTTPEventTable({
           <span
             className={clsx(
               'inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-mono font-bold min-w-[60px] shadow-sm',
-              getMethodClass(event.method)
+              isSelected ? 'bg-white/20 text-white' : getMethodClass(event.method)
             )}
           >
             {event.method}
@@ -111,7 +114,7 @@ export function HTTPEventTable({
             <span
               className={clsx(
                 'inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-mono font-semibold min-w-[44px] shadow-sm',
-                getStatusClass(event.statusCode)
+                isSelected ? 'bg-white/20 text-white' : getStatusClass(event.statusCode)
               )}
             >
               {event.statusCode ?? 'ERR'}
@@ -122,10 +125,16 @@ export function HTTPEventTable({
         {/* URL */}
         <td className="px-4 py-3.5 max-w-md">
           <div className="flex flex-col gap-0.5">
-            <span className="text-sm text-text-primary truncate group-hover:text-primary transition-colors" title={event.url}>
+            <span className={clsx(
+              'text-sm truncate transition-colors',
+              isSelected ? 'text-white' : 'text-text-primary group-hover:text-primary'
+            )} title={event.url}>
               {truncateUrl(event.url)}
             </span>
-            <span className="text-xs text-text-muted truncate font-mono opacity-70">
+            <span className={clsx(
+              'text-xs truncate font-mono',
+              isSelected ? 'text-white/70' : 'text-text-muted opacity-70'
+            )}>
               {extractDomain(event.url)}
             </span>
           </div>
@@ -133,7 +142,10 @@ export function HTTPEventTable({
 
         {/* Duration */}
         <td className="px-4 py-3.5 whitespace-nowrap">
-          <span className={clsx('text-sm font-mono font-medium', getDurationClass(event.duration))}>
+          <span className={clsx(
+            'text-sm font-mono font-medium',
+            isSelected ? 'text-white' : getDurationClass(event.duration)
+          )}>
             {formatDuration(event.duration)}
           </span>
         </td>

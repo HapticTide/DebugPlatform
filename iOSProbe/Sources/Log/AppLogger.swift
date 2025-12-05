@@ -106,7 +106,7 @@ public struct AppLogger {
         log(level: .error, message, tags: tags, traceId: traceId, file: file, function: function, line: line)
     }
 
-    public func fault(
+    public func verbose(
         _ message: String,
         tags: [String] = [],
         traceId: String? = nil,
@@ -114,13 +114,15 @@ public struct AppLogger {
         function: String = #function,
         line: Int = #line
     ) {
-        log(level: .fault, message, tags: tags, traceId: traceId, file: file, function: function, line: line)
+        log(level: .verbose, message, tags: tags, traceId: traceId, file: file, function: function, line: line)
     }
 
     // MARK: - Helpers
 
     private func mapLevelToOSLogType(_ level: LogEvent.Level) -> OSLogType {
         switch level {
+        case .verbose:
+            .debug
         case .debug:
             .debug
         case .info:
@@ -129,8 +131,6 @@ public struct AppLogger {
             .default
         case .error:
             .error
-        case .fault:
-            .fault
         }
     }
 }

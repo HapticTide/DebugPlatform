@@ -146,6 +146,9 @@ func routes(_ app: Application) throws {
 
     // 故障注入 API
     try api.register(collection: ChaosController())
+    
+    // 数据库检查 API
+    try api.register(collection: DatabaseController())
 
     // 导出 API
     try api.register(collection: ExportController())

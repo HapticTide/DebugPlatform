@@ -1,0 +1,193 @@
+// DatabaseDTOs.swift
+// DebugHub
+//
+// Created by Sun on 2025/12/05.
+// Copyright © 2025 Sun. All rights reserved.
+//
+
+import Foundation
+import Vapor
+
+// MARK: - Database Descriptor DTO
+
+/// 数据库描述符
+struct DatabaseDescriptorDTO: Content {
+    /// 数据库类型（使用字符串以便扩展）
+    typealias Kind = String
+    
+    enum Location: Content {
+        case appSupport(relative: String)
+        case documents(relative: String)
+        case caches(relative: String)
+        case group(containerId: String, relative: String)
+        case custom(description: String)
+    }
+    
+    let id: String
+    let name: String
+    let kind: Kind
+    let location: Location
+    let isSensitive: Bool
+    let visibleInInspector: Bool
+}
+
+// MARK: - DB Info DTO
+
+/// 数据库信息（包含表数量）
+struct DBInfoDTO: Content {
+    let descriptor: DatabaseDescriptorDTO
+    let tableCount: Int
+    let fileSizeBytes: Int64?
+}
+
+// MARK: - Table Info DTO
+
+/// 表信息
+struct DBTableInfoDTO: Content {
+    let name: String
+    let rowCount: Int?
+}
+
+// MARK: - Column Info DTO
+
+/// 列信息
+struct DBColumnInfoDTO: Content {
+    let name: String
+    let type: String?
+    let notNull: Bool
+    let primaryKey: Bool
+    let defaultValue: String?
+}
+
+// MARK: - Row DTO
+
+/// 行数据
+struct DBRowDTO: Content {
+    let values: [String: String?]
+}
+
+// MARK: - Table Page Result DTO
+
+/// 分页查询结果
+struct DBTablePageResultDTO: Content {
+    let dbId: String
+    let table: String
+    let page: Int
+    let pageSize: Int
+    let totalRows: Int?
+    let columns: [DBColumnInfoDTO]
+    let rows: [DBRowDTO]
+}
+
+// MARK: - DB Command DTO
+
+/// 数据库命令类型
+enum DBCommandKindDTO: String, Content {
+    case listDatabases
+    case listTables
+    case describeTable
+    case fetchTablePage
+    case executeQuery
+}
+
+/// 数据库命令
+struct DBCommandDTO: Content {
+    let requestId: String
+    let kind: DBCommandKindDTO
+    let dbId: String?
+    let table: String?
+    let page: Int?
+    let pageSize: Int?
+    let orderBy: String?
+    let ascending: Bool?
+    let query: String?  // SQL 查询语句
+    
+    init(
+        requestId: String,
+        kind: DBCommandKindDTO,
+        dbId: String? = nil,
+        table: String? = nil,
+        page: Int? = nil,
+        pageSize: Int? = nil,
+        orderBy: String? = nil,
+        ascending: Bool? = nil,
+        query: String? = nil
+    ) {
+        self.requestId = requestId
+        self.kind = kind
+        self.dbId = dbId
+        self.table = table
+        self.page = page
+        self.pageSize = pageSize
+        self.orderBy = orderBy
+        self.ascending = ascending
+        self.query = query
+    }
+}
+
+// MARK: - DB Response DTO
+
+/// DB Inspector 错误
+enum DBInspectorErrorDTO: Content {
+    case databaseNotFound(String)
+    case tableNotFound(String)
+    case invalidQuery(String)
+    case timeout
+    case accessDenied(String)
+    case internalError(String)
+    
+    var message: String {
+        switch self {
+        case .databaseNotFound(let id):
+            return "Database not found: \(id)"
+        case .tableNotFound(let name):
+            return "Table not found: \(name)"
+        case .invalidQuery(let reason):
+            return "Invalid query: \(reason)"
+        case .timeout:
+            return "Operation timeout"
+        case .accessDenied(let reason):
+            return "Access denied: \(reason)"
+        case .internalError(let msg):
+            return "Internal error: \(msg)"
+        }
+    }
+}
+
+/// 数据库响应
+struct DBResponseDTO: Content {
+    let requestId: String
+    let success: Bool
+    let payload: Data?
+    let error: DBInspectorErrorDTO?
+}
+
+// MARK: - Response Wrapper DTOs
+
+/// 数据库列表响应
+struct DBListDatabasesResponseDTO: Content {
+    let databases: [DBInfoDTO]
+}
+
+/// 表列表响应
+struct DBListTablesResponseDTO: Content {
+    let dbId: String
+    let tables: [DBTableInfoDTO]
+}
+
+/// 表结构响应
+struct DBDescribeTableResponseDTO: Content {
+    let dbId: String
+    let table: String
+    let columns: [DBColumnInfoDTO]
+}
+
+/// SQL 查询响应
+struct DBQueryResponseDTO: Content {
+    let dbId: String
+    let query: String
+    let columns: [DBColumnInfoDTO]
+    let rows: [DBRowDTO]
+    let rowCount: Int
+    let executionTimeMs: Double
+}

@@ -48,6 +48,12 @@ public enum BridgeMessage: Codable {
     
     /// 更新故障注入规则
     case updateChaosRules([ChaosRule])
+    
+    /// 数据库命令
+    case dbCommand(DBCommand)
+    
+    /// 数据库响应
+    case dbResponse(DBResponse)
 
     /// 错误响应
     case error(code: Int, message: String)
@@ -72,6 +78,8 @@ public enum BridgeMessage: Codable {
         case updateBreakpointRules
         case breakpointResume
         case updateChaosRules
+        case dbCommand
+        case dbResponse
         case error
     }
 
@@ -115,6 +123,12 @@ public enum BridgeMessage: Codable {
         case .updateChaosRules:
             let rules = try container.decode([ChaosRule].self, forKey: .payload)
             self = .updateChaosRules(rules)
+        case .dbCommand:
+            let command = try container.decode(DBCommand.self, forKey: .payload)
+            self = .dbCommand(command)
+        case .dbResponse:
+            let response = try container.decode(DBResponse.self, forKey: .payload)
+            self = .dbResponse(response)
         case .error:
             let payload = try container.decode(ErrorPayload.self, forKey: .payload)
             self = .error(code: payload.code, message: payload.message)
@@ -160,6 +174,12 @@ public enum BridgeMessage: Codable {
         case let .updateChaosRules(rules):
             try container.encode(MessageType.updateChaosRules, forKey: .type)
             try container.encode(rules, forKey: .payload)
+        case let .dbCommand(command):
+            try container.encode(MessageType.dbCommand, forKey: .type)
+            try container.encode(command, forKey: .payload)
+        case let .dbResponse(response):
+            try container.encode(MessageType.dbResponse, forKey: .type)
+            try container.encode(response, forKey: .payload)
         case let .error(code, message):
             try container.encode(MessageType.error, forKey: .type)
             try container.encode(ErrorPayload(code: code, message: message), forKey: .payload)

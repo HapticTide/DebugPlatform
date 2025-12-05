@@ -262,11 +262,11 @@ export function prettyJSON(str: string): string {
  */
 export function getLogLevelClass(level: string): { color: string; bg: string; border: string } {
   const classes: Record<string, { color: string; bg: string; border: string }> = {
+    verbose: { color: 'text-level-verbose', bg: 'bg-level-verbose/10', border: 'border-l-level-verbose' },
     debug: { color: 'text-level-debug', bg: 'bg-level-debug/10', border: 'border-l-level-debug' },
     info: { color: 'text-level-info', bg: 'bg-level-info/10', border: 'border-l-level-info' },
     warning: { color: 'text-level-warning', bg: 'bg-level-warning/10', border: 'border-l-level-warning' },
     error: { color: 'text-level-error', bg: 'bg-level-error/10', border: 'border-l-level-error' },
-    fault: { color: 'text-level-fault', bg: 'bg-level-fault/10', border: 'border-l-level-fault' },
   }
   return classes[level.toLowerCase()] || classes.debug
 }

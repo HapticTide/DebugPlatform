@@ -275,6 +275,9 @@ enum BridgeMessageDTO: Codable {
     case breakpointResume(BreakpointResumeDTO)
     // 故障注入相关
     case updateChaosRules([ChaosRuleDTO])
+    // 数据库检查相关
+    case dbCommand(DBCommandDTO)
+    case dbResponse(DBResponseDTO)
     case error(code: Int, message: String)
 
     private enum CodingKeys: String, CodingKey {
@@ -295,6 +298,8 @@ enum BridgeMessageDTO: Codable {
         case breakpointHit
         case breakpointResume
         case updateChaosRules
+        case dbCommand
+        case dbResponse
         case error
     }
 
@@ -338,6 +343,12 @@ enum BridgeMessageDTO: Codable {
         case .updateChaosRules:
             let rules = try container.decode([ChaosRuleDTO].self, forKey: .payload)
             self = .updateChaosRules(rules)
+        case .dbCommand:
+            let command = try container.decode(DBCommandDTO.self, forKey: .payload)
+            self = .dbCommand(command)
+        case .dbResponse:
+            let response = try container.decode(DBResponseDTO.self, forKey: .payload)
+            self = .dbResponse(response)
         case .error:
             let payload = try container.decode(ErrorPayload.self, forKey: .payload)
             self = .error(code: payload.code, message: payload.message)
@@ -383,6 +394,12 @@ enum BridgeMessageDTO: Codable {
         case let .updateChaosRules(rules):
             try container.encode(MessageType.updateChaosRules, forKey: .type)
             try container.encode(rules, forKey: .payload)
+        case let .dbCommand(command):
+            try container.encode(MessageType.dbCommand, forKey: .type)
+            try container.encode(command, forKey: .payload)
+        case let .dbResponse(response):
+            try container.encode(MessageType.dbResponse, forKey: .type)
+            try container.encode(response, forKey: .payload)
         case let .error(code, message):
             try container.encode(MessageType.error, forKey: .type)
             try container.encode(ErrorPayload(code: code, message: message), forKey: .payload)

@@ -72,7 +72,7 @@ export function ChaosManager({ deviceId }: ChaosManagerProps) {
     }
 
     const handleDelete = async (id: string) => {
-        if (!confirm('确定要删除这条混沌规则吗？')) return
+        if (!confirm('确定要删除这条故障注入规则吗？')) return
         try {
             await deleteChaosRule(deviceId, id)
             fetchRules()
@@ -97,7 +97,7 @@ export function ChaosManager({ deviceId }: ChaosManagerProps) {
                 <div className="flex items-center gap-3">
                     <span className="text-xl">🎲</span>
                     <div>
-                        <h3 className="font-medium text-text-primary">混沌规则</h3>
+                        <h3 className="font-medium text-text-primary">故障注入规则</h3>
                         <p className="text-xs text-text-muted">注入网络故障来测试应用的健壮性</p>
                     </div>
                 </div>
@@ -113,7 +113,7 @@ export function ChaosManager({ deviceId }: ChaosManagerProps) {
                 ) : rules.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-text-muted">
                         <span className="text-4xl mb-3 opacity-50">🎲</span>
-                        <p className="text-sm mb-3">暂无混沌规则</p>
+                        <p className="text-sm mb-3">暂无故障注入规则</p>
                         <button onClick={handleCreate} className="btn btn-primary text-sm">
                             + 新建规则
                         </button>
@@ -312,7 +312,7 @@ function ChaosRuleEditor({
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-bg-dark border border-border rounded-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-lg font-medium text-text-primary mb-4">
-                    {rule.id ? '编辑混沌规则' : '新建混沌规则'}
+                    {rule.id ? '编辑故障注入规则' : '新建故障注入规则'}
                 </h3>
 
                 <div className="space-y-4">
@@ -339,7 +339,7 @@ function ChaosRuleEditor({
                     </div>
 
                     <div>
-                        <label className="block text-sm text-text-muted mb-2">混沌类型</label>
+                        <label className="block text-sm text-text-muted mb-2">故障注入类型</label>
                         <div className="grid grid-cols-2 gap-2">
                             {(Object.entries(chaosTypeConfig) as [ChaosTypeKind, typeof chaosTypeConfig['latency']][]).map(
                                 ([type, config]) => (

@@ -477,3 +477,68 @@ export async function deleteChaosRule(deviceId: string, ruleId: string): Promise
   })
 }
 
+// ============================================================================
+// DB Inspector API
+// ============================================================================
+
+import type {
+  DBListDatabasesResponse,
+  DBListTablesResponse,
+  DBDescribeTableResponse,
+  DBTablePageResult,
+  DBQueryResponse,
+} from '@/types'
+
+export async function listDatabases(deviceId: string): Promise<DBListDatabasesResponse> {
+  return fetchJSON(`${API_BASE}/devices/${deviceId}/databases`)
+}
+
+export async function listTables(deviceId: string, dbId: string): Promise<DBListTablesResponse> {
+  return fetchJSON(`${API_BASE}/devices/${deviceId}/databases/${dbId}/tables`)
+}
+
+export async function describeTable(
+  deviceId: string,
+  dbId: string,
+  table: string
+): Promise<DBDescribeTableResponse> {
+  return fetchJSON(`${API_BASE}/devices/${deviceId}/databases/${dbId}/tables/${table}/schema`)
+}
+
+export interface FetchTablePageParams {
+  page?: number
+  pageSize?: number
+  orderBy?: string
+  ascending?: boolean
+}
+
+export async function fetchTablePage(
+  deviceId: string,
+  dbId: string,
+  table: string,
+  params?: FetchTablePageParams
+): Promise<DBTablePageResult> {
+  const searchParams = new URLSearchParams()
+  if (params?.page) searchParams.set('page', params.page.toString())
+  if (params?.pageSize) searchParams.set('pageSize', params.pageSize.toString())
+  if (params?.orderBy) searchParams.set('orderBy', params.orderBy)
+  if (params?.ascending !== undefined) searchParams.set('ascending', params.ascending.toString())
+
+  const queryString = searchParams.toString()
+  const url = `${API_BASE}/devices/${deviceId}/databases/${dbId}/tables/${table}/rows${queryString ? '?' + queryString : ''}`
+  return fetchJSON(url)
+}
+
+export async function executeQuery(
+  deviceId: string,
+  dbId: string,
+  query: string
+): Promise<DBQueryResponse> {
+  return fetchJSON(`${API_BASE}/devices/${deviceId}/databases/${dbId}/query`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query }),
+  })
+}

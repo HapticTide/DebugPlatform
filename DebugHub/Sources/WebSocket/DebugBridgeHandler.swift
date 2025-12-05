@@ -105,6 +105,10 @@ final class DebugBridgeHandler: @unchecked Sendable {
                     print("[DebugBridge] Received breakpoint hit from \(deviceId): requestId=\(hit.requestId)")
                     handleBreakpointHit(hit: hit, deviceId: deviceId)
                 }
+                
+            case let .dbResponse(response):
+                print("[DebugBridge] Received DB response: requestId=\(response.requestId)")
+                DBResponseManager.shared.handleResponse(response)
 
             default:
                 print("[DebugBridge] Received unknown message type")
@@ -207,7 +211,7 @@ final class DebugBridgeHandler: @unchecked Sendable {
             print("[DebugBridge] Sent \(breakpointRules.count) breakpoint rules to \(deviceId)")
         }
 
-        // 发送混沌规则
+        // 发送故障注入规则
         let chaosRules = await loadChaosRules(deviceId: deviceId, db: db)
         if !chaosRules.isEmpty {
             let message = BridgeMessageDTO.updateChaosRules(chaosRules)

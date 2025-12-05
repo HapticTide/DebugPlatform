@@ -40,6 +40,8 @@ public final class DebugProbeSettings {
 
     private init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
+        // 同步日志开关状态
+        DebugLog.isEnabled = userDefaults.bool(forKey: Keys.verboseLogging)
     }
 
     // MARK: - Public API

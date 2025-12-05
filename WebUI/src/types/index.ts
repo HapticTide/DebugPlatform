@@ -95,7 +95,7 @@ export interface HTTPEventListResponse {
 }
 
 // 日志事件
-export type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'fault'
+export type LogLevel = 'verbose' | 'debug' | 'info' | 'warning' | 'error'
 
 export interface LogEvent {
   id: string
@@ -329,3 +329,82 @@ export interface TrafficRule {
   updatedAt: string | null
 }
 
+// =========================================
+// DB Inspector Types
+// =========================================
+
+export type DatabaseKind = 'main' | 'message' | 'log' | 'cache' | 'analytics' | 'backup' | 'other'
+
+export interface DatabaseLocation {
+  appSupport?: { relative: string }
+  documents?: { relative: string }
+  caches?: { relative: string }
+  group?: { containerId: string; relative: string }
+  custom?: { description: string }
+}
+
+export interface DatabaseDescriptor {
+  id: string
+  name: string
+  kind: DatabaseKind
+  location: DatabaseLocation
+  isSensitive: boolean
+  visibleInInspector: boolean
+}
+
+export interface DBInfo {
+  descriptor: DatabaseDescriptor
+  tableCount: number
+  fileSizeBytes: number | null
+}
+
+export interface DBTableInfo {
+  name: string
+  rowCount: number | null
+}
+
+export interface DBColumnInfo {
+  name: string
+  type: string | null
+  notNull: boolean
+  primaryKey: boolean
+  defaultValue: string | null
+}
+
+export interface DBRow {
+  values: Record<string, string | null>
+}
+
+export interface DBTablePageResult {
+  dbId: string
+  table: string
+  page: number
+  pageSize: number
+  totalRows: number | null
+  columns: DBColumnInfo[]
+  rows: DBRow[]
+}
+
+export interface DBListDatabasesResponse {
+  databases: DBInfo[]
+}
+
+export interface DBListTablesResponse {
+  dbId: string
+  tables: DBTableInfo[]
+}
+
+export interface DBDescribeTableResponse {
+  dbId: string
+  table: string
+  columns: DBColumnInfo[]
+}
+
+export interface DBQueryResponse {
+  dbId: string
+  query: string
+  columns: DBColumnInfo[]
+  rows: DBRow[]
+  rowCount: number
+  executionTimeMs: number
+}

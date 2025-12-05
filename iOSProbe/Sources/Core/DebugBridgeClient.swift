@@ -242,6 +242,10 @@ public final class DebugBridgeClient: NSObject {
                     action: mapBreakpointAction(payload)
                 )
             }
+            
+        case let .dbCommand(command):
+            DebugLog.info(.bridge, "Received DB command: \(command.kind.rawValue)")
+            handleDBCommand(command)
 
         case let .error(code, errorMessage):
             let error = NSError(domain: "DebugBridge", code: code, userInfo: [NSLocalizedDescriptionKey: errorMessage])
@@ -311,6 +315,71 @@ public final class DebugBridgeClient: NSObject {
             return .resume
         default:
             return .resume
+        }
+    }
+    
+    // MARK: - DB Inspector Commands
+    
+    /// 处理数据库检查命令
+    private func handleDBCommand(_ command: DBCommand) {
+        Task {
+            let response = await executeDBCommand(command)
+            send(.dbResponse(response))
+        }
+    }
+    
+    /// 执行数据库命令并返回响应
+    private func executeDBCommand(_ command: DBCommand) async -> DBResponse {
+        let inspector = SQLiteInspector.shared
+        
+        do {
+            switch command.kind {
+            case .listDatabases:
+                let databases = try await inspector.listDatabases()
+                let payload = DBListDatabasesResponse(databases: databases)
+                return try DBResponse.success(requestId: command.requestId, data: payload)
+                
+            case .listTables:
+                guard let dbId = command.dbId else {
+                    return DBResponse.failure(requestId: command.requestId, error: .invalidQuery("dbId is required"))
+                }
+                let tables = try await inspector.listTables(dbId: dbId)
+                let payload = DBListTablesResponse(dbId: dbId, tables: tables)
+                return try DBResponse.success(requestId: command.requestId, data: payload)
+                
+            case .describeTable:
+                guard let dbId = command.dbId, let table = command.table else {
+                    return DBResponse.failure(requestId: command.requestId, error: .invalidQuery("dbId and table are required"))
+                }
+                let columns = try await inspector.describeTable(dbId: dbId, table: table)
+                let payload = DBDescribeTableResponse(dbId: dbId, table: table, columns: columns)
+                return try DBResponse.success(requestId: command.requestId, data: payload)
+                
+            case .fetchTablePage:
+                guard let dbId = command.dbId, let table = command.table else {
+                    return DBResponse.failure(requestId: command.requestId, error: .invalidQuery("dbId and table are required"))
+                }
+                let result = try await inspector.fetchTablePage(
+                    dbId: dbId,
+                    table: table,
+                    page: command.page ?? 1,
+                    pageSize: command.pageSize ?? 50,
+                    orderBy: command.orderBy,
+                    ascending: command.ascending ?? true
+                )
+                return try DBResponse.success(requestId: command.requestId, data: result)
+                
+            case .executeQuery:
+                guard let dbId = command.dbId, let query = command.query else {
+                    return DBResponse.failure(requestId: command.requestId, error: .invalidQuery("dbId and query are required"))
+                }
+                let result = try await inspector.executeQuery(dbId: dbId, query: query)
+                return try DBResponse.success(requestId: command.requestId, data: result)
+            }
+        } catch let error as DBInspectorError {
+            return DBResponse.failure(requestId: command.requestId, error: error)
+        } catch {
+            return DBResponse.failure(requestId: command.requestId, error: .internalError(error.localizedDescription))
         }
     }
 

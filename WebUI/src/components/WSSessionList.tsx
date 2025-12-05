@@ -111,9 +111,10 @@ const SessionItem = memo(function SessionItem({
         'px-4 py-3 cursor-pointer transition-all',
         'hover:bg-bg-light/50',
         isSelected && !isSelectMode
-          ? 'bg-primary/10 border-l-2 border-l-primary'
-          : 'border-l-2 border-l-transparent',
-        isSelectMode && isChecked && 'bg-primary/10'
+          ? 'bg-primary text-white shadow-sm shadow-primary/20'
+          : '',
+        !isSelected && 'border-l-2 border-l-transparent',
+        isSelectMode && isChecked && 'bg-primary/15'
       )}
     >
       {/* 第一行：选择框/状态、域名、时间 */}
@@ -127,35 +128,56 @@ const SessionItem = memo(function SessionItem({
             className="w-4 h-4 rounded border-border bg-bg-light text-primary focus:ring-primary/50 cursor-pointer"
           />
         ) : (
-          <StatusIndicator isOpen={session.isOpen} />
+          <StatusIndicator isOpen={session.isOpen} isSelectedRow={isSelected && !isSelectMode} />
         )}
-        <span className="font-mono text-sm text-text-primary truncate flex-1">
+        <span className={clsx(
+          'font-mono text-sm truncate flex-1',
+          isSelected && !isSelectMode ? 'text-inherit' : 'text-text-primary'
+        )}>
           {extractDomain(session.url)}
         </span>
-        <span className="text-xs text-text-muted">
+        <span className={clsx(
+          'text-xs',
+          isSelected && !isSelectMode ? 'text-white/70' : 'text-text-muted'
+        )}>
           {formatSmartTime(session.connectTime)}
         </span>
       </div>
 
       {/* 第二行：完整 URL */}
-      <div className="text-xs text-text-muted truncate font-mono ml-5">
+      <div className={clsx(
+        'text-xs truncate font-mono ml-5',
+        isSelected && !isSelectMode ? 'text-white/70' : 'text-text-muted'
+      )}>
         {session.url}
       </div>
 
       {/* 第三行：状态信息 */}
       <div className="flex items-center gap-3 mt-1.5 ml-5">
         {session.isOpen ? (
-          <span className="inline-flex items-center gap-1 text-xs text-green-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+          <span className={clsx(
+            'inline-flex items-center gap-1 text-xs',
+            isSelected && !isSelectMode ? 'text-green-200' : 'text-green-400'
+          )}>
+            <span className={clsx(
+              'w-1.5 h-1.5 rounded-full animate-pulse',
+              isSelected && !isSelectMode ? 'bg-green-200' : 'bg-green-400'
+            )} />
             连接中
           </span>
         ) : (
           <>
-            <span className="text-xs text-text-muted">
+            <span className={clsx(
+              'text-xs',
+              isSelected && !isSelectMode ? 'text-white/70' : 'text-text-muted'
+            )}>
               已关闭{session.closeCode ? ` (${session.closeCode})` : ''}
             </span>
             {duration && (
-              <span className="text-xs text-text-muted">
+              <span className={clsx(
+                'text-xs',
+                isSelected && !isSelectMode ? 'text-white/70' : 'text-text-muted'
+              )}>
                 持续 {duration}
               </span>
             )}
@@ -166,12 +188,18 @@ const SessionItem = memo(function SessionItem({
   )
 })
 
-function StatusIndicator({ isOpen }: { isOpen: boolean }) {
+function StatusIndicator({ isOpen, isSelectedRow }: { isOpen: boolean; isSelectedRow?: boolean }) {
   return (
     <span
       className={clsx(
         'w-3 h-3 rounded-full flex-shrink-0',
-        isOpen ? 'bg-green-500 shadow-green-500/50 shadow-sm' : 'bg-gray-500'
+        isOpen 
+          ? isSelectedRow 
+            ? 'bg-green-300 shadow-green-300/50 shadow-sm' 
+            : 'bg-green-500 shadow-green-500/50 shadow-sm'
+          : isSelectedRow
+            ? 'bg-gray-300'
+            : 'bg-gray-500'
       )}
     />
   )

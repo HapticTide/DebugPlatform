@@ -43,13 +43,13 @@ export default {
           active: 'var(--color-border-active)',
           glass: 'var(--color-glass-border)',
         },
-        // 日志级别
+        // 日志级别 (从高到低: error > warning > info > debug > verbose)
         level: {
-          debug: '#8b949e',
-          info: '#4facfe',
-          warning: '#f59e0b',
           error: '#ef4444',
-          fault: '#f472b6',
+          warning: '#f59e0b',
+          info: '#4facfe',
+          debug: '#8b949e',
+          verbose: '#6b7280',
         },
         // HTTP 方法
         method: {

@@ -2,8 +2,18 @@ import { create } from 'zustand'
 import type { LogEvent, LogLevel } from '@/types'
 import * as api from '@/services/api'
 
+// 日志级别优先级（从低到高）: verbose < debug < info < warning < error
+// 选中某个级别时，显示该级别及更高级别的日志
+const LEVEL_PRIORITY: Record<LogLevel, number> = {
+  verbose: 0,
+  debug: 1,
+  info: 2,
+  warning: 3,
+  error: 4,
+}
+
 interface Filters {
-  levels: LogLevel[]
+  minLevel: LogLevel  // 最低显示级别（单选层级模式）
   subsystem: string
   category: string
   text: string
@@ -12,9 +22,12 @@ interface Filters {
 
 // 过滤逻辑
 function filterEvents(events: LogEvent[], filters: Filters): LogEvent[] {
+  const minPriority = LEVEL_PRIORITY[filters.minLevel]
+  
   return events.filter((event) => {
-    // Level 过滤
-    if (!filters.levels.includes(event.level)) return false
+    // Level 过滤: 只显示大于等于最低级别的日志
+    const eventPriority = LEVEL_PRIORITY[event.level] ?? 0
+    if (eventPriority < minPriority) return false
 
     // Subsystem 过滤
     if (filters.subsystem && event.subsystem !== filters.subsystem) return false
@@ -56,12 +69,10 @@ interface LogState {
   addRealtimeEvent: (event: LogEvent) => void
   clearEvents: () => void
   setFilter: (key: string, value: unknown) => void
-  toggleLevel: (level: LogLevel) => void
+  setMinLevel: (level: LogLevel) => void
   setAutoScroll: (value: boolean) => void
   applyFilters: () => void
 }
-
-const ALL_LEVELS: LogLevel[] = ['debug', 'info', 'warning', 'error', 'fault']
 
 export const useLogStore = create<LogState>((set, get) => ({
   events: [],
@@ -76,7 +87,7 @@ export const useLogStore = create<LogState>((set, get) => ({
   categories: [],
 
   filters: {
-    levels: [...ALL_LEVELS],
+    minLevel: 'verbose' as LogLevel,  // 默认显示所有级别
     subsystem: '',
     category: '',
     text: '',
@@ -139,12 +150,9 @@ export const useLogStore = create<LogState>((set, get) => ({
     })
   },
 
-  toggleLevel: (level: LogLevel) => {
+  setMinLevel: (level: LogLevel) => {
     set((state) => {
-      const levels = state.filters.levels.includes(level)
-        ? state.filters.levels.filter((l) => l !== level)
-        : [...state.filters.levels, level]
-      const newFilters = { ...state.filters, levels }
+      const newFilters = { ...state.filters, minLevel: level }
       const filteredEvents = filterEvents(state.events, newFilters)
       return { filters: newFilters, filteredEvents }
     })

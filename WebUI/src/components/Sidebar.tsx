@@ -296,9 +296,8 @@ export function Sidebar() {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate text-sm flex items-center gap-1">
+                    <div className="font-medium truncate text-sm">
                       {device.deviceName}
-                      {isFavorite && <span className="text-yellow-400 text-xs">⭐</span>}
                     </div>
                     <div className="text-2xs text-text-muted truncate mt-0.5">
                       {device.appName} <span className="opacity-60">{device.appVersion} ({device.buildNumber})</span>

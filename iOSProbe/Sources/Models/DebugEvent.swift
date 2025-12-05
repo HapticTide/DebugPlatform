@@ -300,19 +300,19 @@ public struct LogEvent: Codable {
     }
 
     public enum Level: String, Codable, CaseIterable {
+        case verbose
         case debug
         case info
         case warning
         case error
-        case fault
 
         public var emoji: String {
             switch self {
+            case .verbose: "📝"
             case .debug: "🔍"
             case .info: "ℹ️"
             case .warning: "⚠️"
             case .error: "❌"
-            case .fault: "💥"
             }
         }
     }
