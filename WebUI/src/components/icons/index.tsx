@@ -526,6 +526,59 @@ export const StarIcon: React.FC<IconProps & { filled?: boolean }> = ({
     </svg>
 )
 
+/** 高亮标记图标（荧光笔形状，区别于收藏星标） */
+export const HighlightIcon: React.FC<IconProps & { filled?: boolean }> = ({
+    size = defaultProps.size,
+    className,
+    strokeWidth = defaultProps.strokeWidth,
+    filled = false
+}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill={filled ? "currentColor" : "none"}
+        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+    >
+        {/* 荧光笔笔尖 */}
+        <path
+            d="M9 11L15 5L19 9L13 15L9 11Z"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill={filled ? "currentColor" : "none"}
+        />
+        {/* 笔身 */}
+        <path
+            d="M15 5L18 2L22 6L19 9"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+        {/* 笔尖底部 */}
+        <path
+            d="M9 11L5 21L13 15"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+        {/* 高亮线条 */}
+        <line
+            x1="2"
+            y1="22"
+            x2="8"
+            y2="22"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+        />
+    </svg>
+)
+
 /** 复制图标 */
 export const CopyIcon: React.FC<IconProps> = ({
     size = defaultProps.size,
@@ -913,6 +966,71 @@ export const SuccessCheckIcon: React.FC<IconProps> = ({
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
+        />
+    </svg>
+)
+
+/** 大号绿色对勾图标（健康状态页面用） */
+export const HealthyCheckIcon: React.FC<IconProps> = ({
+    size = defaultProps.size,
+    className
+}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+    >
+        {/* 粗壮的对勾，带渐变效果 */}
+        <defs>
+            <linearGradient id="healthyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#4ade80" />
+                <stop offset="100%" stopColor="#22c55e" />
+            </linearGradient>
+        </defs>
+        <path
+            d="M20 6L9 17L4 12"
+            stroke="url(#healthyGrad)"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </svg>
+)
+
+/** 大号红色叉号图标（健康状态页面用） */
+export const UnhealthyXIcon: React.FC<IconProps> = ({
+    size = defaultProps.size,
+    className
+}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+    >
+        {/* 粗壮的叉号，带渐变效果 */}
+        <defs>
+            <linearGradient id="unhealthyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f87171" />
+                <stop offset="100%" stopColor="#ef4444" />
+            </linearGradient>
+        </defs>
+        <path
+            d="M18 6L6 18"
+            stroke="url(#unhealthyGrad)"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+        />
+        <path
+            d="M6 6L18 18"
+            stroke="url(#unhealthyGrad)"
+            strokeWidth="3.5"
+            strokeLinecap="round"
         />
     </svg>
 )
@@ -1652,5 +1770,69 @@ export const XIcon: React.FC<IconProps> = ({
             strokeLinecap="round"
             strokeLinejoin="round"
         />
+    </svg>
+)
+
+/** 彩色红绿灯图标 - 用于流量规则 */
+export const ColorfulTrafficLightIcon: React.FC<IconProps> = ({
+    size = defaultProps.size,
+    className
+}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+    >
+        {/* 外壳 */}
+        <rect x="7" y="2" width="10" height="20" rx="3" stroke="currentColor" strokeWidth="1.5" fill="none" />
+        {/* 红灯 */}
+        <circle cx="12" cy="6.5" r="2" fill="#ef4444" />
+        {/* 黄灯 */}
+        <circle cx="12" cy="12" r="2" fill="#eab308" />
+        {/* 绿灯 */}
+        <circle cx="12" cy="17.5" r="2" fill="#22c55e" />
+    </svg>
+)
+
+/** 荧光笔图标 - 用于高亮标记 */
+export const HighlighterIcon: React.FC<IconProps> = ({
+    size = defaultProps.size,
+    className
+}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+    >
+        {/* 笔身 - 黄色渐变 */}
+        <path
+            d="M14.5 3.5L20.5 9.5L9.5 20.5H3.5V14.5L14.5 3.5Z"
+            fill="url(#highlighterGrad)"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+        />
+        {/* 笔尖 */}
+        <path
+            d="M3.5 14.5L9.5 20.5L3.5 20.5V14.5Z"
+            fill="#f59e0b"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+        />
+        {/* 分隔线 */}
+        <line x1="11" y1="13" x2="17" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <defs>
+            <linearGradient id="highlighterGrad" x1="3.5" y1="3.5" x2="20.5" y2="20.5" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#fef08a" />
+                <stop offset="1" stopColor="#fde047" />
+            </linearGradient>
+        </defs>
     </svg>
 )

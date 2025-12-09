@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { XIcon, SuccessCheckIcon, OnlineIcon, PackageIcon, ClockIcon, IPhoneIcon, BookIcon } from '@/components/icons'
+import { HealthyCheckIcon, UnhealthyXIcon, OnlineIcon, PackageIcon, ClockIcon, IPhoneIcon, BookIcon } from '@/components/icons'
 
 interface HealthData {
   status: string
@@ -107,22 +107,25 @@ export function HealthPage() {
 
       <div className="max-w-lg w-full relative">
         <div className="glass-card p-10 text-center">
-          {/* Status Icon */}
-          <div className={`w-28 h-28 mx-auto mb-8 rounded-full flex items-center justify-center text-5xl relative ${error ? 'bg-red-500/10' : 'bg-green-500/10'
-            }`}>
-            {/* Pulse ring */}
-            <div className={`absolute inset-0 rounded-full animate-ping opacity-25 ${error ? 'bg-red-500' : 'bg-green-500'
-              }`} style={{ animationDuration: '2s' }} />
+          {/* Status Icon - 大号图标，无背景色 */}
+          <div className="w-28 h-28 mx-auto mb-8 flex items-center justify-center relative">
+            {/* Pulse ring - 只在正常时显示 */}
+            {!error && (
+              <div
+                className="absolute w-24 h-24 rounded-full animate-ping opacity-20 bg-green-500"
+                style={{ animationDuration: '2s' }}
+              />
+            )}
             {/* Icon */}
-            <span className="relative z-10">{error ? <XIcon size={48} /> : <SuccessCheckIcon size={48} />}</span>
+            {error ? <UnhealthyXIcon size={80} /> : <HealthyCheckIcon size={80} />}
           </div>
 
           {/* Title */}
           <h1 className={`text-3xl font-bold mb-3 ${error ? 'text-red-400' : 'text-green-400'}`}>
-            {error ? '服务异常' : '服务正常运行'}
+            {error ? '服务未启动' : '服务正常运行'}
           </h1>
           <p className="text-text-secondary mb-10">
-            {error ? error : 'Debug Hub 所有系统运行正常'}
+            {error ? '无法连接到 Debug Hub 服务' : 'Debug Hub 所有系统运行正常'}
           </p>
 
           {/* Info Grid */}

@@ -14,26 +14,26 @@ struct DomainPolicyController: RouteCollection {
         policies.get(use: listPolicies)
         policies.post(use: createOrUpdatePolicy)
         policies.delete(":policyId", use: deletePolicy)
-        
+
         // Device specific overrides (optional per requirement, but good to have)
         let devicePolicies = routes.grouped("api", "devices", ":deviceId", "domain-policies")
         devicePolicies.get(use: listDevicePolicies)
     }
-    
+
     // MARK: - List Policies (Global or All)
-    
+
     func listPolicies(req: Request) async throws -> [DomainPolicyModel] {
-        return try await DomainPolicyModel.query(on: req.db)
+        try await DomainPolicyModel.query(on: req.db)
             .all()
     }
-    
+
     // MARK: - List Device Policies
-    
+
     func listDevicePolicies(req: Request) async throws -> [DomainPolicyModel] {
         guard let deviceId = req.parameters.get("deviceId") else {
             throw Abort(.badRequest, reason: "Missing deviceId")
         }
-        
+
         // Return both global (deviceId is nil) and device specific
         return try await DomainPolicyModel.query(on: req.db)
             .group(.or) { group in
@@ -42,18 +42,18 @@ struct DomainPolicyController: RouteCollection {
             }
             .all()
     }
-    
+
     // MARK: - Create or Update Policy
-    
+
     func createOrUpdatePolicy(req: Request) async throws -> DomainPolicyModel {
         let dto = try req.content.decode(DomainPolicyDTO.self)
-        
+
         // Check if exists
         let existing = try await DomainPolicyModel.query(on: req.db)
             .filter(\.$domain == dto.domain)
             .filter(\.$deviceId == dto.deviceId)
             .first()
-            
+
         if let policy = existing {
             policy.status = dto.status
             policy.note = dto.note
@@ -70,18 +70,18 @@ struct DomainPolicyController: RouteCollection {
             return policy
         }
     }
-    
+
     // MARK: - Delete Policy
-    
+
     func deletePolicy(req: Request) async throws -> HTTPStatus {
         guard let policyId = req.parameters.get("policyId") else {
             throw Abort(.badRequest)
         }
-        
+
         guard let policy = try await DomainPolicyModel.find(policyId, on: req.db) else {
             throw Abort(.notFound)
         }
-        
+
         try await policy.delete(on: req.db)
         return .ok
     }

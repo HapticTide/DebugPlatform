@@ -39,7 +39,7 @@ struct ChaosController: RouteCollection {
         }
 
         let input = try req.content.decode(ChaosRuleInput.self)
-        
+
         guard let chaos = input.chaos else {
             throw Abort(.badRequest, reason: "Missing chaos type for new rule")
         }

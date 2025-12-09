@@ -79,15 +79,16 @@ struct WSEventDTO: Content {
     struct Frame: Codable {
         let id: String
         let sessionId: String
+        let sessionUrl: String? // 会话 URL，用于在 session 被删除后恢复
         let direction: String
         let opcode: String
         let payload: Data
         let payloadPreview: String?
-        let payloadSize: Int?  // Optional - iOS SDK doesn't send this
+        let payloadSize: Int? // Optional - iOS SDK doesn't send this
         let timestamp: Date
         let isMocked: Bool
         let mockRuleId: String?
-        
+
         /// Computed payload size for when payloadSize is not provided
         var effectivePayloadSize: Int {
             payloadSize ?? payload.count

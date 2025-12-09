@@ -3,7 +3,7 @@ import { useDeviceStore } from '@/stores/deviceStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { DeviceCard } from '@/components/DeviceCard'
 import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
-import { RefreshIcon, IPhoneIcon, ClearIcon, XIcon, OnlineIcon, PackageIcon } from '@/components/icons'
+import { RefreshIcon, IPhoneIcon, ClearIcon, OnlineIcon, PackageIcon, UnhealthyXIcon } from '@/components/icons'
 import clsx from 'clsx'
 
 type FilterType = 'all' | 'online' | 'offline'
@@ -208,16 +208,9 @@ function ServerOfflineState({ onRetry, isLoading }: { onRetry: () => void; isLoa
       <div className="max-w-lg w-full relative">
         <div className="glass-card p-10 text-center">
           {/* Status Icon */}
-          <div className="w-28 h-28 mx-auto mb-8 rounded-full flex items-center justify-center text-5xl relative bg-red-500/10">
-            {/* Pulse ring */}
-            <div
-              className="absolute inset-0 rounded-full animate-ping opacity-25 bg-red-500"
-              style={{ animationDuration: '2s' }}
-            />
+          <div className="w-28 h-28 mx-auto mb-8 flex items-center justify-center relative">
             {/* Icon */}
-            <span className="relative z-10">
-              <XIcon size={48} />
-            </span>
+            <UnhealthyXIcon size={80} />
           </div>
 
           {/* Title */}

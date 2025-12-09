@@ -66,7 +66,7 @@ struct DeviceController: RouteCollection {
 
         // API 请求返回 JSON - 从数据库获取所有设备（包括离线的）
         let onlineSessions = DeviceRegistry.shared.getAllSessions()
-        let onlineDeviceIds = Set(onlineSessions.map { $0.deviceInfo.deviceId })
+        let onlineDeviceIds = Set(onlineSessions.map(\.deviceInfo.deviceId))
 
         // 从数据库获取所有未移除的设备
         let allDevices = try await DeviceModel.query(on: req.db)
@@ -269,9 +269,10 @@ extension DeviceController {
         }
 
         // 软删除设备
-        guard let device = try await DeviceModel.query(on: req.db)
-            .filter(\.$deviceId == deviceId)
-            .first()
+        guard
+            let device = try await DeviceModel.query(on: req.db)
+                .filter(\.$deviceId == deviceId)
+                .first()
         else {
             throw Abort(.notFound, reason: "Device not found")
         }
@@ -284,7 +285,7 @@ extension DeviceController {
 
     func removeAllOfflineDevices(req: Request) async throws -> HTTPStatus {
         // 获取所有在线设备 ID
-        let onlineDeviceIds = Set(DeviceRegistry.shared.getAllSessions().map { $0.deviceInfo.deviceId })
+        let onlineDeviceIds = Set(DeviceRegistry.shared.getAllSessions().map(\.deviceInfo.deviceId))
 
         // 软删除所有离线设备
         let offlineDevices = try await DeviceModel.query(on: req.db)

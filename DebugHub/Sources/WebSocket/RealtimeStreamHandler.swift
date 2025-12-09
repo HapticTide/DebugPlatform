@@ -62,7 +62,7 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
         for subscriber in currentSubscribers {
             subscriber.webSocket.close(code: .goingAway, promise: nil)
         }
-        
+
         print("[RealtimeStream] Shutdown complete")
     }
 
@@ -233,7 +233,9 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
             }
         }
         if wsCount > 0 {
-            print("[RealtimeStream] Broadcasting events: http=\(httpCount), ws=\(wsCount), log=\(logCount), stats=\(statsCount), subscribers=\(currentSubscribers.count)")
+            print(
+                "[RealtimeStream] Broadcasting events: http=\(httpCount), ws=\(wsCount), log=\(logCount), stats=\(statsCount), subscribers=\(currentSubscribers.count)"
+            )
         }
 
         for event in events {

@@ -87,6 +87,12 @@ final class DataCleanupService: LifecycleHandler, @unchecked Sendable {
             let wsSessionCount = try await WSSessionModel.query(on: db).count()
             let deviceSessionCount = try await DeviceSessionModel.query(on: db).count()
 
+            // 统计规则数量
+            let mockRuleCount = try await MockRuleModel.query(on: db).count()
+            let breakpointRuleCount = try await BreakpointRuleModel.query(on: db).count()
+            let chaosRuleCount = try await ChaosRuleModel.query(on: db).count()
+            let trafficRuleCount = try await TrafficRuleModel.query(on: db).count()
+
             // 按顺序删除（考虑外键约束）
             try await WSFrameModel.query(on: db).delete()
             try await WSSessionModel.query(on: db).delete()
@@ -94,15 +100,22 @@ final class DataCleanupService: LifecycleHandler, @unchecked Sendable {
             try await HTTPEventModel.query(on: db).delete()
             try await DeviceSessionModel.query(on: db).delete()
 
+            // 删除所有规则
+            try await MockRuleModel.query(on: db).delete()
+            try await BreakpointRuleModel.query(on: db).delete()
+            try await ChaosRuleModel.query(on: db).delete()
+            try await TrafficRuleModel.query(on: db).delete()
+
             let totalDeleted = httpCount + logCount + wsFrameCount + wsSessionCount + deviceSessionCount
+            let totalRulesDeleted = mockRuleCount + breakpointRuleCount + chaosRuleCount + trafficRuleCount
 
             app.logger.warning(
-                "Database truncated: HTTP=\(httpCount), Log=\(logCount), WSFrame=\(wsFrameCount), WSSession=\(wsSessionCount), DeviceSession=\(deviceSessionCount)"
+                "Database truncated: HTTP=\(httpCount), Log=\(logCount), WSFrame=\(wsFrameCount), WSSession=\(wsSessionCount), DeviceSession=\(deviceSessionCount), MockRule=\(mockRuleCount), BreakpointRule=\(breakpointRuleCount), ChaosRule=\(chaosRuleCount), TrafficRule=\(trafficRuleCount)"
             )
 
             return TruncateResult(
                 success: true,
-                message: "已清空 \(totalDeleted) 条记录",
+                message: "已清空 \(totalDeleted) 条记录，\(totalRulesDeleted) 条规则",
                 deletedCounts: TruncateResult.DeletedCounts(
                     http: httpCount,
                     log: logCount,

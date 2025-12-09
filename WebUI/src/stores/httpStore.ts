@@ -133,7 +133,7 @@ function filterItems(items: ListItem[], filters: HTTPState['filters'], deviceId?
     // 仅当 showBlacklisted 为 false 时执行过滤
     if (!filters.showBlacklisted) {
       // 如果匹配到规则且规则动作为 'hide'，则过滤掉
-      const rule = useRuleStore.getState().matchRule(event)
+      const rule = useRuleStore.getState().matchRule(event, deviceId)
       if (rule && rule.action === 'hide') {
         return false
       }
@@ -171,7 +171,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   },
 
   fetchEvents: async (deviceId: string) => {
-    const { pageSize, filters } = get()
+    const { pageSize, filters, selectedEventId } = get()
     set({ isLoading: true, currentDeviceId: deviceId })
     try {
       const response = await api.getHTTPEvents(deviceId, {
@@ -184,6 +184,12 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
       const events = response.items
 
       const filteredItems = filterItems(events, filters, deviceId)
+
+      // 检查 selectedEventId 是否还在新列表中，如果不在则清除选中
+      const selectedStillExists = selectedEventId
+        ? events.some((e) => e.id === selectedEventId)
+        : true
+
       set({
         events,
         listItems: events, // 从 API 加载时不包含分隔符
@@ -191,6 +197,9 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         total: response.total,
         page: response.page,
         isLoading: false,
+        ...(selectedStillExists
+          ? {}
+          : { selectedEventId: null, selectedEvent: null }),
       })
 
       // 加载完事件后，再加载会话历史来插入分隔符
@@ -219,7 +228,9 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
       const detail = await api.getHTTPEventDetail(deviceId, eventId)
       set({ selectedEvent: detail })
     } catch (error) {
+      // 如果获取详情失败（如数据已被删除），清除选中状态
       console.error('Failed to fetch HTTP event detail:', error)
+      set({ selectedEventId: null, selectedEvent: null })
     }
   },
 

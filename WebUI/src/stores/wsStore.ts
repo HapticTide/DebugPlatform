@@ -46,6 +46,7 @@ interface WSStore {
   addRealtimeSession: (session: WSSessionSummary) => void
   updateSessionStatus: (sessionId: string, isOpen: boolean, closeCode?: number, closeReason?: string) => void
   updateSessionUrl: (sessionId: string, url: string) => void
+  removeSession: (sessionId: string) => void
   addRealtimeFrame: (frame: WSFrame) => void
 
   // 批量操作
@@ -90,10 +91,20 @@ export const useWSStore = create<WSStore>((set, get) => ({
     set({ sessionsLoading: true, sessionsError: null })
     try {
       const response = await getWSSessions(deviceId, get().filters)
+      const { selectedSessionId } = get()
+      // 如果当前选中的 session 不在新列表中，清除选中状态
+      const sessionStillExists = selectedSessionId && response.items.some(s => s.id === selectedSessionId)
       set({
         sessions: response.items,
         totalSessions: response.total,
         sessionsLoading: false,
+        // 清除不存在的选中状态
+        ...(selectedSessionId && !sessionStillExists ? {
+          selectedSessionId: null,
+          selectedSession: null,
+          frames: [],
+          totalFrames: 0,
+        } : {}),
       })
     } catch (error) {
       console.error('[wsStore] fetchSessions error:', error)
@@ -113,7 +124,15 @@ export const useWSStore = create<WSStore>((set, get) => ({
       ])
       set({ selectedSession: detail, sessionLoading: false })
     } catch (error) {
-      set({ sessionLoading: false })
+      // 如果获取详情失败，清除选中状态
+      console.error('[wsStore] selectSession error:', error)
+      set({
+        selectedSessionId: null,
+        selectedSession: null,
+        sessionLoading: false,
+        frames: [],
+        totalFrames: 0,
+      })
     }
   },
 
@@ -195,8 +214,16 @@ export const useWSStore = create<WSStore>((set, get) => ({
 
   addRealtimeSession: (session: WSSessionSummary) => {
     set((state) => {
-      // 检查是否已存在（避免重复）
-      if (state.sessions.some((s) => s.id === session.id)) {
+      // 检查是否已存在
+      const existingIndex = state.sessions.findIndex((s) => s.id === session.id)
+      if (existingIndex >= 0) {
+        // 如果已存在且当前 url 是占位符，则更新 url
+        const existing = state.sessions[existingIndex]
+        if (existing.url === '(loading...)' && session.url !== '(loading...)') {
+          const updatedSessions = [...state.sessions]
+          updatedSessions[existingIndex] = { ...existing, url: session.url }
+          return { sessions: updatedSessions }
+        }
         return state
       }
       return {
@@ -225,6 +252,17 @@ export const useWSStore = create<WSStore>((set, get) => ({
       sessions: state.sessions.map((s) =>
         s.id === sessionId ? { ...s, url } : s
       ),
+    }))
+  },
+
+  removeSession: (sessionId: string) => {
+    set((state) => ({
+      sessions: state.sessions.filter((s) => s.id !== sessionId),
+      totalSessions: Math.max(0, state.totalSessions - 1),
+      // 如果删除的是当前选中的 session，清除选中状态
+      ...(state.selectedSessionId === sessionId
+        ? { selectedSessionId: null, selectedSession: null, frames: [], totalFrames: 0 }
+        : {}),
     }))
   },
 

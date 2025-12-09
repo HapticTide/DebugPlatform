@@ -181,8 +181,16 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                         <h3 className="text-xs font-medium text-text-muted uppercase tracking-wider">
                             数据库
                         </h3>
-                        {/* 排序控件 */}
+                        {/* 刷新和排序控件 */}
                         <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => loadDatabases(deviceId)}
+                                disabled={dbLoading}
+                                className="p-1 rounded hover:bg-bg-light text-text-muted hover:text-text-secondary transition-colors disabled:opacity-50"
+                                title="刷新所有数据库"
+                            >
+                                <RefreshIcon size={12} className={dbLoading ? 'animate-spin' : ''} />
+                            </button>
                             <select
                                 value={dbSortOrder}
                                 onChange={(e) => setDbSortOrder(e.target.value as 'name' | 'size' | 'tableCount')}
@@ -240,20 +248,32 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                         <h3 className="text-xs font-medium text-text-muted uppercase tracking-wider">
                             表 {tables.length > 0 && `(${tables.length})`}
                         </h3>
-                        {selectedDb && (
-                            <button
-                                onClick={() => setQueryMode(!queryMode)}
-                                className={clsx(
-                                    'px-2 py-1 rounded text-xs transition-colors',
-                                    queryMode
-                                        ? 'bg-accent-blue/20 text-accent-blue'
-                                        : 'text-text-muted hover:text-text-secondary hover:bg-bg-light'
-                                )}
-                                title="SQL 查询"
-                            >
-                                {'</>'}
-                            </button>
-                        )}
+                        <div className="flex items-center gap-1">
+                            {selectedDb && (
+                                <>
+                                    <button
+                                        onClick={() => selectedDb && loadTables(deviceId, selectedDb)}
+                                        disabled={tablesLoading}
+                                        className="p-1 rounded hover:bg-bg-light text-text-muted hover:text-text-secondary transition-colors disabled:opacity-50"
+                                        title="刷新当前数据库的所有表"
+                                    >
+                                        <RefreshIcon size={12} className={tablesLoading ? 'animate-spin' : ''} />
+                                    </button>
+                                    <button
+                                        onClick={() => setQueryMode(!queryMode)}
+                                        className={clsx(
+                                            'px-2 py-1 rounded text-xs transition-colors',
+                                            queryMode
+                                                ? 'bg-accent-blue/20 text-accent-blue'
+                                                : 'text-text-muted hover:text-text-secondary hover:bg-bg-light'
+                                        )}
+                                        title="SQL 查询"
+                                    >
+                                        {'</>'}
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
                     {tablesLoading ? (
                         <div className="flex items-center justify-center py-8">

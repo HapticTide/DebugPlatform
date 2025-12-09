@@ -158,15 +158,15 @@ final class HTTPEventParamModel: Model, Content, @unchecked Sendable {
 // MARK: - Traffic Rule Model
 
 enum TrafficRuleMatchType: String, Codable {
-    case domain     // 域名匹配 (legacy)
-    case urlRegex   // URL 正则
-    case header     // Header 匹配
+    case domain // 域名匹配 (legacy)
+    case urlRegex // URL 正则
+    case header // Header 匹配
 }
 
 enum TrafficRuleAction: String, Codable {
-    case highlight  // 高亮 (原白名单)
-    case hide       // 隐藏 (原黑名单)
-    case mark       // 染色 (颜色标记)
+    case highlight // 高亮 (原白名单)
+    case hide // 隐藏 (原黑名单)
+    case mark // 染色 (颜色标记)
 }
 
 final class TrafficRuleModel: Model, Content, @unchecked Sendable {
@@ -189,13 +189,13 @@ final class TrafficRuleModel: Model, Content, @unchecked Sendable {
 
     @Enum(key: "action")
     var action: TrafficRuleAction
-    
+
     @Field(key: "color")
     var color: String? // hex color for highlight/mark
 
     @Field(key: "is_enabled")
     var isEnabled: Bool
-    
+
     @Field(key: "priority")
     var priority: Int
 

@@ -67,6 +67,7 @@
   --color-primary-dark: #008c74;
   --color-primary-light: #00d4aa;
   --color-primary-glow: none;
+  --color-primary-rgb: 0, 160, 133;
 
   /* Accent colors - More vibrant for light theme */
   --color-accent-blue: #2563eb;
@@ -166,6 +167,11 @@ body {
   border-radius: 4px;
 }
 
+/* 列表选中背景 - 使用主题绿色 20% 透明度 */
+.bg-selected {
+  background-color: rgba(var(--color-primary-rgb), 0.2) !important;
+}
+
 /* Input Styles */
 input::placeholder,
 textarea::placeholder {
@@ -218,7 +224,7 @@ input[type='checkbox'] {
 /* Domain Highlight Animation - Simple background flash */
 @keyframes domain-glow-in {
   0% {
-    background-color: rgba(16, 185, 129, 0.2);
+    background-color: rgba(234, 179, 8, 0.2);
   }
 
   100% {

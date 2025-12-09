@@ -15,7 +15,11 @@ final class EventIngestor: @unchecked Sendable {
 
     private init() {}
 
-    func ingest(events: [DebugEventDTO], deviceId: String, db: Database) async {
+    /// 入库事件并返回额外生成的事件（如自动创建的 WS session）
+    /// - Returns: 需要额外广播的事件列表
+    func ingest(events: [DebugEventDTO], deviceId: String, db: Database) async -> [DebugEventDTO] {
+        var extraEvents: [DebugEventDTO] = []
+
         for event in events {
             do {
                 switch event {
@@ -23,7 +27,9 @@ final class EventIngestor: @unchecked Sendable {
                     try await ingestHTTPEvent(httpEvent, deviceId: deviceId, db: db)
 
                 case let .webSocket(wsEvent):
-                    try await ingestWSEvent(wsEvent, deviceId: deviceId, db: db)
+                    if let extraEvent = try await ingestWSEvent(wsEvent, deviceId: deviceId, db: db) {
+                        extraEvents.append(extraEvent)
+                    }
 
                 case let .log(logEvent):
                     try await ingestLogEvent(logEvent, deviceId: deviceId, db: db)
@@ -36,6 +42,8 @@ final class EventIngestor: @unchecked Sendable {
                 print("[EventIngestor] Failed to ingest event: \(error)")
             }
         }
+
+        return extraEvents
     }
 
     // MARK: - HTTP Event
@@ -135,7 +143,8 @@ final class EventIngestor: @unchecked Sendable {
 
     // MARK: - WebSocket Event
 
-    private func ingestWSEvent(_ event: WSEventDTO, deviceId: String, db: Database) async throws {
+    /// 入库 WS 事件，如果自动创建了 session，返回对应的 sessionCreated 事件用于广播
+    private func ingestWSEvent(_ event: WSEventDTO, deviceId: String, db: Database) async throws -> DebugEventDTO? {
         let encoder = JSONEncoder()
 
         switch event.kind {
@@ -153,6 +162,7 @@ final class EventIngestor: @unchecked Sendable {
                 closeReason: session.closeReason
             )
             try await model.save(on: db)
+            return nil
 
         case let .sessionClosed(session):
             if let existing = try await WSSessionModel.find(session.id, on: db) {
@@ -161,8 +171,43 @@ final class EventIngestor: @unchecked Sendable {
                 existing.closeReason = session.closeReason
                 try await existing.save(on: db)
             }
+            return nil
 
         case let .frame(frame):
+            // 检查对应的 session 是否存在，如果不存在则自动创建
+            var extraSessionEvent: DebugEventDTO?
+            let sessionExists = try await WSSessionModel.find(frame.sessionId, on: db) != nil
+            if !sessionExists {
+                // 优先使用 frame 中携带的 sessionUrl，否则使用 sessionId 前缀作为占位
+                let sessionUrl = frame.sessionUrl ?? "(Session \(String(frame.sessionId.prefix(8)))...)"
+                let placeholderSession = WSSessionModel(
+                    id: frame.sessionId,
+                    deviceId: deviceId,
+                    url: sessionUrl,
+                    requestHeaders: "{}",
+                    subprotocols: "[]",
+                    connectTime: frame.timestamp,
+                    disconnectTime: nil,
+                    closeCode: nil,
+                    closeReason: nil
+                )
+                try await placeholderSession.save(on: db)
+                print("[EventIngestor] Auto-created session: \(frame.sessionId), url: \(sessionUrl)")
+
+                // 生成一个 sessionCreated 事件用于广播
+                let sessionDTO = WSEventDTO.Session(
+                    id: frame.sessionId,
+                    url: sessionUrl,
+                    requestHeaders: [:],
+                    subprotocols: [],
+                    connectTime: frame.timestamp,
+                    disconnectTime: nil,
+                    closeCode: nil,
+                    closeReason: nil
+                )
+                extraSessionEvent = .webSocket(WSEventDTO(kind: .sessionCreated(sessionDTO)))
+            }
+
             let model = WSFrameModel(
                 id: frame.id,
                 deviceId: deviceId,
@@ -176,6 +221,7 @@ final class EventIngestor: @unchecked Sendable {
                 mockRuleId: frame.mockRuleId
             )
             try await model.save(on: db)
+            return extraSessionEvent
         }
     }
 

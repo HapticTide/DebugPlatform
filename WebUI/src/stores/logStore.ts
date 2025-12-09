@@ -74,6 +74,9 @@ interface LogState {
   isLoading: boolean
   autoScroll: boolean
 
+  // 单选
+  selectedId: string | null
+
   // 批量选择
   selectedIds: Set<string>
   isSelectMode: boolean
@@ -96,6 +99,9 @@ interface LogState {
   setAutoScroll: (value: boolean) => void
   applyFilters: () => void
 
+  // 单选
+  selectEvent: (id: string | null) => void
+
   // 批量选择
   toggleSelectMode: () => void
   toggleSelectId: (id: string) => void
@@ -112,6 +118,7 @@ export const useLogStore = create<LogState>((set, get) => ({
   pageSize: 500,
   isLoading: false,
   autoScroll: true,
+  selectedId: null,
   selectedIds: new Set(),
   isSelectMode: false,
 
@@ -209,10 +216,18 @@ export const useLogStore = create<LogState>((set, get) => ({
     set({ autoScroll: value })
   },
 
+  // 单选事件
+  selectEvent: (id: string | null) => {
+    set((state) => ({
+      selectedId: state.selectedId === id ? null : id,  // 点击同一行取消选中
+    }))
+  },
+
   toggleSelectMode: () => {
     set((state) => ({
       isSelectMode: !state.isSelectMode,
       selectedIds: state.isSelectMode ? new Set() : state.selectedIds,
+      selectedId: null,  // 进入/退出批量选择模式时清除单选
     }))
   },
 

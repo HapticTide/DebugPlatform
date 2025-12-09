@@ -19,9 +19,9 @@ struct StatsController: RouteCollection {
         let stats = routes.grouped("stats")
         stats.get(use: getStats)
     }
-    
+
     // MARK: - Get Server Stats
-    
+
     func getStats(req: Request) async throws -> ServerStatsDTO {
         // 获取各表的记录数
         let httpCount = try await HTTPEventModel.query(on: req.db).count()
@@ -33,32 +33,34 @@ struct StatsController: RouteCollection {
         let chaosRuleCount = try await ChaosRuleModel.query(on: req.db).count()
         let trafficRuleCount = try await TrafficRuleModel.query(on: req.db).count()
         let deviceSessionCount = try await DeviceSessionModel.query(on: req.db).count()
-        
+
         // 获取数据库大小
         var databaseSizeBytes: Int64?
         let databaseMode = Environment.get("DATABASE_MODE")?.lowercased() ?? "postgres"
-        
+
         if databaseMode == "sqlite" {
             // SQLite: 获取文件大小
             let dataDir = getDataDirectory()
             let dbPath = Environment.get("SQLITE_PATH") ?? "\(dataDir)/debug_hub.sqlite"
             let fileManager = FileManager.default
-            if let attrs = try? fileManager.attributesOfItem(atPath: dbPath),
-               let fileSize = attrs[.size] as? Int64 {
+            if
+                let attrs = try? fileManager.attributesOfItem(atPath: dbPath),
+                let fileSize = attrs[.size] as? Int64 {
                 databaseSizeBytes = fileSize
             }
         } else {
             // PostgreSQL: 使用 pg_database_size 获取数据库大小
             let dbName = Environment.get("DATABASE_NAME") ?? "debug_hub"
             if let rawSQL = req.db as? SQLDatabase {
-                let result = try? await rawSQL.raw("SELECT pg_database_size('\(unsafeRaw: dbName)') as size").first(decoding: DatabaseSizeRow.self)
+                let result = try? await rawSQL.raw("SELECT pg_database_size('\(unsafeRaw: dbName)') as size")
+                    .first(decoding: DatabaseSizeRow.self)
                 databaseSizeBytes = result?.size
             }
         }
-        
+
         // 在线设备数量
         let onlineDeviceCount = DeviceRegistry.shared.getAllSessions().count
-        
+
         return ServerStatsDTO(
             httpEventCount: httpCount,
             logEventCount: logCount,

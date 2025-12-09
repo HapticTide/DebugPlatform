@@ -72,8 +72,8 @@ export function RulesPage() {
                             <SettingsIcon size={20} />
                         </div>
                         <div>
-                            <h1 className="text-lg font-semibold text-text-primary">流量规则</h1>
-                            <p className="text-xs text-text-muted">管理域名高亮、隐藏等过滤规则</p>
+                            <h1 className="text-lg font-semibold text-text-primary">全局流量规则</h1>
+                            <p className="text-xs text-text-muted">管理域名高亮、隐藏等过滤规则，这里的规则全局生效</p>
                         </div>
                     </div>
 

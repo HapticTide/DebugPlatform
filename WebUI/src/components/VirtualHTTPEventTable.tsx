@@ -21,7 +21,7 @@ import {
     extractDomain,
 } from '@/utils/format'
 import clsx from 'clsx'
-import { MockIcon, StarIcon, HttpIcon, TagIcon } from './icons'
+import { MockIcon, StarIcon, HttpIcon, TagIcon, HighlightIcon } from './icons'
 import { MockRulePopover } from './MockRulePopover'
 
 // 行高度（像素）
@@ -42,6 +42,8 @@ interface Props {
     mockRules?: MockRule[]
     /** 点击编辑 Mock 规则 */
     onEditMockRule?: (rule: MockRule) => void
+    /** 是否显示已隐藏请求（默认 false，即隐藏被规则过滤的请求） */
+    showBlacklisted?: boolean
 }
 
 /**
@@ -85,6 +87,7 @@ export function VirtualHTTPEventTable({
     onToggleSelect,
     mockRules = [],
     onEditMockRule,
+    showBlacklisted = false,
 }: Props) {
     const parentRef = useRef<HTMLDivElement>(null)
     const lastFirstItemRef = useRef<string | null>(null)
@@ -115,8 +118,9 @@ export function VirtualHTTPEventTable({
     }, [items])
 
     // 应用规则过滤（隐藏匹配 'hide' 规则的事件）
+    // 当 showBlacklisted 为 true 时，显示所有事件（包括黑名单）
     const httpEvents = useMemo(() => {
-        if (applicableRules.length === 0) {
+        if (showBlacklisted || applicableRules.length === 0) {
             return rawHttpEvents
         }
 
@@ -125,7 +129,7 @@ export function VirtualHTTPEventTable({
             // 如果匹配到 hide 规则，则隐藏
             return !rule || rule.action !== 'hide'
         })
-    }, [rawHttpEvents, applicableRules])
+    }, [rawHttpEvents, applicableRules, showBlacklisted])
 
     // 虚拟滚动器
     const virtualizer = useVirtualizer({
@@ -172,6 +176,9 @@ export function VirtualHTTPEventTable({
         // 使用 URL 级别的收藏状态（优先于请求级别的状态）
         const isFavorite = deviceId ? isUrlFavorite(deviceId, event.url) : event.isFavorite
 
+        // 检查 Mock 规则是否仍然存在（规则被删除后不显示图标）
+        const isMocked = event.isMocked && event.mockRuleId && mockRules.some(rule => rule.id === event.mockRuleId)
+
         // 检查是否匹配规则（用于高亮/标记）
         const matchedRule = matchEventRule(event, applicableRules)
         const isHighlighted = matchedRule?.action === 'highlight'
@@ -190,27 +197,25 @@ export function VirtualHTTPEventTable({
                 onClick={(e) => handleRowClick(event, e)}
                 className={clsx(
                     'flex items-center cursor-pointer transition-all duration-150 group border-b border-border-light',
-                    // 错误状态
-                    isError && !isSelected && !isHighlighted && 'bg-red-500/5 hover:bg-red-500/10',
-                    // 选中状态 - 使用更浅的蓝色背景
-                    isSelected && 'bg-accent-blue/15 border-l-2 border-l-accent-blue',
-                    // 批量选中
-                    isChecked && !isSelected && 'bg-primary/15',
-                    // 高亮规则
-                    isHighlighted && !isSelected && 'bg-yellow-500/10 hover:bg-yellow-500/20 border-l-4 border-l-yellow-500',
-                    // 标记规则
-                    isMarked && !isSelected && !isHighlighted && 'border-l-4',
-                    // 默认
-                    !isSelected && !isChecked && !isError && !isHighlighted && !isMarked && 'hover:bg-bg-light/60'
+                    // 选中状态 - 底色块样式，使用主题绿色
+                    isSelected && 'bg-selected',
+                    // 批量选中（非选中状态）
+                    !isSelected && isChecked && 'bg-primary/15',
+                    // 高亮规则（非选中状态）- 只用底色，去掉左边框
+                    !isSelected && !isChecked && isHighlighted && 'bg-yellow-500/10 hover:bg-yellow-500/20',
+                    // 标记规则（非选中、非高亮状态）
+                    !isSelected && !isChecked && !isHighlighted && isMarked && 'border-l-4',
+                    // 错误状态（非选中、非高亮状态）
+                    !isSelected && !isChecked && !isHighlighted && isError && 'bg-red-500/5 hover:bg-red-500/10',
+                    // 默认悬停
+                    !isSelected && !isChecked && !isHighlighted && !isError && 'hover:bg-bg-light/60'
                 )}
             >
-                {/* 标记图标 */}
-                {(isHighlighted || isMarked) && !isSelected && (
-                    <div className="w-6 flex-shrink-0 flex items-center justify-center">
-                        {isHighlighted && <StarIcon size={12} filled className="text-yellow-500" />}
-                        {isMarked && !isHighlighted && <TagIcon size={12} style={{ color: ruleColor || 'currentColor' }} />}
-                    </div>
-                )}
+                {/* 标记图标区域 - 始终保留宽度以确保列对齐 */}
+                <div className="w-6 flex-shrink-0 flex items-center justify-center">
+                    {isHighlighted && <HighlightIcon size={12} filled className="text-yellow-500" />}
+                    {isMarked && !isHighlighted && <TagIcon size={12} style={{ color: ruleColor || 'currentColor' }} />}
+                </div>
 
                 {/* Checkbox */}
                 {isSelectMode && (
@@ -227,7 +232,7 @@ export function VirtualHTTPEventTable({
                 {/* Time */}
                 <div className={clsx(
                     'px-4 py-3.5 w-[100px] flex-shrink-0',
-                    isSelected ? 'text-accent-blue' : 'text-text-muted'
+                    isSelected ? 'text-white' : 'text-text-muted'
                 )}>
                     <span className="text-sm font-mono">{formatSmartTime(event.startTime)}</span>
                 </div>
@@ -261,13 +266,13 @@ export function VirtualHTTPEventTable({
                     <div className="flex flex-col gap-0.5">
                         <span className={clsx(
                             'text-sm truncate transition-colors',
-                            isSelected ? 'text-accent-blue font-medium' : 'text-text-primary group-hover:text-primary'
+                            isSelected ? 'text-white font-medium' : 'text-text-primary'
                         )} title={event.url}>
                             {truncateUrl(event.url)}
                         </span>
                         <span className={clsx(
                             'text-xs truncate font-mono',
-                            isSelected ? 'text-accent-blue/70' : 'text-text-muted opacity-70'
+                            isSelected ? 'text-white/70' : 'text-text-muted'
                         )}>
                             {extractDomain(event.url)}
                         </span>
@@ -286,7 +291,7 @@ export function VirtualHTTPEventTable({
 
                 {/* Tags */}
                 <div className="px-4 py-3.5 w-[80px] flex-shrink-0 flex items-center justify-center gap-2">
-                    {event.isMocked && (
+                    {isMocked && (
                         <MockRulePopover
                             url={event.url}
                             mockRuleId={event.mockRuleId}
@@ -303,7 +308,7 @@ export function VirtualHTTPEventTable({
                             <StarIcon size={14} filled />
                         </span>
                     )}
-                    {!event.isMocked && !isFavorite && (
+                    {!isMocked && !isFavorite && (
                         <span className="w-7 h-7" />
                     )}
                 </div>
@@ -315,6 +320,8 @@ export function VirtualHTTPEventTable({
         <div className="flex-1 flex flex-col overflow-hidden">
             {/* Header */}
             <div className="flex items-center bg-bg-medium border-b border-border text-text-secondary sticky top-0 z-10">
+                {/* 标记图标区域占位 */}
+                <div className="w-6 flex-shrink-0"></div>
                 {isSelectMode && (
                     <div className="px-3 py-2 w-10 flex-shrink-0">
                         <span className="sr-only">选择</span>

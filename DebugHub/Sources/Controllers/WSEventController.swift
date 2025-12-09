@@ -30,11 +30,11 @@ struct WSEventController: RouteCollection {
         let pageSize = min(req.query[Int.self, at: "pageSize"] ?? 50, 100)
         let urlContains = req.query[String.self, at: "urlContains"]
         let host = req.query[String.self, at: "host"]
-        
+
         // Parse isOpen from string to avoid Vapor's Bool parsing issue (returns false instead of nil)
         let isOpenStr = req.query[String.self, at: "isOpen"]
         let isOpen: Bool? = isOpenStr.flatMap { $0 == "true" ? true : ($0 == "false" ? false : nil) }
-        
+
         let timeFrom = req.query[Date.self, at: "timeFrom"]
         let timeTo = req.query[Date.self, at: "timeTo"]
 
@@ -42,19 +42,19 @@ struct WSEventController: RouteCollection {
         // despite the data existing. Using in-memory filtering as workaround.
         let allSessions = try await WSSessionModel.query(on: req.db).all()
         var filteredSessions = allSessions.filter { $0.deviceId == deviceId }
-        
+
         if let urlContains {
             filteredSessions = filteredSessions.filter { $0.url.contains(urlContains) }
         }
-        
+
         if let host {
             filteredSessions = filteredSessions.filter { session in
-                session.url.contains("://\(host)/") || 
-                session.url.contains("://\(host):") ||
-                session.url.hasSuffix("://\(host)")
+                session.url.contains("://\(host)/") ||
+                    session.url.contains("://\(host):") ||
+                    session.url.hasSuffix("://\(host)")
             }
         }
-        
+
         if let isOpen {
             if isOpen {
                 filteredSessions = filteredSessions.filter { $0.disconnectTime == nil }
@@ -62,25 +62,25 @@ struct WSEventController: RouteCollection {
                 filteredSessions = filteredSessions.filter { $0.disconnectTime != nil }
             }
         }
-        
+
         if let timeFrom {
             filteredSessions = filteredSessions.filter { $0.connectTime >= timeFrom }
         }
-        
+
         if let timeTo {
             filteredSessions = filteredSessions.filter { $0.connectTime <= timeTo }
         }
-        
+
         let total = filteredSessions.count
-        
+
         // Sort by connectTime descending
         filteredSessions.sort { $0.connectTime > $1.connectTime }
-        
+
         // Pagination
         let startIndex = (page - 1) * pageSize
         let endIndex = min(startIndex + pageSize, filteredSessions.count)
-        let pagedSessions = startIndex < filteredSessions.count 
-            ? Array(filteredSessions[startIndex..<endIndex]) 
+        let pagedSessions = startIndex < filteredSessions.count
+            ? Array(filteredSessions[startIndex..<endIndex])
             : []
 
         let items = pagedSessions.map { session in
@@ -323,7 +323,7 @@ struct WSFrameDetailDTO: Content {
     let sessionId: String
     let direction: String
     let opcode: String
-    let payloadText: String?  // UTF-8 解码的文本（如果可解码）
+    let payloadText: String? // UTF-8 解码的文本（如果可解码）
     let payloadBase64: String // Base64 编码的完整 payload
     let payloadSize: Int
     let timestamp: Date

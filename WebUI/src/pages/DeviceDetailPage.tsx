@@ -27,6 +27,7 @@ import { BreakpointManager } from '@/components/BreakpointManager'
 import { ChaosManager } from '@/components/ChaosManager'
 import { DBInspector } from '@/components/DBInspector'
 import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
+import { FilterPopover } from '@/components/FilterPopover'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { getExportHTTPUrl, getExportLogsUrl, getExportHARUrl, getWSSessionDetail } from '@/services/api'
 import { getPlatformIcon } from '@/utils/deviceIcons'
@@ -48,16 +49,14 @@ import {
   ClearIcon,
   StarIcon,
   IPhoneIcon,
-  TrafficLightIcon,
 } from '@/components/icons'
-import { useRuleStore } from '@/stores/ruleStore'
-import type { BreakpointHit, TrafficRule } from '@/types'
+import type { BreakpointHit } from '@/types'
 import clsx from 'clsx'
 
 type Tab = 'http' | 'logs' | 'websocket' | 'database'
 
 // 主标签配置：简化为核心监控功能
-// HTTP 内部再细分子功能：请求列表、断点、Mock、故障注入、流量规则
+// HTTP 内部再细分子功能：请求列表、断点、Mock、故障注入
 const tabConfig: Array<{ id: Tab; label: string; icon: React.ReactNode; description: string }> = [
   { id: 'http', label: 'HTTP', icon: <HttpIcon size={16} />, description: 'HTTP/HTTPS 请求与调试工具' },
   { id: 'websocket', label: 'WebSocket', icon: <WebSocketIcon size={16} />, description: 'WS 连接' },
@@ -274,10 +273,11 @@ export function DeviceDetailPage() {
               isMocked: boolean
             }
 
-            // 如果没有对应的 session，尝试从 API 获取
+            // 如果没有对应的 session，后端会自动创建占位 session 并广播 sessionCreated 事件
+            // 这里只需要等待 sessionCreated 事件即可，不需要前端处理
             // 这可能发生在 sessionCreated 事件丢失或页面刷新后的情况
             if (!wsStore.sessions.some(s => s.id === frame.sessionId)) {
-              // 先创建一个占位 session 避免重复请求
+              // 先创建一个占位 session 避免重复请求，等待后端广播更新
               wsStore.addRealtimeSession({
                 id: frame.sessionId,
                 url: '(loading...)',
@@ -287,14 +287,16 @@ export function DeviceDetailPage() {
                 closeReason: null,
                 isOpen: true,
               })
-              // 异步获取真实的 session 信息
+              // 尝试从 API 获取真实的 session 信息
+              // 如果失败说明 session 还未创建（后端会自动创建），等待 sessionCreated 广播
               getWSSessionDetail(deviceId, frame.sessionId)
                 .then(detail => {
                   wsStore.updateSessionUrl(frame.sessionId, detail.url)
                 })
                 .catch(() => {
-                  // 如果获取失败，更新为 unknown
-                  wsStore.updateSessionUrl(frame.sessionId, '(unknown)')
+                  // 后端会自动创建 session 并广播，这里保持占位状态
+                  // 如果后端已创建，下一次 sessionCreated 广播会更新 URL
+                  console.log(`[WS] Session ${frame.sessionId} not found, waiting for backend auto-creation`)
                 })
             }
 
@@ -406,6 +408,8 @@ export function DeviceDetailPage() {
   }, [toggleDatabaseInspector])
 
   const handleClearDeviceData = useCallback(async () => {
+    if (!deviceId) return
+
     // 暂停 WebSocket 重连，避免清空数据后持续重连
     realtimeService.pauseReconnect()
 
@@ -416,15 +420,16 @@ export function DeviceDetailPage() {
     logStore.clearEvents()
     wsStore.clearSessions()
 
-    // 清空前端规则状态
+    // 清空前端规则状态（Mock 规则和断点规则是设备级别的）
     mockStore.clearRules()
     breakpointStore.clear()
+    // 注意：流量规则（Traffic Rules）是全局规则，不随设备数据清空
 
     setShowClearDeviceDialog(false)
 
     // 恢复 WebSocket 连接
     realtimeService.resumeReconnect()
-  }, [clearDeviceData])
+  }, [clearDeviceData, deviceId])
 
   const handleSelectHTTPEvent = useCallback(
     (eventId: string) => {
@@ -681,8 +686,8 @@ export function DeviceDetailPage() {
   )
 }
 
-// HTTP 子 Tab 类型
-type HTTPSubTab = 'requests' | 'breakpoints' | 'mock' | 'chaos' | 'rules'
+// HTTP 子 Tab 类型（流量规则已移至全局侧边栏）
+type HTTPSubTab = 'requests' | 'breakpoints' | 'mock' | 'chaos'
 
 // HTTP Tab Component - 包含子 Tab 导航
 function HTTPTab({
@@ -726,13 +731,12 @@ function HTTPTab({
     (item) => !('type' in item && item.type === 'session-divider')
   ).length
 
-  // HTTP 子 Tab 配置
+  // HTTP 子 Tab 配置（流量规则已移至全局侧边栏）
   const httpSubTabs: Array<{ id: HTTPSubTab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: 'requests', label: '请求列表', icon: <HttpIcon size={14} /> },
     { id: 'breakpoints', label: '断点', icon: <BreakpointIcon size={14} />, badge: breakpointStore.pendingHits.length },
     { id: 'mock', label: 'Mock', icon: <MockIcon size={14} /> },
     { id: 'chaos', label: '故障注入', icon: <ChaosIcon size={14} /> },
-    { id: 'rules', label: '流量规则', icon: <TrafficLightIcon size={14} /> },
   ]
 
   return (
@@ -793,10 +797,6 @@ function HTTPTab({
 
       {activeSubTab === 'chaos' && (
         <ChaosManager deviceId={deviceId} />
-      )}
-
-      {activeSubTab === 'rules' && (
-        <TrafficRulesContent deviceId={deviceId} />
       )}
     </div>
   )
@@ -895,37 +895,31 @@ function HTTPRequestsContent({
             data-search-input
           />
 
-          <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer hover:text-text-primary px-1.5 flex-shrink-0">
-            <input
-              type="checkbox"
-              checked={httpStore.filters.mockedOnly}
-              onChange={(e) => httpStore.setFilter('mockedOnly', e.target.checked)}
-              className="accent-primary w-3 h-3"
-            />
-            Mock
-          </label>
-
-          <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer hover:text-text-primary px-1.5 flex-shrink-0">
-            <input
-              type="checkbox"
-              checked={httpStore.filters.favoritesOnly}
-              onChange={(e) => httpStore.setFilter('favoritesOnly', e.target.checked)}
-              className="accent-primary w-3 h-3"
-            />
-            收藏
-          </label>
-
-          <button
-            onClick={() => httpStore.setFilter('statusRange', httpStore.filters.statusRange === '400-599' ? '' : '400-599')}
-            className={clsx(
-              "px-2 py-1 rounded text-xs font-medium border transition-colors flex-shrink-0",
-              httpStore.filters.statusRange === '400-599'
-                ? "bg-red-500/20 text-red-400 border-red-500/20"
-                : "bg-bg-light text-text-muted border-border hover:text-text-secondary"
-            )}
-          >
-            Errors
-          </button>
+          <FilterPopover
+            options={[
+              {
+                key: 'mocked',
+                label: '仅显示 Mock 的请求',
+                shortLabel: 'Mock',
+                checked: httpStore.filters.mockedOnly,
+                onChange: (checked) => httpStore.setFilter('mockedOnly', checked),
+              },
+              {
+                key: 'favorites',
+                label: '仅显示收藏请求',
+                shortLabel: '收藏',
+                checked: httpStore.filters.favoritesOnly,
+                onChange: (checked) => httpStore.setFilter('favoritesOnly', checked),
+              },
+              {
+                key: 'errors',
+                label: '仅显示 Error 请求',
+                shortLabel: 'Error',
+                checked: httpStore.filters.statusRange === '400-599',
+                onChange: (checked) => httpStore.setFilter('statusRange', checked ? '400-599' : ''),
+              },
+            ]}
+          />
 
           {/* 弹性空间 */}
           <div className="flex-1 min-w-4" />
@@ -1005,7 +999,7 @@ function HTTPRequestsContent({
                       onChange={(e) => httpStore.setFilter('showBlacklisted', e.target.checked)}
                       className="accent-primary w-3 h-3"
                     />
-                    显示黑名单域名
+                    显示已隐藏请求
                   </label>
 
                   <div className="border-t border-border my-1" />
@@ -1117,6 +1111,7 @@ function HTTPRequestsContent({
               onEditMockRule={(rule) => {
                 mockStore.openEditor(rule)
               }}
+              showBlacklisted={httpStore.filters.showBlacklisted}
             />
           ) : (
             <GroupedHTTPEventList
@@ -1130,6 +1125,7 @@ function HTTPRequestsContent({
               isSelectMode={httpStore.isSelectMode}
               selectedIds={httpStore.selectedIds}
               onToggleSelect={httpStore.toggleSelectId}
+              showBlacklisted={httpStore.filters.showBlacklisted}
             />
           )}
         </div>
@@ -1179,305 +1175,6 @@ function HTTPRequestsContent({
         httpOnly={true}
       />
     </>
-  )
-}
-
-// 流量规则内容组件 - 简化版，从 RulesPage 提取
-function TrafficRulesContent({ deviceId: _deviceId }: { deviceId: string }) {
-  const { rules, isLoading, fetchRules, createOrUpdateRule, deleteRule } = useRuleStore()
-  const [showEditor, setShowEditor] = useState(false)
-  const [editingRule, setEditingRule] = useState<Partial<typeof rules[0]> | null>(null)
-
-  useEffect(() => {
-    fetchRules()
-  }, [fetchRules])
-
-  // 切换规则启用状态
-  const handleToggleEnabled = async (rule: typeof rules[0]) => {
-    await createOrUpdateRule({
-      ...rule,
-      isEnabled: !rule.isEnabled,
-    })
-  }
-
-  // 创建新规则
-  const handleCreate = () => {
-    setEditingRule({
-      name: '',
-      matchType: 'domain',
-      matchValue: '',
-      action: 'highlight',
-      isEnabled: true,
-      priority: 0,
-    })
-    setShowEditor(true)
-  }
-
-  // 编辑规则
-  const handleEdit = (rule: typeof rules[0]) => {
-    setEditingRule({ ...rule })
-    setShowEditor(true)
-  }
-
-  // 保存规则
-  const handleSave = async () => {
-    if (!editingRule) return
-    await createOrUpdateRule(editingRule as typeof rules[0])
-    setShowEditor(false)
-    setEditingRule(null)
-  }
-
-  // 获取动作的显示名称和颜色
-  const getActionDisplay = (action: string) => {
-    switch (action) {
-      case 'highlight':
-        return { label: '高亮', color: 'text-green-400', bgColor: 'bg-green-500/5 border-green-500/20', icon: '✓' }
-      case 'hide':
-        return { label: '隐藏', color: 'text-red-400', bgColor: 'bg-red-500/5 border-red-500/20', icon: '✗' }
-      case 'mark':
-        return { label: '标记', color: 'text-yellow-400', bgColor: 'bg-yellow-500/5 border-yellow-500/20', icon: '★' }
-      default:
-        return { label: action, color: 'text-text-secondary', bgColor: 'bg-bg-light border-border', icon: '' }
-    }
-  }
-
-  // 获取匹配类型的显示名称
-  const getMatchTypeDisplay = (matchType: string) => {
-    switch (matchType) {
-      case 'domain':
-        return '域名'
-      case 'urlRegex':
-        return '正则'
-      case 'header':
-        return '请求头'
-      default:
-        return matchType
-    }
-  }
-
-  return (
-    <div className="h-full flex flex-col">
-      {/* Header - 与其他子 Tab 保持一致 */}
-      <div className="px-4 py-3 border-b border-border bg-bg-dark/50 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <TrafficLightIcon size={24} className="text-text-primary" />
-          <div>
-            <h3 className="font-medium text-text-primary">流量规则</h3>
-            <p className="text-xs text-text-muted">配置域名的高亮、隐藏、标记策略</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-text-muted bg-bg-light px-2 py-1 rounded-lg">
-            {rules.length} 条规则
-          </span>
-          <button onClick={handleCreate} className="btn btn-primary text-sm">
-            + 新建规则
-          </button>
-        </div>
-      </div>
-
-      {/* Rule List */}
-      <div className="flex-1 overflow-auto p-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full text-text-muted">加载中...</div>
-        ) : rules.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-text-muted">
-            <TrafficLightIcon size={48} className="mb-3 opacity-50" />
-            <p className="text-sm mb-3">暂无流量规则</p>
-            <button onClick={handleCreate} className="btn btn-primary text-sm">
-              + 新建规则
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {rules.map((rule) => {
-              const actionDisplay = getActionDisplay(rule.action)
-              return (
-                <div
-                  key={rule.id}
-                  className={clsx(
-                    'flex items-center justify-between p-4 rounded-lg border transition-colors group',
-                    rule.isEnabled
-                      ? actionDisplay.bgColor
-                      : 'bg-bg-light border-border opacity-60'
-                  )}
-                >
-                  <div className="flex items-center gap-4">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={rule.isEnabled}
-                        onChange={() => handleToggleEnabled(rule)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-bg-medium rounded-full peer peer-checked:bg-primary transition-colors"></div>
-                      <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
-                    </label>
-                    <div>
-                      <div className="font-medium text-text-primary flex items-center gap-2">
-                        <span className={clsx('text-sm', actionDisplay.color)}>{actionDisplay.icon}</span>
-                        {rule.name || rule.matchValue}
-                      </div>
-                      <div className="text-xs text-text-muted mt-0.5">
-                        <span className="px-1.5 py-0.5 bg-bg-medium rounded text-2xs mr-1.5">
-                          {getMatchTypeDisplay(rule.matchType)}
-                        </span>
-                        {rule.matchValue}
-                        <span className="mx-1.5">·</span>
-                        <span className={actionDisplay.color}>
-                          {actionDisplay.label}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleEdit(rule)}
-                      className="btn btn-ghost text-text-muted hover:text-text-primary text-sm"
-                    >
-                      编辑
-                    </button>
-                    <button
-                      onClick={() => deleteRule(rule.id)}
-                      className="btn btn-ghost text-red-400 hover:text-red-300 text-sm"
-                    >
-                      删除
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Rule Editor Modal */}
-      {showEditor && editingRule && (
-        <TrafficRuleEditor
-          rule={editingRule}
-          onChange={setEditingRule}
-          onSave={handleSave}
-          onCancel={() => {
-            setShowEditor(false)
-            setEditingRule(null)
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
-// 流量规则编辑器组件
-function TrafficRuleEditor({
-  rule,
-  onChange,
-  onSave,
-  onCancel,
-}: {
-  rule: Partial<TrafficRule>
-  onChange: (rule: Partial<TrafficRule>) => void
-  onSave: () => void
-  onCancel: () => void
-}) {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-bg-dark border border-border rounded-xl shadow-2xl w-full max-w-lg">
-        <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold text-text-primary">
-            {rule.id ? '编辑规则' : '新建规则'}
-          </h3>
-        </div>
-        <div className="p-5 space-y-4">
-          {/* 规则名称 */}
-          <div>
-            <label className="block text-sm text-text-secondary mb-1.5">规则名称</label>
-            <input
-              type="text"
-              value={rule.name || ''}
-              onChange={(e) => onChange({ ...rule, name: e.target.value })}
-              placeholder="可选，留空将使用匹配值作为名称"
-              className="input w-full"
-            />
-          </div>
-
-          {/* 匹配类型 */}
-          <div>
-            <label className="block text-sm text-text-secondary mb-1.5">匹配类型</label>
-            <div className="flex gap-2">
-              {[
-                { value: 'domain', label: '域名匹配' },
-                { value: 'urlRegex', label: '正则匹配' },
-                { value: 'header', label: '请求头' },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => onChange({ ...rule, matchType: opt.value as TrafficRule['matchType'] })}
-                  className={clsx(
-                    'px-3 py-1.5 rounded-lg text-sm transition-colors',
-                    rule.matchType === opt.value
-                      ? 'bg-primary text-white'
-                      : 'bg-bg-light text-text-secondary hover:text-text-primary'
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 匹配值 */}
-          <div>
-            <label className="block text-sm text-text-secondary mb-1.5">
-              {rule.matchType === 'domain' ? '域名' : rule.matchType === 'urlRegex' ? '正则表达式' : '请求头名称'}
-            </label>
-            <input
-              type="text"
-              value={rule.matchValue || ''}
-              onChange={(e) => onChange({ ...rule, matchValue: e.target.value })}
-              placeholder={rule.matchType === 'domain' ? 'example.com' : rule.matchType === 'urlRegex' ? '.*api/v1.*' : 'X-Custom-Header'}
-              className="input w-full"
-            />
-          </div>
-
-          {/* 动作 */}
-          <div>
-            <label className="block text-sm text-text-secondary mb-1.5">动作</label>
-            <div className="flex gap-2">
-              {[
-                { value: 'highlight', label: '高亮显示', color: 'text-green-400 border-green-500/30' },
-                { value: 'hide', label: '隐藏', color: 'text-red-400 border-red-500/30' },
-                { value: 'mark', label: '标记', color: 'text-yellow-400 border-yellow-500/30' },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => onChange({ ...rule, action: opt.value as TrafficRule['action'] })}
-                  className={clsx(
-                    'px-3 py-1.5 rounded-lg text-sm border transition-colors',
-                    rule.action === opt.value
-                      ? `${opt.color} bg-bg-light`
-                      : 'border-border text-text-secondary hover:text-text-primary'
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="px-5 py-4 border-t border-border flex justify-end gap-3">
-          <button onClick={onCancel} className="btn btn-secondary">
-            取消
-          </button>
-          <button
-            onClick={onSave}
-            disabled={!rule.matchValue}
-            className="btn btn-primary"
-          >
-            保存
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -1682,6 +1379,8 @@ function LogsTab({
         <LogList
           events={logStore.filteredEvents}
           autoScroll={logStore.autoScroll}
+          selectedId={logStore.selectedId}
+          onSelect={logStore.selectEvent}
           isSelectMode={logStore.isSelectMode}
           selectedIds={logStore.selectedIds}
           onToggleSelect={logStore.toggleSelectId}

@@ -156,7 +156,7 @@ func routes(_ app: Application) throws {
 
     // 故障注入 API
     try api.register(collection: ChaosController())
-    
+
     // 数据库检查 API
     try api.register(collection: DatabaseController())
 
@@ -165,13 +165,13 @@ func routes(_ app: Application) throws {
 
     // 数据清理 API
     try api.register(collection: CleanupController())
-    
+
     // 域名策略 API
     try api.register(collection: DomainPolicyController())
-    
+
     // 流量规则 API
     try api.register(collection: TrafficRuleController())
-    
+
     // 服务器统计 API
     try api.register(collection: StatsController())
 
@@ -179,7 +179,7 @@ func routes(_ app: Application) throws {
     api.post("auth", "verify") { req async throws -> TokenVerifyResponse in
         let input = try req.content.decode(TokenVerifyRequest.self)
         let validToken = ProcessInfo.processInfo.environment["DEBUG_HUB_TOKEN"] ?? "debug-token-2025"
-        
+
         if input.token == validToken {
             return TokenVerifyResponse(valid: true, message: "Token 验证成功")
         } else {
@@ -232,10 +232,10 @@ func getDataDirectory() -> String {
     if let customPath = Environment.get("DATA_DIR") {
         return customPath
     }
-    
+
     // 默认使用当前工作目录下的 data 文件夹
     let dataDir = "./data"
-    
+
     // 确保目录存在
     let fileManager = FileManager.default
     if !fileManager.fileExists(atPath: dataDir) {
@@ -246,7 +246,7 @@ func getDataDirectory() -> String {
             return "."
         }
     }
-    
+
     return dataDir
 }
 
@@ -326,7 +326,7 @@ func configureSQLite(_ app: Application) {
         let dataDir = getDataDirectory()
         dbPath = "\(dataDir)/debug_hub.sqlite"
     }
-    
+
     app.databases.use(.sqlite(.file(dbPath)), as: .sqlite)
     app.logger.info("SQLite configured: \(dbPath)")
 }

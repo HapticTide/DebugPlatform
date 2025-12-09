@@ -7,6 +7,8 @@ import { LogIcon } from './icons'
 interface Props {
   events: LogEvent[]
   autoScroll: boolean
+  selectedId?: string | null
+  onSelect?: (id: string | null) => void
   isSelectMode?: boolean
   selectedIds?: Set<string>
   onToggleSelect?: (id: string) => void
@@ -23,6 +25,8 @@ const levelLabels: Record<LogLevel, string> = {
 export function LogList({
   events,
   autoScroll,
+  selectedId,
+  onSelect,
   isSelectMode = false,
   selectedIds = new Set(),
   onToggleSelect,
@@ -57,17 +61,31 @@ export function LogList({
         {events.map((event, index) => {
           const levelStyle = getLogLevelClass(event.level)
           const isChecked = selectedIds.has(event.id)
+          const isSelected = !isSelectMode && selectedId === event.id
+
+          // 处理点击
+          const handleClick = () => {
+            if (isSelectMode) {
+              onToggleSelect?.(event.id)
+            } else {
+              onSelect?.(event.id)
+            }
+          }
 
           return (
             <div
               key={event.id}
-              onClick={() => isSelectMode && onToggleSelect?.(event.id)}
+              onClick={handleClick}
               className={clsx(
-                'flex items-start border-l-2 transition-all duration-150',
+                'flex items-start border-l-2 transition-all duration-150 cursor-pointer',
                 levelStyle.border,
-                index % 2 === 0 ? 'bg-bg-dark/20' : 'bg-transparent',
-                isSelectMode ? 'cursor-pointer' : '',
-                isSelectMode && isChecked ? 'bg-primary/10' : 'hover:bg-bg-light/60'
+                // 选中状态（非批量选择模式）
+                isSelected && 'bg-selected',
+                // 批量选中
+                !isSelected && isChecked && 'bg-primary/15',
+                // 默认状态
+                !isSelected && !isChecked && (index % 2 === 0 ? 'bg-bg-dark/20' : 'bg-transparent'),
+                !isSelected && !isChecked && 'hover:bg-bg-light/60'
               )}
               style={{ animationDelay: `${Math.min(index * 10, 300)}ms` }}
             >
@@ -84,7 +102,10 @@ export function LogList({
                 </div>
               )}
               {/* Time */}
-              <div className="w-32 px-4 py-3 text-text-muted whitespace-nowrap flex-shrink-0 text-xs">
+              <div className={clsx(
+                'w-32 px-4 py-3 whitespace-nowrap flex-shrink-0 text-xs',
+                isSelected ? 'text-white' : 'text-text-muted'
+              )}>
                 {formatSmartTime(event.timestamp)}
               </div>
 
@@ -102,12 +123,18 @@ export function LogList({
               </div>
 
               {/* Category */}
-              <div className="w-36 px-4 py-3 text-primary truncate flex-shrink-0 text-xs font-medium" title={event.category || event.subsystem || '-'}>
+              <div className={clsx(
+                'w-36 px-4 py-3 truncate flex-shrink-0 text-xs font-medium',
+                isSelected ? 'text-white' : 'text-primary'
+              )} title={event.category || event.subsystem || '-'}>
                 {event.category || event.subsystem || '-'}
               </div>
 
               {/* Message */}
-              <div className="flex-1 px-4 py-3 text-text-primary break-all whitespace-pre-wrap leading-relaxed text-xs">
+              <div className={clsx(
+                'flex-1 px-4 py-3 break-all whitespace-pre-wrap leading-relaxed text-xs',
+                isSelected ? 'text-white' : 'text-text-primary'
+              )}>
                 {event.message}
               </div>
             </div>

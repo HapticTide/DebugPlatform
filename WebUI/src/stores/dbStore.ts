@@ -112,7 +112,16 @@ export const useDBStore = create<DBState>((set, get) => ({
     ...initialState,
 
     loadDatabases: async (deviceId: string) => {
-        set({ dbLoading: true, dbError: null })
+        // 刷新时清除当前选择和缓存数据
+        set({
+            dbLoading: true,
+            dbError: null,
+            selectedDb: null,
+            selectedTable: null,
+            tables: [],
+            schema: [],
+            tableData: null,
+        })
         try {
             const response = await api.listDatabases(deviceId)
             set({ databases: response.databases, dbLoading: false })

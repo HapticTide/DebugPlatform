@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getServerStats, truncateAllData } from '@/services/api'
 import { useToastStore } from '@/stores/toastStore'
+import { useRuleStore } from '@/stores/ruleStore'
 import { TokenConfirmDialog } from './TokenConfirmDialog'
 import type { ServerStats } from '@/types'
 import {
@@ -54,6 +55,9 @@ export function ServerStatsPanel() {
   const [isTruncating, setIsTruncating] = useState(false)
   const toast = useToastStore()
 
+  // Traffic Rule store for refreshing after truncate
+  const { fetchRules } = useRuleStore()
+
   const fetchStats = async () => {
     setIsLoading(true)
     try {
@@ -72,8 +76,11 @@ export function ServerStatsPanel() {
       await truncateAllData()
       toast.show('success', '已清空所有数据')
       setShowTruncateDialog(false)
-      // 刷新统计
-      await fetchStats()
+      // 刷新统计和流量规则状态
+      await Promise.all([
+        fetchStats(),
+        fetchRules(),
+      ])
     } catch (error) {
       toast.show('error', '清空数据失败: ' + (error instanceof Error ? error.message : '未知错误'))
     } finally {
@@ -111,7 +118,7 @@ export function ServerStatsPanel() {
       >
         <div className="flex items-center gap-2">
           <ChartBarIcon size={14} />
-          <span className="text-xs font-medium text-text-primary">服务器统计</span>
+          <span className="text-xs font-medium text-text-primary">数据统计</span>
         </div>
         <div className="flex items-center gap-2">
           {!isExpanded && stats && (
@@ -147,11 +154,26 @@ export function ServerStatsPanel() {
           <StatRow icon={<IPhoneIcon size={12} />} label="在线设备" value={stats.onlineDeviceCount} />
           <StatRow icon={<ClockIcon size={12} />} label="历史会话" value={stats.deviceSessionCount} />
 
-          {/* 数据库大小 */}
+          {/* 数据库大小 + 清空按钮 */}
           {stats.databaseSizeBytes !== null && (
             <>
               <div className="text-text-muted/60 text-2xs uppercase tracking-wider mt-2 mb-1">存储</div>
-              <StatRow icon={<DatabaseIcon size={12} />} label="数据库大小" value={formatBytes(stats.databaseSizeBytes)} />
+              <div className="flex justify-between items-center py-1">
+                <span className="text-text-muted flex items-center gap-1.5">
+                  <DatabaseIcon size={12} />
+                  数据库大小
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-text-primary">{formatBytes(stats.databaseSizeBytes)}</span>
+                  <button
+                    onClick={() => setShowTruncateDialog(true)}
+                    className="p-1 text-text-muted hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                    title="清空所有数据"
+                  >
+                    <ClearIcon size={12} />
+                  </button>
+                </div>
+              </div>
             </>
           )}
 
@@ -162,14 +184,6 @@ export function ServerStatsPanel() {
             className="mt-2 w-full py-1.5 text-center text-xs text-text-muted hover:text-text-primary hover:bg-bg-light rounded transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
           >
             {isLoading ? '刷新中...' : <><ArrowPathIcon size={12} /> 刷新统计</>}
-          </button>
-
-          {/* 清空所有数据按钮 */}
-          <button
-            onClick={() => setShowTruncateDialog(true)}
-            className="mt-1 w-full py-1.5 text-center text-xs text-red-400/70 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors flex items-center justify-center gap-1"
-          >
-            <ClearIcon size={12} /> 清空所有数据
           </button>
         </div>
       )}

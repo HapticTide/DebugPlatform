@@ -14,7 +14,7 @@ import Vapor
 struct DatabaseDescriptorDTO: Content {
     /// 数据库类型（使用字符串以便扩展）
     typealias Kind = String
-    
+
     enum Location: Content {
         case appSupport(relative: String)
         case documents(relative: String)
@@ -22,7 +22,7 @@ struct DatabaseDescriptorDTO: Content {
         case group(containerId: String, relative: String)
         case custom(description: String)
     }
-    
+
     let id: String
     let name: String
     let kind: Kind
@@ -100,8 +100,8 @@ struct DBCommandDTO: Content {
     let pageSize: Int?
     let orderBy: String?
     let ascending: Bool?
-    let query: String?  // SQL 查询语句
-    
+    let query: String? // SQL 查询语句
+
     init(
         requestId: String,
         kind: DBCommandKindDTO,
@@ -135,21 +135,21 @@ enum DBInspectorErrorDTO: Content {
     case timeout
     case accessDenied(String)
     case internalError(String)
-    
+
     var message: String {
         switch self {
-        case .databaseNotFound(let id):
-            return "Database not found: \(id)"
-        case .tableNotFound(let name):
-            return "Table not found: \(name)"
-        case .invalidQuery(let reason):
-            return "Invalid query: \(reason)"
+        case let .databaseNotFound(id):
+            "Database not found: \(id)"
+        case let .tableNotFound(name):
+            "Table not found: \(name)"
+        case let .invalidQuery(reason):
+            "Invalid query: \(reason)"
         case .timeout:
-            return "Operation timeout"
-        case .accessDenied(let reason):
-            return "Access denied: \(reason)"
-        case .internalError(let msg):
-            return "Internal error: \(msg)"
+            "Operation timeout"
+        case let .accessDenied(reason):
+            "Access denied: \(reason)"
+        case let .internalError(msg):
+            "Internal error: \(msg)"
         }
     }
 }

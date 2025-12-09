@@ -9,6 +9,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { HTTPEventSummary, TrafficRule } from '@/types'
 import { useRuleStore } from '@/stores/ruleStore'
+import { useMockStore } from '@/stores/mockStore'
 import {
     formatSmartTime,
     formatDuration,
@@ -24,7 +25,8 @@ import {
     StarIcon,
     TagIcon,
     MockIcon,
-    GlobeIcon
+    GlobeIcon,
+    HighlightIcon
 } from './icons'
 
 // 分组模式
@@ -59,6 +61,8 @@ interface Props {
     isSelectMode?: boolean
     selectedIds?: Set<string>
     onToggleSelect?: (id: string) => void
+    /** 是否显示已隐藏请求（默认 false，即隐藏被规则过滤的请求） */
+    showBlacklisted?: boolean
 }
 
 /**
@@ -206,12 +210,20 @@ export function GroupedHTTPEventList({
     isSelectMode = false,
     selectedIds = new Set(),
     onToggleSelect,
+    showBlacklisted = false,
 }: Props) {
     const parentRef = useRef<HTMLDivElement>(null)
     const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
 
+    // 追踪有新请求的分组，用于高亮效果
+    const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set())
+    const prevGroupCountsRef = useRef<Record<string, number>>({})
+
     // 获取规则
     const { deviceRules, rules, fetchDeviceRules, fetchRules } = useRuleStore()
+
+    // 获取 Mock 规则（用于判断 Mock 图标是否显示）
+    const { rules: mockRules } = useMockStore()
 
     // 加载规则
     useEffect(() => {
@@ -228,8 +240,9 @@ export function GroupedHTTPEventList({
     }, [deviceId, deviceRules, rules])
 
     // 应用规则过滤（隐藏匹配 'hide' 规则的事件）
+    // 当 showBlacklisted 为 true 时，显示所有事件（包括黑名单）
     const filteredEvents = useMemo(() => {
-        if (applicableRules.length === 0) {
+        if (showBlacklisted || applicableRules.length === 0) {
             return events
         }
 
@@ -237,13 +250,50 @@ export function GroupedHTTPEventList({
             const rule = matchEventRule(event, applicableRules)
             return !rule || rule.action !== 'hide'
         })
-    }, [events, applicableRules])
+    }, [events, applicableRules, showBlacklisted])
 
     // 计算分组
     const groups = useMemo(
         () => createEventGroups(filteredEvents, groupMode, expandedKeys),
         [filteredEvents, groupMode, expandedKeys]
     )
+
+    // 追踪分组数量变化，为有新请求的分组添加高亮
+    useEffect(() => {
+        if (groupMode === 'none' || groups.length === 0) {
+            prevGroupCountsRef.current = {}
+            return
+        }
+
+        const currentCounts: Record<string, number> = {}
+        groups.forEach(({ key, count }) => {
+            currentCounts[key] = count
+        })
+
+        const newHighlights = new Set<string>()
+        for (const [key, count] of Object.entries(currentCounts)) {
+            const prevCount = prevGroupCountsRef.current[key] || 0
+            if (count > prevCount && prevCount > 0) {
+                // 只有当之前存在且数量增加时才高亮（避免初始加载时全部高亮）
+                newHighlights.add(key)
+            }
+        }
+
+        if (newHighlights.size > 0) {
+            setHighlightedGroups(prev => new Set([...prev, ...newHighlights]))
+
+            // 1.5 秒后移除高亮
+            setTimeout(() => {
+                setHighlightedGroups(prev => {
+                    const next = new Set(prev)
+                    newHighlights.forEach(key => next.delete(key))
+                    return next
+                })
+            }, 1500)
+        }
+
+        prevGroupCountsRef.current = currentCounts
+    }, [groups, groupMode])
 
     // 构建虚拟列表项
     const virtualItems = useMemo(
@@ -298,42 +348,55 @@ export function GroupedHTTPEventList({
         }
     }
 
-    const renderGroupHeader = (group: EventGroup, style: React.CSSProperties) => (
-        <div
-            key={`group-${group.key}`}
-            style={style}
-            className="flex items-center px-4 py-2 bg-bg-light border-b border-border cursor-pointer hover:bg-bg-lighter"
-            onClick={() => toggleGroup(group.key)}
-        >
-            <span className="mr-2 text-text-secondary">
-                {group.expanded ? <ChevronDownIcon size={16} /> : <ChevronRightIcon size={16} />}
-            </span>
-            <span className="font-medium text-text-primary flex-1 truncate">{group.label}</span>
-            <div className="flex items-center gap-3 text-xs">
-                <span className="px-2 py-1 bg-bg-medium rounded text-text-secondary">
-                    {group.count} 请求
-                </span>
-                <span className="px-2 py-1 bg-bg-medium rounded text-text-muted">
-                    平均 {formatDuration(group.avgDuration)}
-                </span>
-                {group.errorCount > 0 && (
-                    <span className="px-2 py-1 bg-red-500/20 rounded text-red-400">
-                        {group.errorCount} 错误
-                    </span>
+    const renderGroupHeader = (group: EventGroup, style: React.CSSProperties) => {
+        const isHighlighted = highlightedGroups.has(group.key)
+
+        return (
+            <div
+                key={`group-${group.key}`}
+                style={style}
+                className={clsx(
+                    "flex items-center px-4 py-2 bg-bg-light border-b border-border cursor-pointer hover:bg-bg-lighter",
+                    isHighlighted && "animate-domain-highlight"
                 )}
-                {group.mockedCount > 0 && (
-                    <span className="px-2 py-1 bg-purple-500/20 rounded text-purple-400">
-                        {group.mockedCount} Mock
+                onClick={() => toggleGroup(group.key)}
+            >
+                <span className="mr-2 text-text-secondary">
+                    {group.expanded ? <ChevronDownIcon size={16} /> : <ChevronRightIcon size={16} />}
+                </span>
+                <span className="font-medium text-text-primary flex-1 truncate">{group.label}</span>
+                <div className="flex items-center gap-3 text-xs">
+                    <span className={clsx(
+                        "px-2 py-1 bg-bg-medium rounded text-text-secondary",
+                        isHighlighted && "animate-count-pop"
+                    )}>
+                        {group.count} 请求
                     </span>
-                )}
+                    <span className="px-2 py-1 bg-bg-medium rounded text-text-muted">
+                        平均 {formatDuration(group.avgDuration)}
+                    </span>
+                    {group.errorCount > 0 && (
+                        <span className="px-2 py-1 bg-red-500/20 rounded text-red-400">
+                            {group.errorCount} 错误
+                        </span>
+                    )}
+                    {group.mockedCount > 0 && (
+                        <span className="px-2 py-1 bg-purple-500/20 rounded text-purple-400">
+                            {group.mockedCount} Mock
+                        </span>
+                    )}
+                </div>
             </div>
-        </div>
-    )
+        )
+    }
 
     const renderEventRow = (event: HTTPEventSummary, style: React.CSSProperties) => {
         const isError = !event.statusCode || event.statusCode >= 400
         const isSelected = event.id === selectedId
         const isChecked = selectedIds.has(event.id)
+
+        // 检查 Mock 规则是否仍然存在（规则被删除后不显示图标）
+        const isMocked = event.isMocked && event.mockRuleId && mockRules.some(rule => rule.id === event.mockRuleId)
 
         // 检查是否匹配规则（用于高亮/标记）
         const matchedRule = matchEventRule(event, applicableRules)
@@ -348,21 +411,25 @@ export function GroupedHTTPEventList({
                 onClick={(e) => handleRowClick(event, e)}
                 className={clsx(
                     'flex items-center cursor-pointer transition-all duration-150 group border-b border-border-light pl-8',
-                    isError && !isSelected && !isHighlighted && 'bg-red-500/5 hover:bg-red-500/10',
-                    isSelected && 'bg-accent-blue/15 border-l-2 border-l-accent-blue',
-                    isChecked && !isSelected && 'bg-primary/15',
-                    isHighlighted && !isSelected && 'bg-yellow-500/10 hover:bg-yellow-500/20 border-l-4 border-l-yellow-500',
-                    isMarked && !isSelected && !isHighlighted && 'border-l-4',
-                    !isSelected && !isChecked && !isError && !isHighlighted && !isMarked && 'hover:bg-bg-light/60'
+                    // 选中状态 - 底色块样式，使用主题绿色
+                    isSelected && 'bg-selected',
+                    // 批量选中（非选中状态）
+                    !isSelected && isChecked && 'bg-primary/15',
+                    // 高亮规则（非选中状态）- 只用底色，去掉左边框
+                    !isSelected && !isChecked && isHighlighted && 'bg-yellow-500/10 hover:bg-yellow-500/20',
+                    // 标记规则（非选中、非高亮状态）
+                    !isSelected && !isChecked && !isHighlighted && isMarked && 'border-l-4',
+                    // 错误状态（非选中、非高亮状态）
+                    !isSelected && !isChecked && !isHighlighted && isError && 'bg-red-500/5 hover:bg-red-500/10',
+                    // 默认悬停
+                    !isSelected && !isChecked && !isHighlighted && !isError && 'hover:bg-bg-light/60'
                 )}
             >
-                {/* 标记图标 */}
-                {(isHighlighted || isMarked) && !isSelected && (
-                    <div className="w-6 flex-shrink-0 flex items-center justify-center -ml-6">
-                        {isHighlighted && <StarIcon size={12} filled className="text-yellow-500" />}
-                        {isMarked && !isHighlighted && <TagIcon size={12} style={{ color: ruleColor || 'currentColor' }} />}
-                    </div>
-                )}
+                {/* 标记图标区域 - 始终保留宽度以确保列对齐 */}
+                <div className="w-6 flex-shrink-0 flex items-center justify-center">
+                    {isHighlighted && <HighlightIcon size={12} filled className="text-yellow-500" />}
+                    {isMarked && !isHighlighted && <TagIcon size={12} style={{ color: ruleColor || 'currentColor' }} />}
+                </div>
 
                 {/* Checkbox */}
                 {isSelectMode && (
@@ -379,7 +446,7 @@ export function GroupedHTTPEventList({
                 {/* Time */}
                 <div className={clsx(
                     'px-3 py-3.5 w-[90px] flex-shrink-0',
-                    isSelected ? 'text-accent-blue' : 'text-text-muted'
+                    isSelected ? 'text-white' : 'text-text-muted'
                 )}>
                     <span className="text-sm font-mono">{formatSmartTime(event.startTime)}</span>
                 </div>
@@ -412,7 +479,7 @@ export function GroupedHTTPEventList({
                 <div className="px-3 py-3.5 flex-1 min-w-0 overflow-hidden">
                     <span className={clsx(
                         'text-sm truncate',
-                        isSelected ? 'text-accent-blue font-medium' : 'text-text-primary'
+                        isSelected ? 'text-white font-medium' : 'text-text-primary'
                     )} title={event.url}>
                         {(() => {
                             try {
@@ -436,7 +503,7 @@ export function GroupedHTTPEventList({
 
                 {/* Tags */}
                 <div className="px-3 py-3.5 w-[60px] flex-shrink-0 flex items-center justify-center gap-1">
-                    {event.isMocked && (
+                    {isMocked && (
                         <span title="已 Mock"><MockIcon size={14} /></span>
                     )}
                     {event.isFavorite && (

@@ -34,7 +34,7 @@ struct CreateHTTPEvent: AsyncMigration {
         // Note: No need to add .unique(on: "id") constraint separately
         // The id field with .identifier(auto: false) is already the primary key
         // and primary keys are inherently unique
-        
+
         // // 创建索引
         // try await database.schema("http_events")
         //     .unique(on: "id")

@@ -14,28 +14,28 @@ struct TrafficRuleController: RouteCollection {
         rules.get(use: listRules)
         rules.post(use: createOrUpdateRule)
         rules.delete(":ruleId", use: deleteRule)
-        
+
         // Device specific overrides
         let deviceRules = routes.grouped("devices", ":deviceId", "traffic-rules")
         deviceRules.get(use: listDeviceRules)
     }
-    
+
     // MARK: - List Rules (Global or All)
-    
+
     func listRules(req: Request) async throws -> [TrafficRuleModel] {
-        return try await TrafficRuleModel.query(on: req.db)
+        try await TrafficRuleModel.query(on: req.db)
             .sort(\.$priority, .descending)
             .sort(\.$createdAt, .descending)
             .all()
     }
-    
+
     // MARK: - List Device Rules
-    
+
     func listDeviceRules(req: Request) async throws -> [TrafficRuleModel] {
         guard let deviceId = req.parameters.get("deviceId") else {
             throw Abort(.badRequest, reason: "Missing deviceId")
         }
-        
+
         // Return both global (deviceId is nil) and device specific
         return try await TrafficRuleModel.query(on: req.db)
             .group(.or) { group in
@@ -46,12 +46,12 @@ struct TrafficRuleController: RouteCollection {
             .sort(\.$createdAt, .descending)
             .all()
     }
-    
+
     // MARK: - Create or Update Rule
-    
+
     func createOrUpdateRule(req: Request) async throws -> TrafficRuleModel {
         let dto = try req.content.decode(TrafficRuleDTO.self)
-        
+
         if let id = dto.id, let existing = try await TrafficRuleModel.find(id, on: req.db) {
             // Update existing
             existing.name = dto.name
@@ -81,18 +81,18 @@ struct TrafficRuleController: RouteCollection {
             return rule
         }
     }
-    
+
     // MARK: - Delete Rule
-    
+
     func deleteRule(req: Request) async throws -> HTTPStatus {
         guard let ruleId = req.parameters.get("ruleId") else {
             throw Abort(.badRequest)
         }
-        
+
         guard let rule = try await TrafficRuleModel.find(ruleId, on: req.db) else {
             throw Abort(.notFound)
         }
-        
+
         try await rule.delete(on: req.db)
         return .ok
     }

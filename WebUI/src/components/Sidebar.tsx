@@ -6,7 +6,7 @@ import { useHTTPStore } from '@/stores/httpStore'
 import { useWSStore } from '@/stores/wsStore'
 import { useRuleStore } from '@/stores/ruleStore'
 import { getPlatformIcon } from '@/utils/deviceIcons'
-import { HttpIcon, WebSocketIcon, LogIcon, SearchIcon, IPhoneIcon, StarIcon, ClearIcon, MoreIcon, ChevronDownIcon, DebugHubLogo, BookIcon, CheckIcon, PackageIcon } from '@/components/icons'
+import { HttpIcon, WebSocketIcon, LogIcon, SearchIcon, IPhoneIcon, StarIcon, ClearIcon, ChevronDownIcon, DebugHubLogo, BookIcon, CheckIcon, PackageIcon, ColorfulTrafficLightIcon, HighlighterIcon } from '@/components/icons'
 import { ServerStatsPanel } from './ServerStatsPanel'
 import { ThemeToggle } from './ThemeToggle'
 import clsx from 'clsx'
@@ -25,8 +25,8 @@ export function Sidebar() {
   // WebSocket Store (for Host List) - 保持单选
   const { sessions: wsSessions, setFilter: setWsFilter, filters: wsFilters } = useWSStore()
 
-  // Rule Store - for domain highlighting/hiding
-  const { getDomainRule, createOrUpdateRule, deleteRule, fetchRules } = useRuleStore()
+  // Rule Store - for domain highlighting/hiding and traffic rules
+  const { rules, getDomainRule, createOrUpdateRule, deleteRule, fetchRules } = useRuleStore()
 
   // Show all devices toggle
   const [showAllDevices, setShowAllDevices] = useState(false)
@@ -230,23 +230,43 @@ export function Sidebar() {
       </Link>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Quick Links - API & 健康 */}
-        <div className="px-4 py-2 border-b border-border flex items-center gap-2">
+        {/* Quick Links - API、健康、流量规则 */}
+        <div className="px-4 py-2 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Link
+              to="/api-docs"
+              className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-primary hover:bg-bg-light rounded transition-colors"
+              title="API 文档"
+            >
+              <BookIcon size={12} />
+              <span>API</span>
+            </Link>
+            <Link
+              to="/health"
+              className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-green-400 hover:bg-bg-light rounded transition-colors"
+              title="健康检查"
+            >
+              <CheckIcon size={12} />
+              <span>健康</span>
+            </Link>
+          </div>
           <Link
-            to="/api-docs"
-            className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-primary hover:bg-bg-light rounded transition-colors"
-            title="API 文档"
+            to="/rules"
+            className={clsx(
+              "flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors",
+              location.pathname === '/rules'
+                ? "text-primary bg-primary/10"
+                : "text-text-muted hover:text-amber-400 hover:bg-bg-light"
+            )}
+            title="全局流量规则"
           >
-            <BookIcon size={12} />
-            <span>API</span>
-          </Link>
-          <Link
-            to="/health"
-            className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-green-400 hover:bg-bg-light rounded transition-colors"
-            title="健康检查"
-          >
-            <CheckIcon size={12} />
-            <span>健康</span>
+            <ColorfulTrafficLightIcon size={12} />
+            <span>流量规则</span>
+            {rules.length > 0 && (
+              <span className="ml-1 text-2xs px-1 py-0.5 rounded bg-bg-medium text-text-muted">
+                {rules.length}
+              </span>
+            )}
           </Link>
         </div>
 
@@ -491,7 +511,7 @@ export function Sidebar() {
                           className="w-4 h-4 min-w-4 min-h-4 flex-shrink-0 rounded border-border cursor-pointer accent-primary"
                         />
                       )}
-                      {isWhitelist && <StarIcon size={12} filled className="text-yellow-500" />}
+                      {isWhitelist && <HighlighterIcon size={12} />}
                       {isBlacklist && <ClearIcon size={12} className="text-red-400" />}
                       <span className={clsx(
                         "truncate font-mono",
@@ -509,13 +529,13 @@ export function Sidebar() {
                           : "opacity-60 bg-bg-medium"
                       )}>{count}</span>
 
-                      {/* Quick Action on Hover */}
+                      {/* Quick Action on Hover - 设置流量规则 */}
                       <button
                         onClick={(e) => cycleDomainRule(e, domain)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-bg-medium rounded transition-colors text-text-muted hover:text-text-primary"
-                        title="Toggle Rule (None -> Highlight -> Hide)"
+                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-bg-medium rounded transition-colors"
+                        title="设置流量规则 (无 → 高亮 → 隐藏)"
                       >
-                        <MoreIcon size={14} />
+                        <ColorfulTrafficLightIcon size={14} />
                       </button>
                     </div>
                   </div>
