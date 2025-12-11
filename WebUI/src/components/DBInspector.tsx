@@ -5,7 +5,7 @@
 // Copyright © 2025 Sun. All rights reserved.
 //
 
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, useRef } from 'react'
 import clsx from 'clsx'
 import { useDBStore } from '@/stores/dbStore'
 import { useProtobufStore } from '@/stores/protobufStore'
@@ -64,18 +64,27 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         setDbSortOrder,
         toggleDbSortDirection,
         getSortedDatabases,
+        // 重置 Action
+        reset,
     } = useDBStore()
 
     // Protobuf 配置
     const { descriptorMeta, getColumnConfig } = useProtobufStore()
     const [showProtobufConfig, setShowProtobufConfig] = useState(false)
 
-    // 初始化加载数据库（仅当数据库列表为空时）
+    // 跟踪 deviceId 变化
+    const prevDeviceIdRef = useRef(deviceId)
+
+    // 设备切换时重置状态并重新加载
     useEffect(() => {
-        if (databases.length === 0) {
-            loadDatabases(deviceId)
+        if (prevDeviceIdRef.current !== deviceId) {
+            // 设备切换，重置所有状态
+            reset()
+            prevDeviceIdRef.current = deviceId
         }
-    }, [deviceId, databases.length, loadDatabases])
+        // 加载数据库列表
+        loadDatabases(deviceId)
+    }, [deviceId, reset, loadDatabases])
 
     // 选中数据库后加载表（仅当表列表为空时）
     useEffect(() => {
