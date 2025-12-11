@@ -242,8 +242,10 @@ function FramesTab({
         ) : (
           <div className="divide-y divide-border">
             {/* 帧列表：后端已按时间降序返回，最新的在顶部 */}
-            {frames.map((frame) => {
+            {frames.map((frame, index) => {
               const isExpanded = expandedFrameId === frame.id
+              // 序号：从 1 开始
+              const rowNumber = index + 1
               return (
                 <FrameItem
                   key={frame.id}
@@ -252,6 +254,7 @@ function FramesTab({
                   frame={frame}
                   isExpanded={isExpanded}
                   onToggle={() => onToggleExpand(isExpanded ? null : frame.id)}
+                  rowNumber={rowNumber}
                 />
               )
             })}
@@ -282,12 +285,14 @@ const FrameItem = memo(function FrameItem({
   frame,
   isExpanded,
   onToggle,
+  rowNumber,
 }: {
   deviceId: string
   sessionId: string
   frame: WSFrame
   isExpanded: boolean
   onToggle: () => void
+  rowNumber: number
 }) {
   const isSend = frame.direction === 'send'
   const isText = frame.opcode === 'text'
@@ -414,6 +419,11 @@ const FrameItem = memo(function FrameItem({
     >
       {/* 帧头部 */}
       <div className="flex items-center gap-3">
+        {/* 序号 */}
+        <span className="w-8 text-xs font-mono text-text-muted text-right flex-shrink-0">
+          {rowNumber}
+        </span>
+
         {/* 方向图标 */}
         <span
           className={clsx(

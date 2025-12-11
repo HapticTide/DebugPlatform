@@ -49,7 +49,7 @@ interface EventGroup {
 // 虚拟列表项类型
 type VirtualItem =
     | { type: 'group-header'; group: EventGroup; index: number }
-    | { type: 'event'; event: HTTPEventSummary; groupKey: string }
+    | { type: 'event'; event: HTTPEventSummary; groupKey: string; eventIndex: number }
 
 interface Props {
     events: HTTPEventSummary[]
@@ -189,9 +189,9 @@ function buildVirtualItems(groups: EventGroup[]): VirtualItem[] {
         items.push({ type: 'group-header', group, index: i })
 
         if (group.expanded) {
-            for (const event of group.events) {
-                items.push({ type: 'event', event, groupKey: group.key })
-            }
+            group.events.forEach((event, eventIndex) => {
+                items.push({ type: 'event', event, groupKey: group.key, eventIndex: eventIndex + 1 })
+            })
         }
     }
 
@@ -388,7 +388,7 @@ export function GroupedHTTPEventList({
         )
     }
 
-    const renderEventRow = (event: HTTPEventSummary, style: React.CSSProperties) => {
+    const renderEventRow = (event: HTTPEventSummary, style: React.CSSProperties, rowNumber: number) => {
         const isError = !event.statusCode || event.statusCode >= 400
         const isSelected = event.id === selectedId
         const isChecked = selectedIds.has(event.id)
@@ -424,6 +424,14 @@ export function GroupedHTTPEventList({
                     !isSelected && !isChecked && !isHighlighted && !isError && 'hover:bg-bg-light/60'
                 )}
             >
+                {/* 序号列 */}
+                <div className={clsx(
+                    'w-10 flex-shrink-0 flex items-center justify-center text-xs font-mono',
+                    isSelected ? 'text-white/80' : 'text-text-muted'
+                )}>
+                    {rowNumber}
+                </div>
+
                 {/* 标记图标区域 - 始终保留宽度以确保列对齐 */}
                 <div className="w-6 flex-shrink-0 flex items-center justify-center">
                     {isHighlighted && <HighlightIcon size={12} filled className="text-yellow-500" />}
@@ -561,7 +569,7 @@ export function GroupedHTTPEventList({
                             if (item.type === 'group-header') {
                                 return renderGroupHeader(item.group, style)
                             } else {
-                                return renderEventRow(item.event, style)
+                                return renderEventRow(item.event, style, item.eventIndex)
                             }
                         })}
                     </div>

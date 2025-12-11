@@ -252,10 +252,12 @@ export function VirtualHTTPEventTable({
         }
     }, [isSelectMode, onToggleSelect, onSelect, selectedId])
 
-    const renderEventRowContent = (event: HTTPEventSummary) => {
+    const renderEventRowContent = (event: HTTPEventSummary, index: number) => {
         const isError = !event.statusCode || event.statusCode >= 400
         const isSelected = event.id === selectedId
         const isChecked = selectedIds.has(event.id)
+        // 序号：从 1 开始
+        const rowNumber = index + 1
 
         // 使用 URL 级别的收藏状态（优先于请求级别的状态）
         const isFavorite = deviceId ? isUrlFavorite(deviceId, event.url) : event.isFavorite
@@ -296,6 +298,14 @@ export function VirtualHTTPEventTable({
                     !isSelected && !isChecked && !isHighlighted && !isError && 'hover:bg-bg-light/60'
                 )}
             >
+                {/* 序号列 */}
+                <div className={clsx(
+                    'w-12 flex-shrink-0 flex items-center justify-center text-xs font-mono',
+                    isSelected ? 'text-white/80' : 'text-text-muted'
+                )}>
+                    {rowNumber}
+                </div>
+
                 {/* 标记图标区域 - 始终保留宽度以确保列对齐 */}
                 <div className="w-6 flex-shrink-0 flex items-center justify-center">
                     {isHighlighted && <HighlightIcon size={12} filled className="text-yellow-500" />}
@@ -408,6 +418,8 @@ export function VirtualHTTPEventTable({
         <div className="h-full flex flex-col">
             {/* Header */}
             <div className="flex items-center bg-bg-medium border-b border-border text-text-secondary sticky top-0 z-10 flex-shrink-0">
+                {/* 序号列 */}
+                <div className="w-12 flex-shrink-0 px-2 py-2 font-semibold text-xs uppercase tracking-wider text-center">#</div>
                 {/* 标记图标区域占位 */}
                 <div className="w-6 flex-shrink-0"></div>
                 {isSelectMode && (
@@ -449,7 +461,7 @@ export function VirtualHTTPEventTable({
                                         height: `${ROW_HEIGHT}px`,
                                     }}
                                 >
-                                    {renderEventRowContent(event)}
+                                    {renderEventRowContent(event, virtualItem.index)}
                                 </div>
                             )
                         })}

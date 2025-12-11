@@ -154,6 +154,8 @@ export function VirtualLogList({
     const levelStyle = getLogLevelClass(event.level)
     const isChecked = selectedIds.has(event.id)
     const isSelected = !isSelectMode && selectedId === event.id
+    // 序号：从 1 开始
+    const rowNumber = index + 1
 
     const handleClick = () => {
       if (isSelectMode) {
@@ -179,6 +181,14 @@ export function VirtualLogList({
       >
         {/* Level indicator bar */}
         <div className={clsx('w-1 self-stretch flex-shrink-0', levelStyle.bg)} />
+
+        {/* 序号列 */}
+        <div className={clsx(
+          'w-12 px-2 whitespace-nowrap flex-shrink-0 text-xs font-mono text-center pt-0.5',
+          isSelected ? 'text-white/80' : 'text-text-muted'
+        )}>
+          {rowNumber}
+        </div>
 
         {/* Checkbox */}
         {isSelectMode && (
@@ -237,6 +247,8 @@ export function VirtualLogList({
         <div className="flex items-center text-xs font-semibold text-text-secondary uppercase tracking-wider">
           {/* Level indicator placeholder */}
           <div className="w-1 flex-shrink-0" />
+          {/* 序号列 */}
+          <div className="w-12 px-2 py-2 text-center">#</div>
           {isSelectMode && (
             <div className="w-10 px-3 py-2 flex-shrink-0">
               <span className="sr-only">选择</span>
