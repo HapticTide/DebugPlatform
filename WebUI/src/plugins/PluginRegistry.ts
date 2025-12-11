@@ -4,7 +4,7 @@
 import { FrontendPlugin, PluginContext, PluginEvent, PluginRegistration, PluginTabConfig } from './types'
 
 // 插件启用状态持久化 Key
-const PLUGIN_ENABLED_STATE_KEY = 'debughub_plugin_enabled_state'
+const PLUGIN_ENABLED_STATE_KEY = 'debugplatform_plugin_enabled_state'
 
 class PluginRegistryImpl {
     private plugins: Map<string, PluginRegistration> = new Map()

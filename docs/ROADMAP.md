@@ -2,9 +2,21 @@
 
 本文档是 Debug Platform 的总体规划。各功能模块的详细路线图请参阅对应文档。
 
-> **当前版本**: v1.3.0 | [更新日志](CHANGELOG.md)
+> **当前版本**: v1.4.0 | [更新日志](CHANGELOG.md)
 >
-> **最后更新**: 2025-12-05
+> **最后更新**: 2025-12-11
+
+---
+
+## 📊 当前状态概览
+
+### 三层插件化架构 ✅ 已完成
+
+| 层级 | 状态 | 说明 |
+|------|------|------|
+| **DebugProbe (iOS SDK)** | ✅ 100% | 7 个内置插件，统一 PluginManager |
+| **DebugHub (Vapor 后端)** | ✅ 100% | 7 个 Backend 插件，BackendPluginRegistry |
+| **WebUI (React 前端)** | ✅ 100% | 7 个 Frontend 插件，PluginRenderer |
 
 ---
 
@@ -12,13 +24,14 @@
 
 | 模块 | 文档 | 当前状态 | 下一步 |
 |------|------|----------|--------|
-| **HTTP Inspector** | [HTTP_INSPECTOR_ROADMAP.md](HTTP_INSPECTOR_ROADMAP.md) | v1.2 稳定 | 虚拟滚动优化 |
-| **WebSocket Inspector** | [WS_INSPECTOR_ROADMAP.md](WS_INSPECTOR_ROADMAP.md) | v1.2 稳定 | 消息搜索/过滤 |
-| **Log Viewer** | [LOG_VIEWER_ROADMAP.md](LOG_VIEWER_ROADMAP.md) | v1.3 增强 | 高级搜索语法 |
-| **DB Inspector** | [DB_INSPECTOR_ROADMAP.md](DB_INSPECTOR_ROADMAP.md) | v1.3 稳定 | 数据编辑 |
-| **Mock Engine** | [MOCK_ENGINE_ROADMAP.md](MOCK_ENGINE_ROADMAP.md) | v1.0 基础 | 动态响应模板 |
-| **Breakpoint** | [BREAKPOINT_ROADMAP.md](BREAKPOINT_ROADMAP.md) | ✅ v1.3 已修复 | 请求修改 UI |
-| **Chaos Engine** | [CHAOS_ENGINE_ROADMAP.md](CHAOS_ENGINE_ROADMAP.md) | ✅ v1.3 已修复 | DNS 失败模拟 |
+| **HTTP Inspector** | [HTTP_INSPECTOR_ROADMAP.md](HTTP_INSPECTOR_ROADMAP.md) | ✅ v1.3 稳定 | 请求缓存 |
+| **WebSocket Inspector** | [WS_INSPECTOR_ROADMAP.md](WS_INSPECTOR_ROADMAP.md) | ✅ v1.2 稳定 | 消息搜索/过滤 |
+| **Log Viewer** | [LOG_VIEWER_ROADMAP.md](LOG_VIEWER_ROADMAP.md) | ✅ v1.3 稳定 | 搜索历史 |
+| **DB Inspector** | [DB_INSPECTOR_ROADMAP.md](DB_INSPECTOR_ROADMAP.md) | ✅ v1.3 稳定 | 数据编辑 |
+| **Mock Engine** | [MOCK_ENGINE_ROADMAP.md](MOCK_ENGINE_ROADMAP.md) | ✅ v1.2 稳定 | 动态响应模板 |
+| **Breakpoint** | [BREAKPOINT_ROADMAP.md](BREAKPOINT_ROADMAP.md) | ✅ v1.3 稳定 | 请求修改 UI |
+| **Chaos Engine** | [CHAOS_ENGINE_ROADMAP.md](CHAOS_ENGINE_ROADMAP.md) | ✅ v1.3 稳定 | DNS 失败模拟 |
+| **Performance Monitor** | [PERFORMANCE_MONITOR_ROADMAP.md](PERFORMANCE_MONITOR_ROADMAP.md) | 📋 规划中 | 基础指标采集 |
 
 ---
 
@@ -81,14 +94,14 @@
 
 **指标**:
 ```prometheus
-debug_hub_devices_connected{}
-debug_hub_events_received_total{type="http|ws|log"}
-debug_hub_database_size_bytes{}
+debug_platform_devices_connected{}
+debug_platform_events_received_total{type="http|ws|log"}
+debug_platform_database_size_bytes{}
 ```
 
 **涉及模块**: DebugHub
 
-**优先级**: P2 | **预估**: 3 天
+**优先级**: P3 | **预估**: 3 天
 
 ---
 
@@ -100,59 +113,43 @@ debug_hub_database_size_bytes{}
 
 **目标**: 支持多实例部署
 
-**架构**:
-```
-Load Balancer → Hub #1, #2, #3 → Redis (Session) → PostgreSQL
-```
-
-**剩余工作**:
-- Redis 设备粘性会话
-- 跨实例 Pub/Sub 广播
+**方案**:
+- Redis 会话共享
+- PostgreSQL 主从复制
+- WebSocket 连接黏连（Sticky Session）
 
 **优先级**: P3 | **预估**: 2 周
 
 ---
 
-#### 5.2 插件系统
+#### 5.2 第三方插件支持
 
-**目标**: 支持第三方扩展
+**目标**: 支持用户自定义插件
 
-**插件类型**:
-- 数据处理插件（自定义解析）
-- 导出插件（更多格式）
-- UI 插件（自定义面板）
+**能力**:
+- 插件市场 / 仓库
+- 热加载 / 热卸载
+- 沙箱隔离
 
-**优先级**: P3 | **预估**: 2 周
-
----
-
-## 📊 优先级总览
-
-| 优先级 | 功能 | 预估 | 详情 |
-|-------|------|------|------|
-| 🔴 P0 | 断点/Chaos 网络层集成 | 2 天 | [Breakpoint](BREAKPOINT_ROADMAP.md) / [Chaos](CHAOS_ENGINE_ROADMAP.md) |
-| 🔴 P0 | 断点消息格式统一 | 0.5 天 | [Breakpoint](BREAKPOINT_ROADMAP.md) |
-| 🔴 P0 | breakpointHit 处理 | 0.5 天 | [Breakpoint](BREAKPOINT_ROADMAP.md) |
-| 🟢 P2 | 会话录制 | 2 周 | 跨模块 |
-| 🟢 P2 | 多设备对比 | 1.5 周 | 跨模块 |
-| 🟢 P2 | 数据脱敏 | 1 周 | 跨模块 |
-| 🟢 P2 | Prometheus Metrics | 3 天 | DebugHub |
-| 🔵 P3 | 高可用部署 | 2 周 | 架构 |
-| 🔵 P3 | 插件系统 | 2 周 | 架构 |
+**优先级**: P3 | **预估**: 3 周
 
 ---
 
-## 📝 更新记录
+## 📋 版本规划
 
-### 2025-12-06
-- 拆分功能模块路线图为独立文档
-- 新增: HTTP_INSPECTOR_ROADMAP.md
-- 新增: WS_INSPECTOR_ROADMAP.md
-- 新增: LOG_VIEWER_ROADMAP.md
-- 新增: MOCK_ENGINE_ROADMAP.md
-- 新增: BREAKPOINT_ROADMAP.md
-- 新增: CHAOS_ENGINE_ROADMAP.md
-- 已有: DB_INSPECTOR_ROADMAP.md
+| 版本 | 计划内容 | 预计时间 |
+|------|----------|----------|
+| v1.5 | WebSocket 搜索/过滤 + 请求缓存 | 2025 Q1 |
+| v1.6 | 会话录制与回放 | 2025 Q1 |
+| v2.0 | 多设备对比 + Prometheus | 2025 Q2 |
 
-### 2025-12-05
-- 初始版本
+---
+
+## 📝 已废弃文档
+
+以下文档已在 v1.4.0 版本中移除（历史参考用的 AI Prompts 和进度追踪）：
+
+- ~~PLUGIN_REFACTOR_PROMPTS_1.md~~
+- ~~PLUGIN_REFACTOR_PROMPTS_2.md~~
+- ~~PLUGIN_REFACTOR_STATUS.md~~
+- ~~PROMPTS.md~~

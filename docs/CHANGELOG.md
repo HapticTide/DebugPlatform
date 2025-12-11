@@ -7,6 +7,64 @@
 
 ---
 
+## [1.4.0] - 2025-12-11
+
+### 新增
+
+#### 设备管理增强
+- 设备批量选择支持
+- 设备备注名功能（保存到后端）
+- 批量删除离线设备
+
+#### 插件管理界面
+- 新增 PluginManager 组件
+- 支持动态启用/禁用插件
+- 插件依赖自动管理
+
+### 改进
+
+#### 平台中立化
+- 所有 "Debug Hub" 文案改为 "Debug Platform"
+- 所有 "iOS App" 文案改为 "App"
+- localStorage key 前缀从 `debughub_` 改为 `debugplatform_`
+
+#### UI/UX 优化
+- 侧边栏 DOMAINS 区域根据当前插件切换显示
+- Log 过滤器栏背景色与工具栏一致
+- 确认对话框支持 ESC 键关闭
+- 批量操作后列表自动刷新
+
+#### API 文档更新
+- 移除废弃的 `toggle-capture` API
+- 新增 `PUT /api/devices/:deviceId/nickname` API
+- 按插件化体系重新组织 API 文档
+- 补充批量删除、单条删除等 API
+
+### 移除
+
+#### 废弃代码清理
+- 移除 `captureEnabled` 相关字段和逻辑
+- 移除旧的 `currentTab` URL 参数
+- 删除历史 AI Prompts 文档：
+  - PLUGIN_REFACTOR_PROMPTS_1.md
+  - PLUGIN_REFACTOR_PROMPTS_2.md
+  - PLUGIN_REFACTOR_STATUS.md
+  - PROMPTS.md
+
+### 文档
+
+#### README 更新
+- 更新架构图显示三层插件系统
+- 更新版本号和日期
+- 更新功能模块状态表
+
+#### ROADMAP 更新
+- 标记所有模块为稳定状态
+- 更新下一步计划
+- 添加废弃文档清单
+
+---
+
 ## [1.3.0] - 2025-12-06
 
 ### 新增
@@ -105,10 +163,10 @@
 | `WebUI/src/types/index.ts` | LogLevel 类型 |
 | `WebUI/src/utils/format.ts` | 日志级别样式 |
 | `WebUI/tailwind.config.js` | 颜色配置 |
-| `iOSProbe/Sources/Database/SQLiteInspector.swift` | 超时保护、内存修复 |
-| `iOSProbe/Sources/Models/DebugEvent.swift` | Level 枚举 |
-| `iOSProbe/Sources/Log/AppLogger.swift` | verbose 方法 |
-| `iOSProbe/Sources/Log/DebugProbeDDLogger.swift` | DDLogFlag 映射 |
+| `DebugProbe/Sources/Database/SQLiteInspector.swift` | 超时保护、内存修复 |
+| `DebugProbe/Sources/Models/DebugEvent.swift` | Level 枚举 |
+| `DebugProbe/Sources/Log/AppLogger.swift` | verbose 方法 |
+| `DebugProbe/Sources/Log/DebugProbeDDLogger.swift` | DDLogFlag 映射 |
 | `DebugHub/Sources/Controllers/DatabaseController.swift` | executeQuery 端点 |
 | `docs/*.md` | 路线图文档 |
 
@@ -160,8 +218,8 @@
 |------|----------|
 | `DebugHub/Sources/Controllers/WSEventController.swift` | 新增 frame payload API |
 | `DebugHub/Sources/Services/EventDTOs.swift` | payloadSize 可选 |
-| `iOSProbe/Sources/Models/BridgeMessage.swift` | 新增消息类型，修复 payload 结构 |
-| `iOSProbe/Sources/Core/DebugBridgeClient.swift` | 实现 replayRequest 处理 |
+| `DebugProbe/Sources/Models/BridgeMessage.swift` | 新增消息类型，修复 payload 结构 |
+| `DebugProbe/Sources/Core/DebugBridgeClient.swift` | 实现 replayRequest 处理 |
 | `WebUI/src/components/WSSessionDetail.tsx` | 完整重写，支持格式切换 |
 | `WebUI/src/pages/DeviceDetailPage.tsx` | 异步 session 信息获取 |
 | `WebUI/src/stores/wsStore.ts` | 添加 updateSessionUrl 方法 |

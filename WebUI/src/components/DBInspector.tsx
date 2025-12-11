@@ -165,7 +165,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                 <DatabaseIcon size={36} className="mb-3 opacity-50" />
                 <p className="text-sm">没有注册的数据库</p>
                 <p className="text-xs mt-2 text-text-muted">
-                    在 iOS App 中使用 DatabaseRegistry.shared.register() 注册数据库
+                    在 App 中使用 DatabaseRegistry.shared.register() 注册数据库
                 </p>
             </div>
         )

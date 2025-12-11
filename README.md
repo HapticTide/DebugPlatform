@@ -1,14 +1,14 @@
 # Debug Platform
 
-一套专为内部 iOS App 设计的调试系统，类似于内部版的 Proxy Tool + Log Viewer。
+全功能移动 App 调试平台，集成 HTTP/WebSocket 监控、日志分析、数据库检查、Mock 引擎、断点调试、故障注入于一体。基于三层插件化架构，支持灵活扩展。
 
 > [!IMPORTANT]
 >
 > **本项目全部代码和文档均由 Agent AI 生成**
 
-> **当前版本**: v1.3.0 | [更新日志](docs/CHANGELOG.md) | [开发路线图](docs/ROADMAP.md)
+> **当前版本**: v1.4.0 | [更新日志](docs/CHANGELOG.md) | [开发路线图](docs/ROADMAP.md)
 >
-> **最后更新**: 2025-12-05
+> **最后更新**: 2025-12-11
 
 ## ✨ 功能特性
 
@@ -21,12 +21,13 @@
 - 🔄 **请求重放** - 一键重放历史请求
 - ⏸️ **断点调试** - 请求/响应拦截与修改
 - 💥 **故障注入** - 延迟、超时、错误码注入
+- 🗄️ **数据库检查** - SQLite 数据库浏览和查询
 
 ### 数据分析
 - 🔍 **高级搜索语法** - `method:POST status:4xx duration:>500ms`
 - 📊 **请求 Diff 对比** - 并排对比两个请求差异
-- 📦 **Protobuf 解析** - Wire Format 自动解析
-- ��️ **图片响应预览** - 检测图片类型并内联渲染
+- 📦 **Protobuf 解析** - Wire Format 自动解析 + BLOB 列解析
+- 🖼️ **图片响应预览** - 检测图片类型并内联渲染
 - ⏱️ **性能时间线** - DNS/TCP/TLS/TTFB 瀑布图
 
 ### 数据导出
@@ -39,6 +40,7 @@
 - ⭐ **请求收藏** - 收藏重要请求，防止被清理
 - 📦 **批量操作** - 多选 + 批量删除/收藏/导出
 - 🧹 **自动清理** - 可配置的数据过期策略
+- 🔌 **插件管理** - 动态启用/禁用功能模块
 
 ### 可靠性
 - 💾 **事件持久化** - 断线时本地 SQLite 缓存，重连后自动恢复
@@ -47,28 +49,20 @@
 
 ---
 
-## 📚 功能模块路线图
-
-| 模块 | 文档 | 描述 |
-|------|------|------|
-| **HTTP Inspector** | [HTTP_INSPECTOR_ROADMAP](docs/HTTP_INSPECTOR_ROADMAP.md) | HTTP 请求捕获和分析 |
-| **WebSocket Inspector** | [WS_INSPECTOR_ROADMAP](docs/WS_INSPECTOR_ROADMAP.md) | WebSocket 会话监控 |
-| **Log Viewer** | [LOG_VIEWER_ROADMAP](docs/LOG_VIEWER_ROADMAP.md) | 日志查看和分析 |
-| **DB Inspector** | [DB_INSPECTOR_ROADMAP](docs/DB_INSPECTOR_ROADMAP.md) | SQLite 数据库检查 |
-| **Mock Engine** | [MOCK_ENGINE_ROADMAP](docs/MOCK_ENGINE_ROADMAP.md) | 请求 Mock 规则引擎 |
-| **Breakpoint** | [BREAKPOINT_ROADMAP](docs/BREAKPOINT_ROADMAP.md) | 请求断点调试 |
-| **Chaos Engine** | [CHAOS_ENGINE_ROADMAP](docs/CHAOS_ENGINE_ROADMAP.md) | 故障注入测试 |
-
----
-
 ## 🏗️ 系统架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                          iOS App                                │
+│                          Mobile App                             │
 │   ┌─────────────────────────────────────────────────────────┐   │
-│   │                     iOS Probe SDK                       │   │
-│   │   NetworkInstrumentation → DebugEventBus → BridgeClient │   │
+│   │                   DebugProbe SDK                        │   │
+│   │  ┌─────────────────────────────────────────────────┐    │   │
+│   │  │              Plugin System                      │    │   │
+│   │  │  NetworkPlugin │ LogPlugin │ WebSocketPlugin    │    │   │
+│   │  │  MockPlugin │ BreakpointPlugin │ ChaosPlugin    │    │   │
+│   │  │  DatabasePlugin                                 │    │   │
+│   │  └─────────────────────────────────────────────────┘    │   │
+│   │  PluginManager → DebugEventBus → BridgeClient           │   │
 │   │            ↓ 断线时                                     │   │
 │   │   EventPersistenceQueue (SQLite)                        │   │
 │   └─────────────────────────────────────────────────────────┘   │
@@ -77,7 +71,13 @@
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Debug Hub (Vapor)                            │
-│   WebSocket Handlers → Services → Controllers → PostgreSQL      │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │              Backend Plugin System                      │   │
+│   │  NetworkBackendPlugin │ LogBackendPlugin │ WSBackendPlugin│  │
+│   │  MockBackendPlugin │ BreakpointBackendPlugin            │   │
+│   │  ChaosBackendPlugin │ DatabaseBackendPlugin             │   │
+│   └─────────────────────────────────────────────────────────┘   │
+│   BackendPluginRegistry → Services → Controllers → PostgreSQL   │
 │                           ↓                                     │
 │                    Public/ (WebUI 静态资源)                     │
 └─────────────────────────────────────────────────────────────────┘
@@ -85,9 +85,30 @@
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                 Web UI (React + TypeScript)                     │
-│   DeviceListPage │ DeviceDetailPage │ ApiDocsPage │ HealthPage  │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │              Frontend Plugin System                     │   │
+│   │  NetworkPlugin │ LogPlugin │ WebSocketPlugin            │   │
+│   │  MockPlugin │ BreakpointPlugin │ ChaosPlugin            │   │
+│   │  DatabasePlugin                                         │   │
+│   └─────────────────────────────────────────────────────────┘   │
+│   PluginRegistry → PluginRenderer → Zustand Stores              │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 📚 功能模块路线图
+
+| 模块 | 文档 | 当前状态 |
+|------|------|----------|
+| **HTTP Inspector** | [HTTP_INSPECTOR_ROADMAP](docs/HTTP_INSPECTOR_ROADMAP.md) | ✅ v1.3 稳定 |
+| **WebSocket Inspector** | [WS_INSPECTOR_ROADMAP](docs/WS_INSPECTOR_ROADMAP.md) | ✅ v1.2 稳定 |
+| **Log Viewer** | [LOG_VIEWER_ROADMAP](docs/LOG_VIEWER_ROADMAP.md) | ✅ v1.3 稳定 |
+| **DB Inspector** | [DB_INSPECTOR_ROADMAP](docs/DB_INSPECTOR_ROADMAP.md) | ✅ v1.3 稳定 |
+| **Mock Engine** | [MOCK_ENGINE_ROADMAP](docs/MOCK_ENGINE_ROADMAP.md) | ✅ v1.2 稳定 |
+| **Breakpoint** | [BREAKPOINT_ROADMAP](docs/BREAKPOINT_ROADMAP.md) | ✅ v1.3 稳定 |
+| **Chaos Engine** | [CHAOS_ENGINE_ROADMAP](docs/CHAOS_ENGINE_ROADMAP.md) | ✅ v1.3 稳定 |
+| **Performance Monitor** | [PERFORMANCE_MONITOR_ROADMAP](docs/PERFORMANCE_MONITOR_ROADMAP.md) | 📋 规划中 |
 
 ---
 
@@ -113,9 +134,9 @@ cd DebugPlatform/DebugHub
 - API 文档: http://localhost:8081/api-docs
 - 健康检查: http://localhost:8081/health
 
-### 2. iOS App 集成
+### 2. App 集成
 
-iOS SDK 已独立为 [DebugProbe](https://github.com/sunimp/DebugProbe) 仓库，请参阅该仓库的 README 获取详细集成文档。
+SDK 已独立为 [DebugProbe](https://github.com/sunimp/iOS-DebugProbe) 仓库，请参阅该仓库的 README 获取详细集成文档。
 
 **快速开始：**
 
@@ -124,7 +145,7 @@ iOS SDK 已独立为 [DebugProbe](https://github.com/sunimp/DebugProbe) 仓库�
 dependencies: [
     .package(path: "../DebugProbe")  // 本地路径
     // 或使用远程仓库
-    // .package(url: "https://github.com/sunimp/DebugProbe.git", branch: "main")
+    // .package(url: "https://github.com/sunimp/iOS-DebugProbe.git", branch: "main")
 ]
 
 // 集成代码
@@ -142,7 +163,7 @@ func setupDebugProbe() {
 #endif
 ```
 
-SDK 默认自动拦截所有 HTTP 请求（Method Swizzling），无需额外配置。更多功能请参阅 [DebugProbe README](https://github.com/sunimp/DebugProbe/blob/main/README.md)。
+SDK 默认自动拦截所有 HTTP 请求（Method Swizzling），无需额外配置。更多功能请参阅 [DebugProbe README](https://github.com/sunimp/iOS-DebugProbe/blob/main/README.md)。
 
 ### 3. 开发模式
 
@@ -168,7 +189,8 @@ npm run deploy
 | `GET /api/devices/{id}/http` | 查询 HTTP 事件 |
 | `GET /api/devices/{id}/ws-sessions` | 查询 WebSocket 会话 |
 | `GET /api/devices/{id}/logs` | 查询日志事件 |
-| `POST /api/devices/{id}/mock` | 管理 Mock 规则 |
+| `GET /api/devices/{id}/databases` | 查询数据库列表 |
+| `POST /api/devices/{id}/mock-rules` | 管理 Mock 规则 |
 | `POST /api/devices/{id}/breakpoints` | 管理断点规则 |
 | `POST /api/devices/{id}/chaos` | 管理故障注入规则 |
 
@@ -176,7 +198,7 @@ npm run deploy
 
 | 端点 | 说明 |
 |------|------|
-| `/debug-bridge` | iOS 设备连接 |
+| `/debug-bridge` | 设备连接端点 |
 | `/ws/live?deviceId=xxx` | Web UI 实时事件流 |
 
 ---

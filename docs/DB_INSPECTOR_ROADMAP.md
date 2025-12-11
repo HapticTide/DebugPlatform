@@ -21,7 +21,7 @@
 
 ### 1.1 查询超时保护 ✅
 
-**实现位置**: `iOSProbe/Sources/Database/SQLiteInspector.swift`
+**实现位置**: `DebugProbe/Sources/Database/SQLiteInspector.swift`
 
 **配置参数**:
 ```swift
@@ -287,7 +287,7 @@ var writeProtectedDatabases: [String] { get set }
 
 ### 已实现的超时保护代码
 
-**位置**: `iOSProbe/Sources/Database/SQLiteInspector.swift`
+**位置**: `DebugProbe/Sources/Database/SQLiteInspector.swift`
 
 ```swift
 private func executeQueryInternal(at url: URL, dbId: String, query: String) throws -> DBQueryResponse {

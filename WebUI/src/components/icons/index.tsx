@@ -1720,7 +1720,7 @@ export const XMarkIcon = ({ size = 24, className = '' }: IconProps) => (
     </svg>
 )
 
-/** Debug Hub Logo 图标 - 与 favicon.svg 一致 */
+/** Debug Platform Logo 图标 - 与 favicon.svg 一致 */
 export const DebugHubLogo: React.FC<IconProps> = ({
     size = defaultProps.size,
     className
@@ -1733,7 +1733,7 @@ export const DebugHubLogo: React.FC<IconProps> = ({
         className={className}
         xmlns="http://www.w3.org/2000/svg"
     >
-        <rect width="64" height="64" rx="16" fill="url(#debugHubGrad)" />
+        <rect width="64" height="64" rx="16" fill="url(#debugPlatformGrad)" />
         <path
             fillRule="evenodd"
             clipRule="evenodd"
@@ -1741,7 +1741,7 @@ export const DebugHubLogo: React.FC<IconProps> = ({
             fill="white"
         />
         <defs>
-            <linearGradient id="debugHubGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+            <linearGradient id="debugPlatformGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
                 <stop stopColor="#00d4aa" />
                 <stop offset="1" stopColor="#00b894" />
             </linearGradient>
