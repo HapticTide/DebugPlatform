@@ -241,8 +241,8 @@ function FramesTab({
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {/* 倒序显示帧，最新的在顶部 */}
-            {[...frames].reverse().map((frame) => {
+            {/* 帧列表：后端已按时间降序返回，最新的在顶部 */}
+            {frames.map((frame) => {
               const isExpanded = expandedFrameId === frame.id
               return (
                 <FrameItem
