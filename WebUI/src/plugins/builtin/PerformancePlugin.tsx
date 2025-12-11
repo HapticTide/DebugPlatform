@@ -782,103 +782,108 @@ function AlertsContent({
     }
 
     return (
-        <div className="p-4 space-y-4">
+        <div className="flex flex-col h-full">
             {/* 顶部工具栏 */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-medium text-text-secondary">
-                        告警列表
-                        {store.activeAlertCount > 0 && (
-                            <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">
-                                {store.activeAlertCount} 活跃
-                            </span>
-                        )}
-                    </h3>
-                    <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer">
-                        <Checkbox
-                            checked={includeResolved}
-                            onChange={(checked) => setIncludeResolved(checked)}
-                        />
-                        显示已解决
-                    </label>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setShowRules(!showRules)}
-                        className="btn btn-secondary text-xs px-2 py-1"
-                    >
-                        {showRules ? '隐藏规则' : '告警规则'}
-                    </button>
-                    <button
-                        onClick={onRefresh}
-                        disabled={isLoading}
-                        className="btn btn-secondary text-xs px-2 py-1 disabled:opacity-50"
-                    >
-                        刷新
-                    </button>
+            <div className="flex-shrink-0 px-4 pt-4 pb-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <h3 className="text-sm font-medium text-text-secondary">
+                            告警列表
+                            {store.activeAlertCount > 0 && (
+                                <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">
+                                    {store.activeAlertCount} 活跃
+                                </span>
+                            )}
+                        </h3>
+                        <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer">
+                            <Checkbox
+                                checked={includeResolved}
+                                onChange={(checked) => setIncludeResolved(checked)}
+                            />
+                            显示已解决
+                        </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowRules(!showRules)}
+                            className="btn btn-secondary text-xs px-2 py-1"
+                        >
+                            {showRules ? '隐藏规则' : '告警规则'}
+                        </button>
+                        <button
+                            onClick={onRefresh}
+                            disabled={isLoading}
+                            className="btn btn-secondary text-xs px-2 py-1 disabled:opacity-50"
+                        >
+                            刷新
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* 告警规则面板 */}
             {showRules && (
-                <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700">
-                    <h4 className="text-sm font-medium text-zinc-300 mb-2">告警规则</h4>
-                    <div className="space-y-2">
-                        {alertRules.length === 0 ? (
-                            <p className="text-xs text-zinc-500">暂无告警规则</p>
-                        ) : (
-                            alertRules.map((rule) => (
-                                <div
-                                    key={rule.id}
-                                    className={clsx(
-                                        'flex items-center justify-between px-2 py-1.5 rounded text-xs',
-                                        rule.isEnabled ? 'bg-zinc-700/50' : 'bg-zinc-800/50 opacity-50'
-                                    )}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span className={getSeverityColor(rule.severity)}>
-                                            {rule.severity === 'critical' ? '🔴' : rule.severity === 'warning' ? '🟡' : '🔵'}
-                                        </span>
-                                        <span className="text-zinc-300">{getMetricTypeLabel(rule.metricType)}</span>
-                                        <span className="text-zinc-500">
-                                            {getConditionLabel(rule.condition)} {rule.threshold}
-                                            {rule.metricType === 'memory' || rule.metricType === 'cpu' ? '%' : ''}
-                                        </span>
-                                        {rule.durationSeconds > 0 && (
-                                            <span className="text-zinc-500">持续 {rule.durationSeconds}s</span>
-                                        )}
-                                    </div>
-                                    <button
-                                        onClick={() =>
-                                            store.updateAlertRule(deviceId, rule.id, { isEnabled: !rule.isEnabled })
-                                        }
+                <div className="flex-shrink-0 px-4 pb-3">
+                    <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700">
+                        <h4 className="text-sm font-medium text-zinc-300 mb-2">告警规则</h4>
+                        <div className="space-y-2">
+                            {alertRules.length === 0 ? (
+                                <p className="text-xs text-zinc-500">暂无告警规则</p>
+                            ) : (
+                                alertRules.map((rule) => (
+                                    <div
+                                        key={rule.id}
                                         className={clsx(
-                                            'px-1.5 py-0.5 rounded text-xs',
-                                            rule.isEnabled
-                                                ? 'bg-green-900/50 text-green-400'
-                                                : 'bg-zinc-600 text-zinc-400'
+                                            'flex items-center justify-between px-2 py-1.5 rounded text-xs',
+                                            rule.isEnabled ? 'bg-zinc-700/50' : 'bg-zinc-800/50 opacity-50'
                                         )}
                                     >
-                                        {rule.isEnabled ? '启用' : '禁用'}
-                                    </button>
-                                </div>
-                            ))
-                        )}
+                                        <div className="flex items-center gap-2">
+                                            <span className={getSeverityColor(rule.severity)}>
+                                                {rule.severity === 'critical' ? '🔴' : rule.severity === 'warning' ? '🟡' : '🔵'}
+                                            </span>
+                                            <span className="text-zinc-300">{getMetricTypeLabel(rule.metricType)}</span>
+                                            <span className="text-zinc-500">
+                                                {getConditionLabel(rule.condition)} {rule.threshold}
+                                                {rule.metricType === 'memory' || rule.metricType === 'cpu' ? '%' : ''}
+                                            </span>
+                                            {rule.durationSeconds > 0 && (
+                                                <span className="text-zinc-500">持续 {rule.durationSeconds}s</span>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() =>
+                                                store.updateAlertRule(deviceId, rule.id, { isEnabled: !rule.isEnabled })
+                                            }
+                                            className={clsx(
+                                                'px-1.5 py-0.5 rounded text-xs',
+                                                rule.isEnabled
+                                                    ? 'bg-green-900/50 text-green-400'
+                                                    : 'bg-zinc-600 text-zinc-400'
+                                            )}
+                                        >
+                                            {rule.isEnabled ? '启用' : '禁用'}
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* 告警列表 */}
-            {isLoading ? (
-                <div className="flex items-center justify-center h-full text-text-muted">加载中...</div>
-            ) : sortedAlerts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-text-muted gap-3">
-                    <AlertIcon size={48} className="opacity-30" />
-                    <span>暂无告警</span>
-                </div>
-            ) : (
-                <div className="space-y-2">
-                    {sortedAlerts.map((alert) => (
+            {/* 告警列表 - 可滚动区域 */}
+            <div className="flex-1 overflow-auto px-4 pb-4">
+                {isLoading ? (
+                    <div className="flex items-center justify-center h-full text-text-muted">加载中...</div>
+                ) : sortedAlerts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-text-muted gap-3">
+                        <AlertIcon size={48} className="opacity-30" />
+                        <span>暂无告警</span>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {sortedAlerts.map((alert) => (
                         <div
                             key={alert.id}
                             className={clsx(
@@ -923,8 +928,9 @@ function AlertsContent({
                             </div>
                         </div>
                     ))}
-                </div>
-            )}
+                    </div>
+                )}
+            </div>
         </div>
     )
 }
