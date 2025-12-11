@@ -1,6 +1,6 @@
 # Debug Platform
 
-全功能移动 App 调试平台，集成 HTTP/WebSocket 监控、日志分析、数据库检查、Mock 引擎、断点调试、故障注入于一体。基于三层插件化架构，支持灵活扩展。
+移动 App 调试平台，集成 HTTP/WebSocket 监控、日志分析、数据库检查、Mock 引擎、断点调试、故障注入于一体。基于三层插件化架构，支持灵活扩展。
 
 > [!IMPORTANT]
 >
