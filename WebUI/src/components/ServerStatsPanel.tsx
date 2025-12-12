@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { getServerStats, truncateAllData } from '@/services/api'
 import { useToastStore } from '@/stores/toastStore'
 import { useRuleStore } from '@/stores/ruleStore'
+import { useHTTPStore } from '@/stores/httpStore'
+import { useLogStore } from '@/stores/logStore'
+import { useWSStore } from '@/stores/wsStore'
+import { usePerformanceStore } from '@/stores/performanceStore'
 import { TokenConfirmDialog } from './TokenConfirmDialog'
 import type { ServerStats } from '@/types'
 import {
@@ -60,6 +64,12 @@ export function ServerStatsPanel() {
   // Traffic Rule store for refreshing after truncate
   const { fetchRules } = useRuleStore()
 
+  // Data stores for clearing client-side data
+  const httpStore = useHTTPStore()
+  const logStore = useLogStore()
+  const wsStore = useWSStore()
+  const performanceStore = usePerformanceStore()
+
   const fetchStats = async () => {
     setIsLoading(true)
     try {
@@ -76,6 +86,13 @@ export function ServerStatsPanel() {
     setIsTruncating(true)
     try {
       await truncateAllData()
+
+      // 清空客户端 store 数据
+      httpStore.clearEvents()
+      logStore.clearEvents()
+      wsStore.clearSessions()
+      performanceStore.clearData()
+
       toast.show('success', '已清空所有数据')
       setShowTruncateDialog(false)
       // 刷新统计和流量规则状态

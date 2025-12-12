@@ -164,6 +164,8 @@ export function DevicePluginView() {
                     httpStore.clearEvents()
                 } else if (activePluginId === 'logs') {
                     logStore.clearEvents()
+                } else if (activePluginId === 'performance') {
+                    performanceStore.clearData()
                 }
             },
         },
@@ -278,6 +280,7 @@ export function DevicePluginView() {
             wsStore.clearSessions()
             mockStore.clearRules()
             breakpointStore.clear()
+            performanceStore.clearData()
             clearActivities()
             setInDeviceDetail(false)
         }
@@ -319,6 +322,7 @@ export function DevicePluginView() {
         wsStore.clearSessions()
         mockStore.clearRules()
         breakpointStore.clear()
+        performanceStore.clearData()
 
         setShowClearDeviceDialog(false)
 
@@ -528,7 +532,7 @@ export function DevicePluginView() {
                 onClose={() => setShowClearDeviceDialog(false)}
                 onConfirm={handleClearDeviceData}
                 title="清空设备数据"
-                message={`确定要清空 "${currentDevice?.deviceInfo.deviceName || '该设备'}" 的所有数据吗？\n\n这将删除：\n• 所有 HTTP 请求记录\n• 所有日志事件\n• 所有 WebSocket 会话\n\n此操作不可恢复。`}
+                message={`确定要清空 "${currentDevice?.deviceInfo.deviceName || '该设备'}" 的所有数据吗？\n\n这将删除：\n• 所有 HTTP 请求记录\n• 所有日志事件\n• 所有 WebSocket 会话\n• 所有性能监控数据\n\n此操作不可恢复。`}
                 confirmText="确认清空"
                 cancelText="取消"
                 type="danger"
