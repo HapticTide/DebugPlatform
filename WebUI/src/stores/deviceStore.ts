@@ -163,9 +163,9 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
           }
         })
       }
-      return { 
-        success: false, 
-        error: (error as Error).message || '刷新失败' 
+      return {
+        success: false,
+        error: (error as Error).message || '刷新失败'
       }
     }
   },
