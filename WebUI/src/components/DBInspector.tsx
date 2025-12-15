@@ -13,7 +13,7 @@ import { ProtobufConfigPanel } from './ProtobufConfigPanel'
 import { BlobCell, isBase64Blob } from './BlobCell'
 import { ListLoadingOverlay } from './ListLoadingOverlay'
 import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, ArrowUpIcon, ArrowDownIcon, EditIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon, FolderIcon, CheckIcon } from './icons'
-import type { DatabaseLocation } from '@/types'
+import type { DatabaseLocation, DBInfo } from '@/types'
 
 interface DBInspectorProps {
     deviceId: string
@@ -101,6 +101,33 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
             prevTableRef.current = selectedTable
         }
     }, [selectedTable])
+
+    // 路径弹窗：ESC 键和点击外部关闭
+    useEffect(() => {
+        if (!pathPopupDbId) return
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setPathPopupDbId(null)
+            }
+        }
+
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as HTMLElement
+            // 检查点击是否在弹窗内部或文件夹图标按钮上
+            if (!target.closest('[data-path-popup]') && !target.closest('[data-path-button]')) {
+                setPathPopupDbId(null)
+            }
+        }
+
+        document.addEventListener('keydown', handleKeyDown)
+        document.addEventListener('mousedown', handleClickOutside)
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown)
+            document.removeEventListener('mousedown', handleClickOutside)
+        }
+    }, [pathPopupDbId])
 
     // 设备切换时重置状态并重新加载
     useEffect(() => {
@@ -230,13 +257,18 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         return 'Unknown location'
     }, [])
 
+    // 获取数据库显示路径（优先使用绝对路径）
+    const getDisplayPath = useCallback((db: DBInfo): string => {
+        return db.absolutePath || formatLocationPath(db.descriptor.location)
+    }, [formatLocationPath])
+
     // 复制数据库路径并显示反馈
-    const handleCopyPath = useCallback(async (location: DatabaseLocation) => {
-        const path = formatLocationPath(location)
+    const handleCopyPath = useCallback(async (db: DBInfo) => {
+        const path = getDisplayPath(db)
         await copyToClipboard(path)
         setPathCopied(true)
         setTimeout(() => setPathCopied(false), 2000)
-    }, [formatLocationPath, copyToClipboard])
+    }, [getDisplayPath, copyToClipboard])
 
     // 根据筛选条件过滤数据（客户端筛选）
     const filteredRows = useMemo(() => {
@@ -388,12 +420,13 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                                 <span className="text-yellow-500" title="敏感数据"><LockIcon size={12} /></span>
                                             )}
                                             <span
+                                                data-path-button
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     setPathPopupDbId(pathPopupDbId === db.descriptor.id ? null : db.descriptor.id)
                                                 }}
                                                 className={clsx(
-                                                    'p-1 rounded transition-colors',
+                                                    'p-1 rounded transition-colors cursor-pointer',
                                                     selectedDb === db.descriptor.id
                                                         ? 'hover:bg-white/20 text-white/70 hover:text-white'
                                                         : 'hover:bg-bg-lighter text-text-muted hover:text-text-secondary'
@@ -407,7 +440,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                 </button>
                                 {/* 路径弹窗 */}
                                 {pathPopupDbId === db.descriptor.id && (
-                                    <div className="absolute left-0 right-0 mt-1 p-2 bg-bg-dark border border-border rounded-lg shadow-lg z-10">
+                                    <div data-path-popup className="absolute left-0 right-0 mt-1 p-2 bg-bg-dark border border-border rounded-lg shadow-lg z-10">
                                         <div className="flex items-center justify-between gap-2 mb-1">
                                             <span className="text-2xs text-text-muted">数据库路径</span>
                                             <button
@@ -421,12 +454,12 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                             </button>
                                         </div>
                                         <div className="text-xs text-text-primary font-mono break-all bg-bg-light p-2 rounded">
-                                            {formatLocationPath(db.descriptor.location)}
+                                            {getDisplayPath(db)}
                                         </div>
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation()
-                                                handleCopyPath(db.descriptor.location)
+                                                handleCopyPath(db)
                                             }}
                                             className={clsx(
                                                 'mt-2 w-full flex items-center justify-center gap-1 px-2 py-1 rounded text-xs transition-colors',

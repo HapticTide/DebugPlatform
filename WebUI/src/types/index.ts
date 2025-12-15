@@ -371,6 +371,7 @@ export interface DBInfo {
   descriptor: DatabaseDescriptor
   tableCount: number
   fileSizeBytes: number | null
+  absolutePath: string | null
 }
 
 export interface DBTableInfo {
