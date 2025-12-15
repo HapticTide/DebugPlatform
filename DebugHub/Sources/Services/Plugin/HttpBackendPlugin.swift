@@ -438,7 +438,7 @@ struct PluginHTTPEventDetailDTO: Content {
         requestHeaders = (try? JSONDecoder().decode([String: String].self, from: Data(model.requestHeaders.utf8))) ??
             [:]
         requestBody = model.requestBody
-        bodyParams = (try? JSONDecoder().decode([String: String].self, from: Data(model.bodyParams.utf8)))
+        bodyParams = model.bodyParams.flatMap { try? JSONDecoder().decode([String: String].self, from: Data($0.utf8)) }
         statusCode = model.statusCode
         responseHeaders = model.responseHeaders.flatMap { try? JSONDecoder().decode(
             [String: String].self,
