@@ -12,7 +12,8 @@ import { useProtobufStore } from '@/stores/protobufStore'
 import { ProtobufConfigPanel } from './ProtobufConfigPanel'
 import { BlobCell, isBase64Blob } from './BlobCell'
 import { ListLoadingOverlay } from './ListLoadingOverlay'
-import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, ArrowUpIcon, ArrowDownIcon, EditIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon } from './icons'
+import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, ArrowUpIcon, ArrowDownIcon, EditIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon, FolderIcon, CheckIcon } from './icons'
+import type { DatabaseLocation } from '@/types'
 
 interface DBInspectorProps {
     deviceId: string
@@ -76,6 +77,10 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
     // 展开的筛选列
     const [expandedFilterColumn, setExpandedFilterColumn] = useState<string | null>(null)
+
+    // 数据库路径弹窗状态
+    const [pathPopupDbId, setPathPopupDbId] = useState<string | null>(null)
+    const [pathCopied, setPathCopied] = useState(false)
 
     // 双击单元格弹出框状态
     const [cellDetailPopup, setCellDetailPopup] = useState<{
@@ -205,6 +210,34 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         }
     }, [])
 
+    // 格式化数据库位置为路径字符串
+    const formatLocationPath = useCallback((location: DatabaseLocation): string => {
+        if (location.appSupport) {
+            return `Application Support/${location.appSupport.relative}`
+        }
+        if (location.documents) {
+            return `Documents/${location.documents.relative}`
+        }
+        if (location.caches) {
+            return `Caches/${location.caches.relative}`
+        }
+        if (location.group) {
+            return `AppGroup(${location.group.containerId})/${location.group.relative}`
+        }
+        if (location.custom) {
+            return location.custom.description
+        }
+        return 'Unknown location'
+    }, [])
+
+    // 复制数据库路径并显示反馈
+    const handleCopyPath = useCallback(async (location: DatabaseLocation) => {
+        const path = formatLocationPath(location)
+        await copyToClipboard(path)
+        setPathCopied(true)
+        setTimeout(() => setPathCopied(false), 2000)
+    }, [formatLocationPath, copyToClipboard])
+
     // 根据筛选条件过滤数据（客户端筛选）
     const filteredRows = useMemo(() => {
         if (!tableData?.rows) return []
@@ -315,32 +348,94 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                     </div>
                     <div className="space-y-1">
                         {getSortedDatabases().map((db) => (
-                            <button
-                                key={db.descriptor.id}
-                                onClick={() => handleSelectDb(db.descriptor.id)}
-                                className={clsx(
-                                    'w-full px-3 py-2 rounded-lg text-left text-xs transition-all',
-                                    selectedDb === db.descriptor.id
-                                        ? 'bg-primary text-white shadow-sm shadow-primary/30'
-                                        : 'text-text-secondary hover:bg-bg-light'
-                                )}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span>{getDbKindIcon(db.descriptor.kind)}</span>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-medium truncate">{db.descriptor.name}</div>
-                                        <div className={clsx(
-                                            'text-2xs',
-                                            selectedDb === db.descriptor.id ? 'text-white/70' : 'text-text-muted'
-                                        )}>
-                                            {db.tableCount} 表 • {formatBytes(db.fileSizeBytes)}
+                            <div key={db.descriptor.id} className="relative">
+                                <button
+                                    onClick={() => handleSelectDb(db.descriptor.id)}
+                                    className={clsx(
+                                        'w-full px-3 py-2 rounded-lg text-left text-xs transition-all',
+                                        selectedDb === db.descriptor.id
+                                            ? 'bg-primary text-white shadow-sm shadow-primary/30'
+                                            : 'text-text-secondary hover:bg-bg-light'
+                                    )}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span>{getDbKindIcon(db.descriptor.kind)}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-medium truncate">{db.descriptor.name}</div>
+                                            <div className={clsx(
+                                                'text-2xs',
+                                                selectedDb === db.descriptor.id ? 'text-white/70' : 'text-text-muted'
+                                            )}>
+                                                {db.tableCount} 表 • {formatBytes(db.fileSizeBytes)}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {db.descriptor.isSensitive && (
+                                                <span className="text-yellow-500" title="敏感数据"><LockIcon size={12} /></span>
+                                            )}
+                                            <span
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    setPathPopupDbId(pathPopupDbId === db.descriptor.id ? null : db.descriptor.id)
+                                                }}
+                                                className={clsx(
+                                                    'p-1 rounded transition-colors',
+                                                    selectedDb === db.descriptor.id
+                                                        ? 'hover:bg-white/20 text-white/70 hover:text-white'
+                                                        : 'hover:bg-bg-lighter text-text-muted hover:text-text-secondary'
+                                                )}
+                                                title="查看路径"
+                                            >
+                                                <FolderIcon size={12} />
+                                            </span>
                                         </div>
                                     </div>
-                                    {db.descriptor.isSensitive && (
-                                        <span className="text-yellow-500" title="敏感数据"><LockIcon size={12} /></span>
-                                    )}
-                                </div>
-                            </button>
+                                </button>
+                                {/* 路径弹窗 */}
+                                {pathPopupDbId === db.descriptor.id && (
+                                    <div className="absolute left-0 right-0 mt-1 p-2 bg-bg-dark border border-border rounded-lg shadow-lg z-10">
+                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                            <span className="text-2xs text-text-muted">数据库路径</span>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    setPathPopupDbId(null)
+                                                }}
+                                                className="p-0.5 rounded hover:bg-bg-light text-text-muted hover:text-text-secondary transition-colors"
+                                            >
+                                                <XIcon size={10} />
+                                            </button>
+                                        </div>
+                                        <div className="text-xs text-text-primary font-mono break-all bg-bg-light p-2 rounded">
+                                            {formatLocationPath(db.descriptor.location)}
+                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleCopyPath(db.descriptor.location)
+                                            }}
+                                            className={clsx(
+                                                'mt-2 w-full flex items-center justify-center gap-1 px-2 py-1 rounded text-xs transition-colors',
+                                                pathCopied
+                                                    ? 'bg-accent-green/20 text-accent-green'
+                                                    : 'bg-bg-light text-text-secondary hover:bg-bg-lighter'
+                                            )}
+                                        >
+                                            {pathCopied ? (
+                                                <>
+                                                    <CheckIcon size={12} />
+                                                    已复制
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ClipboardIcon size={12} />
+                                                    复制路径
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         ))}
                     </div>
                 </div>

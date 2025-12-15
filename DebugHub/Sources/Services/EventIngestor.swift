@@ -59,7 +59,7 @@ final class EventIngestor: @unchecked Sendable {
                     try await ingestPerformanceEvent(perfEvent, deviceId: deviceId, db: db)
                 }
             } catch {
-                print("[EventIngestor] Failed to ingest event: \(error)")
+                print("[EventIngestor] Failed to ingest event: \(String(reflecting: error))")
             }
         }
 
