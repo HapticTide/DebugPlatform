@@ -281,10 +281,24 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
     }
 
     if (dbError) {
+        // 检查是否是设备未连接的错误
+        const isNotConnected = dbError.includes('未连接') || dbError.includes('404')
         return (
             <div className="flex flex-col items-center justify-center h-full text-text-muted">
-                <WarningIcon size={36} className="mb-3 opacity-50" />
-                <p className="text-sm mb-3">{dbError}</p>
+                {isNotConnected ? (
+                    <>
+                        <DatabaseIcon size={48} className="mb-4 opacity-30" />
+                        <p className="text-base font-medium mb-2">设备未连接</p>
+                        <p className="text-sm text-text-muted mb-4 text-center max-w-md">
+                            请确保设备已连接到 DebugHub，且 DebugProbe SDK 已启用数据库功能
+                        </p>
+                    </>
+                ) : (
+                    <>
+                        <WarningIcon size={36} className="mb-3 opacity-50" />
+                        <p className="text-sm mb-3">{dbError}</p>
+                    </>
+                )}
                 <button
                     onClick={() => loadDatabases(deviceId)}
                     className="px-4 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors"

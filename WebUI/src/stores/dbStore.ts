@@ -129,7 +129,9 @@ export const useDBStore = create<DBState>((set, get) => ({
             let errorMessage = 'Failed to load databases'
             if (error instanceof Error) {
                 // 针对常见错误提供友好提示
-                if (error.message.includes('504') || error.message.includes('timeout')) {
+                if (error.message.includes('404')) {
+                    errorMessage = '设备未连接或数据库功能未启用'
+                } else if (error.message.includes('504') || error.message.includes('timeout')) {
                     errorMessage = '设备连接超时，请确保设备已连接且 DebugProbe SDK 已启用数据库功能'
                 } else {
                     errorMessage = error.message
