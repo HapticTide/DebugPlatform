@@ -20,6 +20,7 @@ struct RealtimeMessage: Content {
         case deviceDisconnected
         case deviceReconnected
         case breakpointHit
+        case pluginStateChange
     }
 
     let type: MessageType
@@ -33,6 +34,7 @@ struct DeviceSessionEvent: Content {
     let deviceId: String
     let deviceName: String
     let timestamp: Date
+    var pluginStates: [String: Bool]?  // 插件启用状态（可选，仅在连接/重连时携带）
 }
 
 /// 订阅者信息
@@ -106,13 +108,14 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
     }
 
     /// 广播设备连接事件
-    func broadcastDeviceConnected(deviceId: String, deviceName: String, sessionId: String) {
-        let event = DeviceSessionEvent(
+    func broadcastDeviceConnected(deviceId: String, deviceName: String, sessionId: String, pluginStates: [String: Bool] = [:]) {
+        var event = DeviceSessionEvent(
             sessionId: sessionId,
             deviceId: deviceId,
             deviceName: deviceName,
             timestamp: Date()
         )
+        event.pluginStates = pluginStates
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -378,5 +381,28 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
         }
 
         broadcastRaw(json, deviceId: deviceId)
+    }
+
+    /// 广播插件状态变化事件
+    /// - Parameters:
+    ///   - pluginId: 插件 ID
+    ///   - isEnabled: 是否启用
+    ///   - deviceId: 设备 ID
+    func broadcastPluginStateChange(pluginId: String, isEnabled: Bool, deviceId: String) {
+        let payload: [String: Any] = [
+            "pluginId": pluginId,
+            "isEnabled": isEnabled,
+        ]
+
+        guard
+            let payloadData = try? JSONSerialization.data(withJSONObject: payload),
+            let payloadString = String(data: payloadData, encoding: .utf8) else {
+            print("[RealtimeStream] Failed to encode plugin state change")
+            return
+        }
+
+        let message = RealtimeMessage(type: .pluginStateChange, deviceId: deviceId, payload: payloadString)
+        broadcastMessage(message)
+        print("[RealtimeStream] Broadcasted plugin state change: \(pluginId) -> \(isEnabled)")
     }
 }

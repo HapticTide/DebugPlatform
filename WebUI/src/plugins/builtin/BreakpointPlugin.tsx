@@ -265,17 +265,19 @@ function BreakpointPluginView({ context, isActive }: PluginRenderProps) {
                 {/* 右侧：清空规则 + 规则统计 */}
                 <div className="flex items-center gap-2 text-xs text-text-secondary">
                     {/* 清空规则按钮 */}
-                    <button
-                        onClick={handleClearAll}
-                        className="btn text-xs px-2 py-1.5 flex-shrink-0 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-                        title="清空所有规则"
-                        disabled={rules.length === 0}
-                    >
-                        清空规则
-                    </button>
+                    {rules.length > 0 && (
+                        <button
+                            onClick={handleClearAll}
+                            className="btn btn-ghost text-red-400 hover:bg-red-500/10 text-xs px-2 py-1.5 flex-shrink-0 flex items-center"
+                            title="清空所有规则"
+                        >
+                            <TrashIcon size={14} className="mr-1" />
+                            清空规则
+                        </button>
+                    )}
 
                     {/* 分隔线 */}
-                    <div className="w-px h-4 bg-border mx-1" />
+                    {rules.length > 0 && <div className="w-px h-4 bg-border mx-1" />}
 
                     {/* 规则统计 */}
                     <span>共 {rules.length} 条规则</span>

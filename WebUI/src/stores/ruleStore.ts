@@ -12,6 +12,7 @@ interface RuleStore {
   fetchDeviceRules: (deviceId: string) => Promise<void>
   createOrUpdateRule: (rule: Partial<TrafficRule>) => Promise<void>
   deleteRule: (id: string) => Promise<void>
+  deleteAllRules: () => Promise<void>
 
   // Helpers
   getDomainRule: (domain: string, deviceId?: string) => TrafficRule | undefined
@@ -88,6 +89,16 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
       }))
     } catch (error) {
       console.error('Failed to delete traffic rule', error)
+      throw error
+    }
+  },
+
+  deleteAllRules: async () => {
+    try {
+      await api.delete('/api/traffic-rules')
+      set({ rules: [], deviceRules: [] })
+    } catch (error) {
+      console.error('Failed to delete all traffic rules', error)
       throw error
     }
   },

@@ -39,6 +39,7 @@ export interface DeviceDetail {
     logEventCount: number
     wsSessionCount: number
   }
+  pluginStates: Record<string, boolean>  // 插件启用状态
 }
 
 // HTTP 事件
@@ -237,6 +238,7 @@ export type RealtimeMessageType =
   | 'deviceConnected'
   | 'deviceDisconnected'
   | 'breakpointHit'
+  | 'pluginStateChange'
 
 export interface RealtimeMessage {
   type: RealtimeMessageType

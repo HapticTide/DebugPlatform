@@ -1,10 +1,19 @@
 // 前端插件注册表
 // 管理所有已注册的前端插件
 
-import { FrontendPlugin, PluginContext, PluginEvent, PluginRegistration, PluginTabConfig } from './types'
+import { FrontendPlugin, PluginContext, PluginEvent, PluginRegistration, PluginTabConfig, BuiltinPluginId } from './types'
 
 // 插件启用状态持久化 Key
 const PLUGIN_ENABLED_STATE_KEY = 'debugplatform_plugin_enabled_state'
+
+// 常用插件列表（默认启用）
+// 这些插件在没有 localStorage 状态时默认启用
+const COMMON_PLUGINS: string[] = [
+    BuiltinPluginId.HTTP,
+    BuiltinPluginId.LOG,
+    BuiltinPluginId.DATABASE,
+    BuiltinPluginId.MOCK,
+]
 
 class PluginRegistryImpl {
     private plugins: Map<string, PluginRegistration> = new Map()
@@ -177,9 +186,8 @@ class PluginRegistryImpl {
         if (this.enabledState.has(pluginId)) {
             return this.enabledState.get(pluginId)!
         }
-        // 否则使用插件默认状态
-        const plugin = this.getPlugin(pluginId)
-        return plugin?.isEnabled ?? false
+        // 否则使用常用插件默认规则：常用插件默认启用，其他插件默认禁用
+        return COMMON_PLUGINS.includes(pluginId)
     }
 
     // 注册插件
@@ -192,9 +200,12 @@ class PluginRegistryImpl {
             return
         }
 
-        // 应用持久化的启用状态
+        // 应用持久化的启用状态，或使用常用插件默认规则
         if (this.enabledState.has(plugin.metadata.pluginId)) {
             plugin.isEnabled = this.enabledState.get(plugin.metadata.pluginId)!
+        } else {
+            // 没有持久化状态时，常用插件默认启用，其他插件默认禁用
+            plugin.isEnabled = COMMON_PLUGINS.includes(plugin.metadata.pluginId)
         }
 
         const registration: PluginRegistration = {

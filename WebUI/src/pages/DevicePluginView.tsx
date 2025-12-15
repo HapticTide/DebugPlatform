@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { toast } from 'react-hot-toast'
 import { useDeviceStore } from '@/stores/deviceStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useThemeStore } from '@/stores/themeStore'
@@ -58,7 +59,7 @@ export function DevicePluginView() {
     const [activePluginId, setActivePluginId] = useState(getDefaultPluginId)
 
     // Stores
-    const { currentDevice, selectDevice, clearSelection, clearDeviceData, toggleFavorite, isFavorite, refreshDevice, deviceNicknames, setNickname } =
+    const { currentDevice, selectDevice, clearSelection, clearDeviceData, toggleFavorite, isFavorite, refreshDevice, deviceNicknames, setNickname, updatePluginStates } =
         useDeviceStore()
     const { setConnected, setInDeviceDetail } = useConnectionStore()
     const toggleTheme = useThemeStore((s) => s.toggleTheme)
@@ -84,7 +85,17 @@ export function DevicePluginView() {
     const handleRefreshDevice = useCallback(async () => {
         setIsRefreshing(true)
         try {
-            await refreshDevice()
+            const result = await refreshDevice()
+            if (!result.success) {
+                // 显示错误提示
+                if (result.error?.includes('not found') || result.error?.includes('offline')) {
+                    toast.error('设备已离线，无法获取最新信息')
+                } else {
+                    toast.error(result.error || '刷新失败')
+                }
+            } else {
+                toast.success('刷新成功')
+            }
         } finally {
             setIsRefreshing(false)
         }
@@ -247,6 +258,10 @@ export function DevicePluginView() {
                         type: 'connected',
                         deviceName: data.deviceName,
                     })
+                    // 更新插件状态
+                    if (data.pluginStates) {
+                        updatePluginStates(data.pluginStates)
+                    }
                     break
                 }
                 case 'deviceDisconnected': {
@@ -263,6 +278,16 @@ export function DevicePluginView() {
                     const hit = JSON.parse(message.payload) as BreakpointHit
                     breakpointStore.addHit(hit)
                     // 不自动切换 Tab，只是添加到 store 中，让 BreakpointHitNotification 组件显示通知
+                    break
+                }
+                case 'pluginStateChange': {
+                    // 实时更新单个插件的启用状态
+                    const data = JSON.parse(message.payload) as { pluginId: string; isEnabled: boolean }
+                    const currentStates = useDeviceStore.getState().pluginStates
+                    updatePluginStates({
+                        ...currentStates,
+                        [data.pluginId]: data.isEnabled
+                    })
                     break
                 }
             }

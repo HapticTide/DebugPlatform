@@ -70,11 +70,11 @@ export function PluginManager({ className }: PluginManagerProps) {
         // 状态变化会通过 subscribe 自动触发更新
     }, [plugins])
 
-    // 禁用所有插件（保留核心插件）
+    // 禁用所有插件（保留常用插件）
     const handleDisableAll = useCallback(() => {
-        const corePlugins = ['http', 'log', 'database']
+        const commonPlugins = ['http', 'log', 'database']
         for (const plugin of plugins) {
-            if (!corePlugins.includes(plugin.pluginId)) {
+            if (!commonPlugins.includes(plugin.pluginId)) {
                 PluginRegistry.setPluginEnabled(plugin.pluginId, false)
             }
         }
@@ -128,7 +128,7 @@ export function PluginManager({ className }: PluginManagerProps) {
                                     onClick={handleDisableAll}
                                     className="text-xs text-text-muted hover:text-text-secondary"
                                 >
-                                    仅保留核心
+                                    仅保留常用
                                 </button>
                             </div>
                         </div>
@@ -137,7 +137,7 @@ export function PluginManager({ className }: PluginManagerProps) {
                         <div className="max-h-[400px] overflow-auto">
                             {plugins.map((plugin) => {
                                 const isEnabled = PluginRegistry.isPluginEnabled(plugin.pluginId)
-                                const isCore = ['http', 'log', 'database'].includes(plugin.pluginId)
+                                const isCommon = ['http', 'log', 'database'].includes(plugin.pluginId)
                                 // 获取依赖的插件名称
                                 const dependencyNames = plugin.dependencies.map(depId => {
                                     const dep = PluginRegistry.getPlugin(depId)
@@ -169,9 +169,9 @@ export function PluginManager({ className }: PluginManagerProps) {
                                                 )}>
                                                     {plugin.displayName}
                                                 </span>
-                                                {isCore && (
+                                                {isCommon && (
                                                     <span className="text-xs px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded">
-                                                        核心
+                                                        常用
                                                     </span>
                                                 )}
                                             </div>

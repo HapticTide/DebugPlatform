@@ -11,7 +11,7 @@ import {
     PluginState,
     BuiltinPluginId,
 } from '../types'
-import { MockIcon } from '@/components/icons'
+import { MockIcon, TrashIcon } from '@/components/icons'
 import { useMockStore } from '@/stores/mockStore'
 import { useToastStore } from '@/stores/toastStore'
 import { MockRuleList } from '@/components/MockRuleList'
@@ -209,17 +209,19 @@ function MockPluginView({ context, isActive }: PluginRenderProps) {
 
                 <div className="flex items-center gap-2 text-xs text-text-secondary">
                     {/* 清空按钮 */}
-                    <button
-                        onClick={() => setShowClearConfirm(true)}
-                        className="btn text-xs px-2 py-1.5 flex-shrink-0 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-                        title="清空所有规则"
-                        disabled={rules.length === 0}
-                    >
-                        清空规则
-                    </button>
+                    {rules.length > 0 && (
+                        <button
+                            onClick={() => setShowClearConfirm(true)}
+                            className="btn btn-ghost text-red-400 hover:bg-red-500/10 text-xs px-2 py-1.5 flex-shrink-0 flex items-center"
+                            title="清空所有规则"
+                        >
+                            <TrashIcon size={14} className="mr-1" />
+                            清空规则
+                        </button>
+                    )}
 
                     {/* 分隔线 */}
-                    <div className="w-px h-4 bg-border mx-1" />
+                    {rules.length > 0 && <div className="w-px h-4 bg-border mx-1" />}
 
                     {/* 规则计数 */}
                     <span>共 {rules.length} 条规则</span>

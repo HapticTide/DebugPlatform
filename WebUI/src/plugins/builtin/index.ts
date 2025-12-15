@@ -12,35 +12,30 @@ import { ChaosPlugin } from './ChaosPlugin'
 import { PerformancePlugin } from './PerformancePlugin'
 
 // 注册所有内置插件
-// 核心插件：HTTP、Log、Database（"仅保留核心"操作不会禁用这些插件）
-// 扩展插件：WebSocket、Performance、Mock、Breakpoint、Chaos
-// 所有插件默认启用，可通过插件管理功能启用/禁用
+// 插件顺序固定为：HTTP、WebSocket、Log、Database、Performance、Mock、Breakpoint、Chaos
+// 可通过插件管理功能启用/禁用任意插件
 export function registerBuiltinPlugins(): void {
-    // === 核心插件 ===
-
     // HTTP 请求监控插件
     PluginRegistry.register(HttpPlugin, {
         routePath: '/device/:deviceId/http',
         tabOrder: 0,
     })
 
+    // WebSocket 插件
+    PluginRegistry.register(WebSocketPlugin, {
+        routePath: '/device/:deviceId/websocket',
+        tabOrder: 1,
+    })
+
     // 日志插件
     PluginRegistry.register(LogPlugin, {
         routePath: '/device/:deviceId/logs',
-        tabOrder: 1,
+        tabOrder: 2,
     })
 
     // 数据库插件
     PluginRegistry.register(DatabasePlugin, {
         routePath: '/device/:deviceId/database',
-        tabOrder: 2,
-    })
-
-    // === 扩展插件 ===
-
-    // WebSocket 插件
-    PluginRegistry.register(WebSocketPlugin, {
-        routePath: '/device/:deviceId/websocket',
         tabOrder: 3,
     })
 

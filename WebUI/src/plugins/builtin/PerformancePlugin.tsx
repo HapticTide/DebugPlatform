@@ -10,7 +10,7 @@ import {
     PluginRenderProps,
     PluginState,
 } from '../types'
-import { PerformanceIcon, CPUIcon, MemoryIcon, FPSIcon, SettingsIcon, AlertIcon } from '@/components/icons'
+import { PerformanceIcon, CPUIcon, MemoryIcon, FPSIcon, SettingsIcon, AlertIcon, TrashIcon } from '@/components/icons'
 import { Checkbox } from '@/components/Checkbox'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import {
@@ -338,16 +338,21 @@ function PerformancePluginView({ context, isActive }: PluginRenderProps) {
                         )}
                     </div>
 
-                    <div className="h-5 w-px bg-border flex-shrink-0" />
-
                     {/* 清除数据 */}
-                    <button
-                        onClick={() => setShowClearConfirm(true)}
-                        className="btn text-xs px-2.5 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-                        title="清除数据"
-                    >
-                        清除数据
-                    </button>
+                    {(store.realtimeMetrics.length > 0 || store.jankEvents.length > 0) && (
+                        <>
+                            <div className="h-5 w-px bg-border flex-shrink-0" />
+                            <button
+                                onClick={() => setShowClearConfirm(true)}
+                                className="btn btn-ghost text-red-400 hover:bg-red-500/10 text-xs px-2 py-1.5 flex items-center"
+                                title="清除数据"
+                                disabled={isClearing}
+                            >
+                                <TrashIcon size={14} className="mr-1" />
+                                清空
+                            </button>
+                        </>
+                    )}
 
                     {/* 设置 */}
                     <button

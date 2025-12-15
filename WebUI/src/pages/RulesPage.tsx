@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom'
 import { useRuleStore } from '@/stores/ruleStore'
 import { TrafficRule } from '@/types'
 import { BackIcon, SettingsIcon, LogIcon, StarIcon, ClearIcon, TagIcon, EditIcon, TrashIcon } from '@/components/icons'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import clsx from 'clsx'
 
 export function RulesPage() {
-    const { rules, fetchRules, createOrUpdateRule, deleteRule, isLoading } = useRuleStore()
+    const { rules, fetchRules, createOrUpdateRule, deleteRule, deleteAllRules, isLoading } = useRuleStore()
     const [editingRule, setEditingRule] = useState<Partial<TrafficRule> | null>(null)
     const [showEditor, setShowEditor] = useState(false)
+    const [showClearConfirm, setShowClearConfirm] = useState(false)
 
     useEffect(() => {
         fetchRules()
@@ -52,6 +54,15 @@ export function RulesPage() {
         await createOrUpdateRule({ ...rule, isEnabled: !rule.isEnabled })
     }
 
+    const handleClearAll = async () => {
+        try {
+            await deleteAllRules()
+            setShowClearConfirm(false)
+        } catch (error) {
+            console.error('Failed to clear all rules', error)
+        }
+    }
+
     return (
         <div className="h-full flex flex-col">
             {/* Header */}
@@ -77,12 +88,24 @@ export function RulesPage() {
                         </div>
                     </div>
 
-                    <button
-                        onClick={handleCreateNew}
-                        className="btn btn-primary"
-                    >
-                        + 新建规则
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {rules.length > 0 && (
+                            <button
+                                onClick={() => setShowClearConfirm(true)}
+                                className="btn btn-ghost text-red-400 hover:bg-red-500/10"
+                                title="清空所有规则"
+                            >
+                                <TrashIcon size={16} className="mr-1" />
+                                清空规则
+                            </button>
+                        )}
+                        <button
+                            onClick={handleCreateNew}
+                            className="btn btn-primary"
+                        >
+                            + 新建规则
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -252,6 +275,17 @@ export function RulesPage() {
                     </div>
                 </>
             )}
+
+            {/* Clear All Confirm Dialog */}
+            <ConfirmDialog
+                isOpen={showClearConfirm}
+                onClose={() => setShowClearConfirm(false)}
+                onConfirm={handleClearAll}
+                title="清空规则"
+                message={`确定要清空所有流量规则吗？\n\n当前共有 ${rules.length} 条规则将被删除。\n此操作不可恢复。`}
+                confirmText="确认清空"
+                type="danger"
+            />
         </div>
     )
 }

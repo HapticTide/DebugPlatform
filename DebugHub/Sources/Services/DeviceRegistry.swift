@@ -76,17 +76,24 @@ final class DeviceSession {
     let connectedAt: Date
     let sessionId: String
     var lastSeenAt: Date
+    var pluginStates: [String: Bool] // 插件启用状态
 
-    init(deviceInfo: DeviceInfoDTO, webSocket: WebSocket, sessionId: String) {
+    init(deviceInfo: DeviceInfoDTO, webSocket: WebSocket, sessionId: String, pluginStates: [String: Bool] = [:]) {
         self.deviceInfo = deviceInfo
         self.webSocket = webSocket
         self.sessionId = sessionId
+        self.pluginStates = pluginStates
         connectedAt = Date()
         lastSeenAt = Date()
     }
 
     func updateLastSeen() {
         lastSeenAt = Date()
+    }
+
+    /// 更新插件状态
+    func updatePluginStates(_ states: [String: Bool]) {
+        self.pluginStates = states
     }
 }
 
@@ -138,7 +145,12 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
 
     // MARK: - Session Management
 
-    func register(deviceInfo: DeviceInfoDTO, webSocket: WebSocket, sessionId: String) -> DeviceRegistrationResult {
+    func register(
+        deviceInfo: DeviceInfoDTO,
+        webSocket: WebSocket,
+        sessionId: String,
+        pluginStates: [String: Bool] = [:]
+    ) -> DeviceRegistrationResult {
         lock.lock()
 
         // 检查是否为重复连接（同一设备已经在线）
@@ -146,6 +158,8 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
             // 检查是否是同一个 WebSocket 连接
             if ObjectIdentifier(existingSession.webSocket) == ObjectIdentifier(webSocket) {
                 // 完全相同的连接，忽略重复注册
+                // 更新插件状态（可能发生了变化）
+                existingSession.updatePluginStates(pluginStates)
                 lock.unlock()
                 print("[DeviceRegistry] Duplicate register from same connection for \(deviceInfo.deviceId) - ignored")
                 return DeviceRegistrationResult(session: existingSession, connectionType: .duplicateConnection)
@@ -168,7 +182,7 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
             print("[DeviceRegistry] Cancelled pending disconnect for \(deviceInfo.deviceId) - quick reconnect")
         }
 
-        let session = DeviceSession(deviceInfo: deviceInfo, webSocket: webSocket, sessionId: sessionId)
+        let session = DeviceSession(deviceInfo: deviceInfo, webSocket: webSocket, sessionId: sessionId, pluginStates: pluginStates)
         let isNewConnection = sessions[deviceInfo.deviceId] == nil && !isQuickReconnect
         sessions[deviceInfo.deviceId] = session
         lock.unlock()
@@ -389,7 +403,7 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
 // MARK: - Bridge Message DTO
 
 enum BridgeMessageDTO: Codable {
-    case register(DeviceInfoDTO, token: String)
+    case register(DeviceInfoDTO, token: String, pluginStates: [String: Bool])
     case heartbeat
     case events([DebugEventDTO])
     case registered(sessionId: String)
@@ -408,6 +422,8 @@ enum BridgeMessageDTO: Codable {
     // 插件命令
     case pluginCommand(PluginCommandDTO)
     case pluginEvent(PluginEventDTO)
+    // 插件状态变化
+    case pluginStateChange(pluginId: String, isEnabled: Bool)
     case error(code: Int, message: String)
 
     private enum CodingKeys: String, CodingKey {
@@ -431,6 +447,7 @@ enum BridgeMessageDTO: Codable {
         case dbResponse
         case pluginCommand
         case pluginEvent
+        case pluginStateChange
         case error
     }
 
@@ -441,7 +458,7 @@ enum BridgeMessageDTO: Codable {
         switch type {
         case .register:
             let payload = try container.decode(RegisterPayload.self, forKey: .payload)
-            self = .register(payload.deviceInfo, token: payload.token)
+            self = .register(payload.deviceInfo, token: payload.token, pluginStates: payload.pluginStates ?? [:])
         case .heartbeat:
             self = .heartbeat
         case .events:
@@ -483,6 +500,9 @@ enum BridgeMessageDTO: Codable {
         case .pluginEvent:
             let event = try container.decode(PluginEventDTO.self, forKey: .payload)
             self = .pluginEvent(event)
+        case .pluginStateChange:
+            let payload = try container.decode(PluginStateChangePayload.self, forKey: .payload)
+            self = .pluginStateChange(pluginId: payload.pluginId, isEnabled: payload.isEnabled)
         case .error:
             let payload = try container.decode(ErrorPayload.self, forKey: .payload)
             self = .error(code: payload.code, message: payload.message)
@@ -493,9 +513,9 @@ enum BridgeMessageDTO: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {
-        case let .register(deviceInfo, token):
+        case let .register(deviceInfo, token, pluginStates):
             try container.encode(MessageType.register, forKey: .type)
-            try container.encode(RegisterPayload(deviceInfo: deviceInfo, token: token), forKey: .payload)
+            try container.encode(RegisterPayload(deviceInfo: deviceInfo, token: token, pluginStates: pluginStates), forKey: .payload)
         case .heartbeat:
             try container.encode(MessageType.heartbeat, forKey: .type)
         case let .events(events):
@@ -537,6 +557,9 @@ enum BridgeMessageDTO: Codable {
         case let .pluginEvent(event):
             try container.encode(MessageType.pluginEvent, forKey: .type)
             try container.encode(event, forKey: .payload)
+        case let .pluginStateChange(pluginId, isEnabled):
+            try container.encode(MessageType.pluginStateChange, forKey: .type)
+            try container.encode(PluginStateChangePayload(pluginId: pluginId, isEnabled: isEnabled), forKey: .payload)
         case let .error(code, message):
             try container.encode(MessageType.error, forKey: .type)
             try container.encode(ErrorPayload(code: code, message: message), forKey: .payload)
@@ -548,6 +571,7 @@ enum BridgeMessageDTO: Codable {
 private struct RegisterPayload: Codable {
     let deviceInfo: DeviceInfoDTO
     let token: String
+    let pluginStates: [String: Bool]? // 插件 ID -> 是否启用
 }
 
 private struct RegisteredPayload: Codable {
@@ -563,6 +587,12 @@ private struct ExportPayload: Codable {
 private struct ErrorPayload: Codable {
     let code: Int
     let message: String
+}
+
+/// 插件状态变化 Payload
+private struct PluginStateChangePayload: Codable {
+    let pluginId: String
+    let isEnabled: Bool
 }
 
 struct ReplayRequestPayload: Codable {

@@ -250,16 +250,19 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
 
                 <div className="flex items-center gap-2 text-xs text-text-secondary">
                     {/* 清除全部日志按钮 */}
-                    <button
-                        onClick={() => setShowClearAllConfirm(true)}
-                        className="btn text-xs px-2 py-1.5 flex-shrink-0 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-                        title="清除全部日志（从数据库删除）"
-                        disabled={filteredEvents.length === 0 || isClearingAll}
-                    >
-                        清除全部
-                    </button>
+                    {filteredEvents.length > 0 && (
+                        <button
+                            onClick={() => setShowClearAllConfirm(true)}
+                            className="btn btn-ghost text-red-400 hover:bg-red-500/10 text-xs px-2 py-1.5 flex-shrink-0 flex items-center"
+                            title="清除全部日志（从数据库删除）"
+                            disabled={isClearingAll}
+                        >
+                            <TrashIcon size={14} className="mr-1" />
+                            清空
+                        </button>
+                    )}
 
-                    <div className="h-5 w-px bg-border flex-shrink-0" />
+                    {filteredEvents.length > 0 && <div className="h-5 w-px bg-border flex-shrink-0" />}
 
                     {/* 自动滚动 */}
                     <div className="flex items-center gap-1.5 flex-shrink-0">

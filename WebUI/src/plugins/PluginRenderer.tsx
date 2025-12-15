@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { PluginRegistry } from '@/plugins/PluginRegistry'
 import type { PluginContext, PluginRenderProps, PluginEvent } from '@/plugins/types'
 import { useToastStore } from '@/stores/toastStore'
+import { useDeviceStore } from '@/stores/deviceStore'
 import { realtimeService } from '@/services/realtime'
 
 // API 基础路径
@@ -49,6 +50,7 @@ export function getPluginTabs(): PluginTabInfo[] {
  */
 export function PluginRenderer({ deviceId, activePluginId, className }: PluginRendererProps) {
     const toastStore = useToastStore()
+    const isPluginEnabledOnDevice = useDeviceStore((state) => state.isPluginEnabled)
     const [updateTrigger, forceUpdate] = useState({})
 
     // 订阅插件状态变化
@@ -191,6 +193,9 @@ export function PluginRenderer({ deviceId, activePluginId, className }: PluginRe
     const pluginExists = activePluginId ? PluginRegistry.get(activePluginId) : undefined
     const isPluginDisabled = pluginExists && !PluginRegistry.isPluginEnabled(activePluginId)
 
+    // 检查插件是否在 SDK 端被禁用
+    const isPluginDisabledOnDevice = activePluginId ? !isPluginEnabledOnDevice(activePluginId) : false
+
     if (enabledTabs.length === 0) {
         return (
             <div className={`flex flex-col items-center justify-center h-full text-text-tertiary ${className}`}>
@@ -200,8 +205,22 @@ export function PluginRenderer({ deviceId, activePluginId, className }: PluginRe
         )
     }
 
+    // 检查 SDK 端是否禁用了该插件
+    if (isPluginDisabledOnDevice && activePlugin) {
+        return (
+            <div className={`flex flex-col items-center justify-center h-full text-text-tertiary ${className}`}>
+                <div className="text-5xl mb-4">🔒</div>
+                <div className="text-lg mb-2">插件在设备端已禁用</div>
+                <div className="text-sm text-text-muted max-w-md text-center">
+                    插件 "{activePlugin.metadata.displayName}" 在 DebugProbe SDK 中已被禁用，
+                    无法在 WebUI 中使用。请在 App 中启用该插件后重新连接。
+                </div>
+            </div>
+        )
+    }
+
     if (!activePlugin) {
-        // 区分插件未找到和插件未启用
+        // 区分插件未找到和插件未启用（WebUI 端）
         if (isPluginDisabled) {
             return (
                 <div className={`flex flex-col items-center justify-center h-full text-text-tertiary ${className}`}>
@@ -243,6 +262,7 @@ interface PluginTabBarProps {
 
 export function PluginTabBar({ activePluginId, onTabChange, className }: PluginTabBarProps) {
     const [, forceUpdate] = useState({})
+    const isPluginEnabledOnDevice = useDeviceStore((state) => state.isPluginEnabled)
 
     // 订阅插件状态变化
     useEffect(() => {
@@ -253,20 +273,28 @@ export function PluginTabBar({ activePluginId, onTabChange, className }: PluginT
 
     return (
         <div className={`flex items-center gap-0.5 p-0.5 bg-bg-medium rounded-lg border border-border w-fit ${className}`}>
-            {tabs.map((tab, index) => (
-                <button
-                    key={tab.pluginId}
-                    onClick={() => onTabChange(tab.pluginId)}
-                    title={`⌘${index + 1}`}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors relative whitespace-nowrap ${activePluginId === tab.pluginId
-                        ? 'bg-primary text-bg-darkest'
-                        : 'text-text-secondary hover:text-text-primary hover:bg-bg-light'
-                        }`}
-                >
-                    <span className="text-sm">{tab.icon}</span>
-                    <span>{tab.displayName}</span>
-                </button>
-            ))}
+            {tabs.map((tab, index) => {
+                const isDisabledOnDevice = !isPluginEnabledOnDevice(tab.pluginId)
+                return (
+                    <button
+                        key={tab.pluginId}
+                        onClick={() => onTabChange(tab.pluginId)}
+                        title={isDisabledOnDevice ? `${tab.displayName}（设备端已禁用）` : `⌘${index + 1}`}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors relative whitespace-nowrap ${activePluginId === tab.pluginId
+                                ? 'bg-primary text-bg-darkest'
+                                : isDisabledOnDevice
+                                    ? 'text-text-muted opacity-50 cursor-not-allowed'
+                                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-light'
+                            }`}
+                    >
+                        <span className="text-sm">{tab.icon}</span>
+                        <span>{tab.displayName}</span>
+                        {isDisabledOnDevice && (
+                            <span className="text-xs ml-1">🔒</span>
+                        )}
+                    </button>
+                )
+            })}
         </div>
     )
 }

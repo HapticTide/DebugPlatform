@@ -13,6 +13,7 @@ struct TrafficRuleController: RouteCollection {
         let rules = routes.grouped("traffic-rules")
         rules.get(use: listRules)
         rules.post(use: createOrUpdateRule)
+        rules.delete(use: deleteAllRules)  // 删除所有规则（放在前面，避免与 :ruleId 冲突）
         rules.delete(":ruleId", use: deleteRule)
 
         // Device specific overrides
@@ -94,6 +95,16 @@ struct TrafficRuleController: RouteCollection {
         }
 
         try await rule.delete(on: req.db)
+        return .ok
+    }
+
+    // MARK: - Delete All Rules
+
+    /// 删除所有流量规则（全局规则）
+    func deleteAllRules(req: Request) async throws -> HTTPStatus {
+        try await TrafficRuleModel.query(on: req.db)
+            .filter(\.$deviceId == nil)  // 只删除全局规则（deviceId 为 nil）
+            .delete()
         return .ok
     }
 }

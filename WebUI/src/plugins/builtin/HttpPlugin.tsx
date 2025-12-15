@@ -12,7 +12,7 @@ import {
     PluginState,
     BuiltinPluginId,
 } from '../types'
-import { HttpIcon, ArrowUpIcon, ArrowDownIcon } from '@/components/icons'
+import { HttpIcon, ArrowUpIcon, ArrowDownIcon, TrashIcon } from '@/components/icons'
 import { useHTTPStore, isSessionDivider } from '@/stores/httpStore'
 import { useMockStore } from '@/stores/mockStore'
 import { useConnectionStore } from '@/stores/connectionStore'
@@ -346,16 +346,19 @@ function HTTPRequestsContent({
                     {/* 弹性空间 */}
                     <div className="flex-1 min-w-4" />
 
-                    {/* 右侧：清除全部 - 自动滚动 - 更多 - 连接状态 - 请求总条数 */}
-                    {/* 清除全部请求按钮 */}
-                    <button
-                        onClick={() => setShowClearAllConfirm(true)}
-                        className="btn text-xs px-2 py-1.5 flex-shrink-0 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-                        title="清除全部请求（从数据库删除）"
-                        disabled={filteredEvents.length === 0 || isClearingAll}
-                    >
-                        清除全部
-                    </button>
+                    {/* 右侧：清空 - 自动滚动 - 更多 - 连接状态 - 请求总条数 */}
+                    {/* 清空按钮：只在有数据时显示 */}
+                    {httpStore.events.length > 0 && (
+                        <button
+                            onClick={() => setShowClearAllConfirm(true)}
+                            className="btn btn-ghost text-red-400 hover:bg-red-500/10 text-xs px-2 py-1.5 flex-shrink-0"
+                            title="清空所有请求（从数据库删除）"
+                            disabled={isClearingAll}
+                        >
+                            <TrashIcon size={14} className="mr-1" />
+                            清空
+                        </button>
+                    )}
 
                     <div className="h-5 w-px bg-border flex-shrink-0" />
 

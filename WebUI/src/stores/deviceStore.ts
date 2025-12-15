@@ -67,10 +67,13 @@ interface DeviceState {
   isSelectMode: boolean
   selectedIds: Set<string>
 
+  // 插件启用状态（来自 SDK）
+  pluginStates: Record<string, boolean>
+
   // Actions
   fetchDevices: () => Promise<void>
   selectDevice: (deviceId: string) => Promise<void>
-  refreshDevice: () => Promise<void>
+  refreshDevice: () => Promise<{ success: boolean; error?: string }>
   clearSelection: () => void
   clearDeviceData: () => Promise<void>
   removeDevice: (deviceId: string) => Promise<void>
@@ -92,6 +95,10 @@ interface DeviceState {
 
   // 服务离线时更新设备状态
   setAllDevicesOffline: () => void
+
+  // 插件状态相关
+  updatePluginStates: (states: Record<string, boolean>) => void
+  isPluginEnabled: (pluginId: string) => boolean
 }
 
 export const useDeviceStore = create<DeviceState>((set, get) => ({
@@ -107,6 +114,9 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   isSelectMode: false,
   selectedIds: new Set(),
 
+  // 插件启用状态
+  pluginStates: {},
+
   fetchDevices: async () => {
     set({ isLoading: true, error: null })
     try {
@@ -121,20 +131,42 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     set({ currentDeviceId: deviceId, isLoading: true, error: null })
     try {
       const detail = await api.getDevice(deviceId)
-      set({ currentDevice: detail, isLoading: false })
+      set({
+        currentDevice: detail,
+        isLoading: false,
+        pluginStates: detail.pluginStates || {}
+      })
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false })
     }
   },
 
   refreshDevice: async () => {
-    const { currentDeviceId } = get()
-    if (!currentDeviceId) return
+    const { currentDeviceId, currentDevice } = get()
+    if (!currentDeviceId) return { success: false, error: '未选择设备' }
     try {
       const detail = await api.getDevice(currentDeviceId)
-      set({ currentDevice: detail })
+      set({
+        currentDevice: detail,
+        pluginStates: detail.pluginStates || {}
+      })
+      return { success: true }
     } catch (error) {
       console.error('Failed to refresh device:', error)
+      // 如果设备离线，更新状态但保留旧信息
+      if (currentDevice) {
+        set({
+          currentDevice: {
+            ...currentDevice,
+            isOnline: false,
+            lastSeenAt: new Date().toISOString()
+          }
+        })
+      }
+      return { 
+        success: false, 
+        error: (error as Error).message || '刷新失败' 
+      }
     }
   },
 
@@ -308,6 +340,18 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
         isOnline: false
       } : null
     }))
+  },
+
+  // 更新插件状态（由实时流事件调用）
+  updatePluginStates: (states: Record<string, boolean>) => {
+    set({ pluginStates: states })
+  },
+
+  // 检查插件是否启用
+  isPluginEnabled: (pluginId: string) => {
+    const { pluginStates } = get()
+    // 如果没有该插件的状态信息，默认为启用
+    return pluginStates[pluginId] ?? true
   },
 }))
 

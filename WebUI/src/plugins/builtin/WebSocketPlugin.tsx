@@ -329,15 +329,18 @@ function WebSocketPluginView({ context, isActive }: PluginRenderProps) {
                 </div>
 
                 <div className="flex items-center gap-2 text-xs text-text-secondary">
-                    {/* 清除全部会话按钮 */}
-                    <button
-                        onClick={() => setShowClearAllConfirm(true)}
-                        className="btn text-xs px-2 py-1.5 flex-shrink-0 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-                        title="清除全部会话（从数据库删除）"
-                        disabled={sessions.length === 0 || isClearingAll}
-                    >
-                        清除全部
-                    </button>
+                    {/* 清空按钮：只在有数据时显示 */}
+                    {sessions.length > 0 && (
+                        <button
+                            onClick={() => setShowClearAllConfirm(true)}
+                            className="btn btn-ghost text-red-400 hover:bg-red-500/10 text-xs px-2 py-1.5 flex-shrink-0"
+                            title="清空所有会话（从数据库删除）"
+                            disabled={isClearingAll}
+                        >
+                            <TrashIcon size={14} className="mr-1" />
+                            清空
+                        </button>
+                    )}
 
                     <div className="h-5 w-px bg-border flex-shrink-0" />
 

@@ -129,7 +129,8 @@ struct DeviceController: RouteCollection {
                 httpEventCount: httpCount,
                 logEventCount: logCount,
                 wsSessionCount: wsSessionCount
-            )
+            ),
+            pluginStates: session.pluginStates
         )
     }
 
@@ -226,6 +227,7 @@ struct DeviceDetailDTO: Content {
     let connectedAt: Date
     let lastSeenAt: Date
     let stats: DeviceStatsDTO
+    let pluginStates: [String: Bool]  // 插件启用状态
 }
 
 struct DeviceStatsDTO: Content {

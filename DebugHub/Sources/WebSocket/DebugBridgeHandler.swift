@@ -76,9 +76,9 @@ final class DebugBridgeHandler: @unchecked Sendable {
             let message = try decoder.decode(BridgeMessageDTO.self, from: data)
 
             switch message {
-            case let .register(deviceInfo, token):
+            case let .register(deviceInfo, token, pluginStates):
                 print("[DebugBridge] Received register message from \(deviceInfo.deviceName)")
-                handleRegister(deviceInfo: deviceInfo, token: token, ws: ws, deviceIdHolder: deviceIdHolder, req: req)
+                handleRegister(deviceInfo: deviceInfo, token: token, pluginStates: pluginStates, ws: ws, deviceIdHolder: deviceIdHolder, req: req)
 
             case .heartbeat:
                 print("[DebugBridge] Received heartbeat from \(deviceIdHolder.deviceId ?? "unknown")")
@@ -119,6 +119,12 @@ final class DebugBridgeHandler: @unchecked Sendable {
                     handlePluginEvent(event: event, deviceId: deviceId)
                 }
 
+            case let .pluginStateChange(pluginId, isEnabled):
+                if let deviceId = deviceIdHolder.deviceId {
+                    print("[DebugBridge] Received plugin state change from \(deviceId): \(pluginId) -> \(isEnabled)")
+                    handlePluginStateChange(pluginId: pluginId, isEnabled: isEnabled, deviceId: deviceId)
+                }
+
             default:
                 print("[DebugBridge] Received unknown message type")
             }
@@ -132,6 +138,7 @@ final class DebugBridgeHandler: @unchecked Sendable {
     private func handleRegister(
         deviceInfo: DeviceInfoDTO,
         token: String,
+        pluginStates: [String: Bool],
         ws: WebSocket,
         deviceIdHolder: DeviceIdHolder,
         req: Request
@@ -147,7 +154,12 @@ final class DebugBridgeHandler: @unchecked Sendable {
         let sessionId = UUID().uuidString
 
         // 注册设备（获取连接类型）
-        let result = DeviceRegistry.shared.register(deviceInfo: deviceInfo, webSocket: ws, sessionId: sessionId)
+        let result = DeviceRegistry.shared.register(
+            deviceInfo: deviceInfo,
+            webSocket: ws,
+            sessionId: sessionId,
+            pluginStates: pluginStates
+        )
         deviceIdHolder.deviceId = deviceInfo.deviceId
 
         // 发送注册成功响应
@@ -162,7 +174,8 @@ final class DebugBridgeHandler: @unchecked Sendable {
             RealtimeStreamHandler.shared.broadcastDeviceConnected(
                 deviceId: deviceInfo.deviceId,
                 deviceName: deviceInfo.deviceName,
-                sessionId: sessionId
+                sessionId: sessionId,
+                pluginStates: pluginStates
             )
         case .quickReconnect:
             print("[DebugBridge] Device reconnected (quick): \(deviceInfo.deviceName) (\(deviceInfo.deviceId))")
@@ -305,6 +318,22 @@ final class DebugBridgeHandler: @unchecked Sendable {
 
         // 广播给 WebUI
         RealtimeStreamHandler.shared.broadcastPluginEvent(event, deviceId: deviceId)
+    }
+
+    private func handlePluginStateChange(pluginId: String, isEnabled: Bool, deviceId: String) {
+        // 更新 DeviceSession 中的插件状态
+        if let session = DeviceRegistry.shared.getSession(deviceId: deviceId) {
+            var states = session.pluginStates
+            states[pluginId] = isEnabled
+            session.updatePluginStates(states)
+        }
+
+        // 广播给 WebUI
+        RealtimeStreamHandler.shared.broadcastPluginStateChange(
+            pluginId: pluginId,
+            isEnabled: isEnabled,
+            deviceId: deviceId
+        )
     }
 
     private func handleDisconnect(deviceId: String) {
