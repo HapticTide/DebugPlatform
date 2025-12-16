@@ -4,6 +4,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { PluginRegistry } from '@/plugins/PluginRegistry'
 import { SettingsIcon, PlugIcon } from '@/components/icons'
+import { useDeviceStore } from '@/stores/deviceStore'
 import { toast } from 'react-hot-toast'
 import clsx from 'clsx'
 
@@ -18,14 +19,19 @@ export function PluginManager({ className }: PluginManagerProps) {
     const [isOpen, setIsOpen] = useState(false)
     const [, forceUpdate] = useState({})
 
+    // 获取 SDK 端的插件状态
+    const pluginStates = useDeviceStore((state) => state.pluginStates)
+    const currentDeviceId = useDeviceStore((state) => state.currentDeviceId)
+
     // 订阅插件状态变化
     useEffect(() => {
         return PluginRegistry.subscribe(() => forceUpdate({}))
     }, [])
 
     // 获取所有插件（包括已禁用的）
+    // 重组列表：主插件按 tabOrder 排序，子插件紧跟在其父插件后面
     const plugins = useMemo(() => {
-        return PluginRegistry.getAll()
+        const allPlugins = PluginRegistry.getAll()
             .map((plugin) => ({
                 pluginId: plugin.metadata.pluginId,
                 displayName: plugin.metadata.displayName,
@@ -35,8 +41,32 @@ export function PluginManager({ className }: PluginManagerProps) {
                 isEnabled: PluginRegistry.isPluginEnabled(plugin.metadata.pluginId),
                 isSubPlugin: plugin.metadata.isSubPlugin || false,
                 parentPluginId: plugin.metadata.parentPluginId,
+                // SDK 端的启用状态（只读展示）
+                // 如果 pluginStates 中没有该插件，默认为 true（SDK 端未报告状态时）
+                sdkEnabled: pluginStates[plugin.metadata.pluginId] ?? true,
             }))
-    }, [])
+
+        // 分离主插件和子插件
+        const mainPlugins = allPlugins.filter(p => !p.isSubPlugin)
+        const subPlugins = allPlugins.filter(p => p.isSubPlugin)
+
+        // 重组：主插件后紧跟其子插件
+        const result: typeof allPlugins = []
+        for (const main of mainPlugins) {
+            result.push(main)
+            // 找到该主插件的所有子插件并按固定顺序排列
+            const children = subPlugins
+                .filter(sub => sub.parentPluginId === main.pluginId)
+                .sort((a, b) => {
+                    // 子插件固定顺序：Mock、Breakpoint、Chaos
+                    const order: Record<string, number> = { mock: 0, breakpoint: 1, chaos: 2 }
+                    return (order[a.pluginId] ?? 99) - (order[b.pluginId] ?? 99)
+                })
+            result.push(...children)
+        }
+
+        return result
+    }, [pluginStates])
 
     // 切换插件启用状态（带依赖提示）
     const handleTogglePlugin = useCallback((pluginId: string, enabled: boolean) => {
@@ -140,6 +170,8 @@ export function PluginManager({ className }: PluginManagerProps) {
                             {plugins.map((plugin) => {
                                 const isEnabled = PluginRegistry.isPluginEnabled(plugin.pluginId)
                                 const isCommon = ['http', 'log', 'database'].includes(plugin.pluginId)
+                                // SDK 端是否禁用（只有当有设备连接且 SDK 明确报告为 false 时才显示）
+                                const sdkDisabled = currentDeviceId && plugin.sdkEnabled === false
                                 // 获取依赖的插件名称
                                 const dependencyNames = plugin.dependencies.map(depId => {
                                     const dep = PluginRegistry.getPlugin(depId)
@@ -184,6 +216,12 @@ export function PluginManager({ className }: PluginManagerProps) {
                                                 {plugin.isSubPlugin && parentPluginName && (
                                                     <span className="text-xs px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded">
                                                         {parentPluginName} 子功能
+                                                    </span>
+                                                )}
+                                                {/* SDK 端禁用标记 */}
+                                                {sdkDisabled && (
+                                                    <span className="text-xs px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded">
+                                                        SDK 已禁用
                                                     </span>
                                                 )}
                                             </div>

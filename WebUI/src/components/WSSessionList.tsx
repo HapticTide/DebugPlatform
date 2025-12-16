@@ -149,6 +149,13 @@ export function WSSessionList({
           <div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full" />
         </div>
       )}
+
+      {/* 没有更多数据提示 */}
+      {!loading && sessions.length > 0 && (
+        <div className="py-4 text-center">
+          <span className="text-xs text-text-muted">没有更多数据了</span>
+        </div>
+      )}
     </div>
   )
 }

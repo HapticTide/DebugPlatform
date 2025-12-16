@@ -1,19 +1,14 @@
 // 前端插件注册表
 // 管理所有已注册的前端插件
 
-import { FrontendPlugin, PluginContext, PluginEvent, PluginRegistration, PluginTabConfig, BuiltinPluginId } from './types'
+import { FrontendPlugin, PluginContext, PluginEvent, PluginRegistration, PluginTabConfig } from './types'
 
 // 插件启用状态持久化 Key
 const PLUGIN_ENABLED_STATE_KEY = 'debugplatform_plugin_enabled_state'
 
-// 常用插件列表（默认启用）
-// 这些插件在没有 localStorage 状态时默认启用
-const COMMON_PLUGINS: string[] = [
-    BuiltinPluginId.HTTP,
-    BuiltinPluginId.LOG,
-    BuiltinPluginId.DATABASE,
-    BuiltinPluginId.MOCK,
-]
+// WebUI 上所有插件默认启用
+// 只有用户明确禁用某个插件，该状态才会被保存到 localStorage
+const DEFAULT_PLUGIN_ENABLED = true
 
 class PluginRegistryImpl {
     private plugins: Map<string, PluginRegistration> = new Map()
@@ -78,6 +73,12 @@ class PluginRegistryImpl {
             if (enabledDeps.length > 0) {
                 console.log(`[PluginRegistry] Auto-enabled dependencies for ${pluginId}: ${enabledDeps.join(', ')}`)
             }
+
+            // 启用父插件时，同时启用所有子插件
+            const enabledChildren = this.enableChildPlugins(pluginId)
+            if (enabledChildren.length > 0) {
+                console.log(`[PluginRegistry] Auto-enabled child plugins of ${pluginId}: ${enabledChildren.join(', ')}`)
+            }
         } else {
             // 禁用插件时，同时禁用依赖该插件的所有插件
             const disabledDeps = this.disableDependentPlugins(pluginId)
@@ -95,6 +96,25 @@ class PluginRegistryImpl {
 
         // 同步插件状态到 DebugHub
         this.syncPluginStatesToHub()
+    }
+
+    // 启用父插件的所有子插件（返回被启用的插件列表）
+    private enableChildPlugins(parentId: string): string[] {
+        const enabled: string[] = []
+
+        for (const [id, registration] of this.plugins) {
+            const metadata = registration.plugin.metadata
+            // 检查是否是该父插件的子插件
+            if (metadata.isSubPlugin && metadata.parentPluginId === parentId) {
+                if (!this.isPluginEnabled(id)) {
+                    registration.plugin.isEnabled = true
+                    this.enabledState.set(id, true)
+                    enabled.push(id)
+                }
+            }
+        }
+
+        return enabled
     }
 
     // 检查并返回启用插件时需要同时启用的依赖插件列表
@@ -186,8 +206,8 @@ class PluginRegistryImpl {
         if (this.enabledState.has(pluginId)) {
             return this.enabledState.get(pluginId)!
         }
-        // 否则使用常用插件默认规则：常用插件默认启用，其他插件默认禁用
-        return COMMON_PLUGINS.includes(pluginId)
+        // 否则默认启用所有插件
+        return DEFAULT_PLUGIN_ENABLED
     }
 
     // 注册插件
@@ -200,12 +220,12 @@ class PluginRegistryImpl {
             return
         }
 
-        // 应用持久化的启用状态，或使用常用插件默认规则
+        // 应用持久化的启用状态，或使用默认启用
         if (this.enabledState.has(plugin.metadata.pluginId)) {
             plugin.isEnabled = this.enabledState.get(plugin.metadata.pluginId)!
         } else {
-            // 没有持久化状态时，常用插件默认启用，其他插件默认禁用
-            plugin.isEnabled = COMMON_PLUGINS.includes(plugin.metadata.pluginId)
+            // 没有持久化状态时，默认启用所有插件
+            plugin.isEnabled = DEFAULT_PLUGIN_ENABLED
         }
 
         const registration: PluginRegistration = {

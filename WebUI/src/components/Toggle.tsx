@@ -46,6 +46,9 @@ export function Toggle({
             className={clsx('flex items-center gap-1.5 cursor-pointer select-none', disabled && 'opacity-50 cursor-not-allowed', className)}
             onClick={handleClick}
         >
+            {label && (
+                <span className="text-xs text-text-secondary">{label}</span>
+            )}
             <div
                 className={clsx(
                     'relative inline-flex items-center rounded-full transition-colors duration-200',
@@ -61,9 +64,6 @@ export function Toggle({
                     )}
                 />
             </div>
-            {label && (
-                <span className="text-xs text-text-secondary">{label}</span>
-            )}
         </div>
     )
 }

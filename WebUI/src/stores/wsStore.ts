@@ -2,6 +2,31 @@ import { create } from 'zustand'
 import type { WSSessionSummary, WSSessionDetail, WSFrame } from '@/types'
 import { getWSSessions, getWSSessionDetail, getWSFrames, batchDeleteWSSessions, type WSSessionFilters } from '@/services/api'
 
+// localStorage key for auto scroll state
+const WS_AUTO_SCROLL_KEY = 'ws-auto-scroll'
+
+// Helper to load auto scroll state from localStorage
+function loadAutoScrollState(): boolean {
+  try {
+    const stored = localStorage.getItem(WS_AUTO_SCROLL_KEY)
+    if (stored !== null) {
+      return stored === 'true'
+    }
+  } catch {
+    // ignore
+  }
+  return true // default to enabled
+}
+
+// Helper to save auto scroll state to localStorage
+function saveAutoScrollState(enabled: boolean): void {
+  try {
+    localStorage.setItem(WS_AUTO_SCROLL_KEY, String(enabled))
+  } catch {
+    // ignore
+  }
+}
+
 interface WSStore {
   // 会话列表
   sessions: WSSessionSummary[]
@@ -81,7 +106,7 @@ export const useWSStore = create<WSStore>((set, get) => ({
   framePageSize: 100,
   frameDirection: '',
 
-  autoScroll: true,
+  autoScroll: loadAutoScrollState(),
 
   isSelectMode: false,
   selectedIds: new Set(),
@@ -215,6 +240,7 @@ export const useWSStore = create<WSStore>((set, get) => ({
   },
 
   setAutoScroll: (enabled: boolean) => {
+    saveAutoScrollState(enabled)
     set({ autoScroll: enabled })
   },
 

@@ -345,13 +345,11 @@ function WebSocketPluginView({ context, isActive }: PluginRenderProps) {
                     <div className="h-5 w-px bg-border flex-shrink-0" />
 
                     {/* 自动滚动 */}
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-xs text-text-muted">自动滚动</span>
-                        <Toggle
-                            checked={autoScroll}
-                            onChange={(checked) => setAutoScroll(checked)}
-                        />
-                    </div>
+                    <Toggle
+                        checked={autoScroll}
+                        onChange={(checked) => setAutoScroll(checked)}
+                        label="自动滚动"
+                    />
 
                     <div className="h-5 w-px bg-border flex-shrink-0" />
 
