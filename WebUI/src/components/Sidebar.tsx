@@ -559,7 +559,7 @@ export function Sidebar() {
                     key={device.deviceId}
                     onClick={() => handleDeviceClick(device.deviceId)}
                     className={clsx(
-                      "group relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors",
+                      "group relative flex items-start gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors",
                       isSelected
                         ? "bg-primary/15"
                         : isOffline
@@ -571,40 +571,39 @@ export function Sidebar() {
                     {isSelected && (
                       <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary" />
                     )}
-                    <div className="relative flex-shrink-0">
-                      <div className={clsx(
-                        "w-9 h-9 rounded-lg flex items-center justify-center",
-                        isSelected
-                          ? "bg-primary/20"
-                          : isOffline
-                            ? "bg-bg-medium/50"
-                            : "bg-bg-medium"
-                      )}>
-                        {getPlatformIcon(device.platform, 18, undefined, device.isSimulator)}
+                    {/* 设备图标和模拟器标记 */}
+                    <div className="flex flex-col items-center flex-shrink-0 gap-0.5">
+                      <div className="relative">
+                        <div className={clsx(
+                          "w-9 h-9 rounded-lg flex items-center justify-center",
+                          isSelected
+                            ? "bg-primary/20"
+                            : isOffline
+                              ? "bg-bg-medium/50"
+                              : "bg-bg-medium"
+                        )}>
+                          {getPlatformIcon(device.platform, 18, undefined, device.isSimulator)}
+                        </div>
+                        {device.isOnline ? (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-bg-dark rounded-full" />
+                        ) : (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-gray-500 border-2 border-bg-dark rounded-full" />
+                        )}
                       </div>
-                      {device.isOnline ? (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-bg-dark rounded-full" />
-                      ) : (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-gray-500 border-2 border-bg-dark rounded-full" />
+                      {/* 模拟器标记 - 图标下方 */}
+                      {device.isSimulator && (
+                        <span className="text-2xs px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 whitespace-nowrap">
+                          模拟器
+                        </span>
                       )}
                     </div>
                     <div className={clsx("min-w-0 flex-1", isOffline && "opacity-60")}>
                       {/* 设备名：有别名展示别名，否则展示设备名 */}
                       <div className={clsx(
-                        "font-medium truncate text-xs flex items-center gap-1.5",
+                        "font-medium truncate text-xs",
                         isSelected ? "text-primary" : "text-text-primary"
                       )}>
                         {displayName}
-                        {/* 设备 ID 后 4 位 */}
-                        <span
-                          className="text-2xs px-1 py-0.5 rounded bg-bg-light text-text-muted font-mono"
-                          title={`设备 ID: ${device.deviceId}`}
-                        >
-                          #{device.deviceId.slice(-4).toUpperCase()}
-                        </span>
-                        {device.isSimulator && (
-                          <span className="text-2xs px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 font-medium">模拟器</span>
-                        )}
                       </div>
                       <div className={clsx(
                         "text-2xs truncate",
