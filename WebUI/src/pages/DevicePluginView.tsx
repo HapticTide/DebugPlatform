@@ -22,6 +22,7 @@ import { SessionActivityIndicator } from '@/components/SessionActivityIndicator'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { PluginManager } from '@/components/PluginManager'
 import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
+import { DeviceIdPopover } from '@/components/DeviceIdPopover'
 import { getPlatformIcon } from '@/utils/deviceIcons'
 import {
     BackIcon,
@@ -390,18 +391,32 @@ export function DevicePluginView() {
                             {currentDevice ? getPlatformIcon(currentDevice.deviceInfo.platform, 14, undefined, currentDevice.deviceInfo.isSimulator) : <IPhoneIcon size={14} />}
                         </div>
                         <div className="flex items-center gap-1.5 min-w-0">
-                            {/* 设备名称 */}
-                            <h1 className="text-sm font-semibold text-text-primary truncate">
-                                {currentDevice?.deviceInfo.deviceName || '加载中...'}
-                            </h1>
-                            {/* 设备 ID 后 4 位 */}
+                            {/* 设备名称：有别名时两行展示，无别名时单行 */}
+                            <div className="min-w-0">
+                                {currentDevice?.deviceInfo.deviceAlias ? (
+                                    <>
+                                        <h1 className="text-sm font-semibold text-text-primary truncate">
+                                            {currentDevice.deviceInfo.deviceAlias}
+                                        </h1>
+                                        <p className="text-xs text-text-muted truncate">
+                                            {currentDevice.deviceInfo.deviceName}
+                                        </p>
+                                    </>
+                                ) : (
+                                    <h1 className="text-sm font-semibold text-text-primary truncate">
+                                        {currentDevice?.deviceInfo.deviceName || '加载中...'}
+                                    </h1>
+                                )}
+                            </div>
+                            {/* 设备 ID 后 4 位 - 点击弹出完整 ID */}
                             {deviceId && (
-                                <span
-                                    className="text-xs px-1.5 py-0.5 rounded bg-bg-light text-text-muted font-mono flex-shrink-0"
-                                    title={`设备 ID: ${deviceId}`}
-                                >
-                                    #{deviceId.slice(-4).toUpperCase()}
-                                </span>
+                                <DeviceIdPopover deviceId={deviceId}>
+                                    <span
+                                        className="text-xs px-1.5 py-0.5 rounded bg-bg-light text-text-muted font-mono flex-shrink-0 hover:bg-primary/20 hover:text-primary transition-colors"
+                                    >
+                                        #{deviceId.slice(-4).toUpperCase()}
+                                    </span>
+                                </DeviceIdPopover>
                             )}
                             {currentDevice?.deviceInfo.isSimulator && (
                                 <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 flex-shrink-0">

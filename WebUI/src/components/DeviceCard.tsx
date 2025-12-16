@@ -3,6 +3,7 @@ import type { DeviceListItem } from '@/types'
 import { formatRelativeTime } from '@/utils/format'
 import { useDeviceStore } from '@/stores/deviceStore'
 import { getPlatformIcon } from '@/utils/deviceIcons'
+import { DeviceIdPopover } from '@/components/DeviceIdPopover'
 import { StarIcon, PackageIcon, CheckIcon } from '@/components/icons'
 import clsx from 'clsx'
 import { type CSSProperties } from 'react'
@@ -97,10 +98,12 @@ export function DeviceCard({ device, style, isSelectMode, isSelected, onToggleSe
               <h3 className="font-medium text-sm text-text-primary group-hover:text-primary transition-colors truncate">
                 {hasAlias ? device.deviceAlias : device.deviceName}
               </h3>
-              {/* 设备 ID 后 4 位，便于多设备区分 */}
-              <span className="text-2xs px-1 py-0.5 rounded bg-bg-light text-text-muted font-mono flex-shrink-0" title={`设备 ID: ${device.deviceId}`}>
-                #{device.deviceId.slice(-4).toUpperCase()}
-              </span>
+              {/* 设备 ID 后 4 位 - 点击弹出完整 ID */}
+              <DeviceIdPopover deviceId={device.deviceId}>
+                <span className="text-2xs px-1 py-0.5 rounded bg-bg-light text-text-muted font-mono flex-shrink-0 hover:bg-primary/20 hover:text-primary transition-colors">
+                  #{device.deviceId.slice(-4).toUpperCase()}
+                </span>
+              </DeviceIdPopover>
               {isOffline && (
                 <span className="text-2xs px-1 py-0.5 rounded bg-gray-500/20 text-gray-400 flex-shrink-0">
                   离线
