@@ -18,7 +18,6 @@ import { useToastStore } from '@/stores/toastStore'
 import { WSSessionList } from '@/components/WSSessionList'
 import { WSSessionDetail } from '@/components/WSSessionDetail'
 import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
-import { Toggle } from '@/components/Toggle'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { parseWSEvent } from '@/services/realtime'
 import { deleteAllWSSessions, getWSSessionDetail } from '@/services/api'
@@ -344,15 +343,6 @@ function WebSocketPluginView({ context, isActive }: PluginRenderProps) {
 
                     <div className="h-5 w-px bg-border flex-shrink-0" />
 
-                    {/* 自动滚动 */}
-                    <Toggle
-                        checked={autoScroll}
-                        onChange={(checked) => setAutoScroll(checked)}
-                        label="自动滚动"
-                    />
-
-                    <div className="h-5 w-px bg-border flex-shrink-0" />
-
                     {/* 连接状态 */}
                     <span className={clsx(
                         'px-2 py-0.5 rounded text-xs',
@@ -402,6 +392,8 @@ function WebSocketPluginView({ context, isActive }: PluginRenderProps) {
                             onFrameDirectionChange={handleFrameDirectionChange}
                             loadedCount={frames.length}
                             totalCount={totalFrames}
+                            autoScroll={autoScroll}
+                            onAutoScrollChange={setAutoScroll}
                         />
                     )}
                 </div>

@@ -21,6 +21,8 @@ interface WSSessionDetailProps {
   onFrameDirectionChange: (direction: string) => void
   loadedCount?: number
   totalCount?: number
+  autoScroll: boolean
+  onAutoScrollChange: (enabled: boolean) => void
 }
 
 export function WSSessionDetail({
@@ -34,6 +36,8 @@ export function WSSessionDetail({
   onFrameDirectionChange,
   loadedCount,
   totalCount,
+  autoScroll,
+  onAutoScrollChange,
 }: WSSessionDetailProps) {
   const [activeTab, setActiveTab] = useState<'frames' | 'info'>('frames')
   const [expandedFrameId, setExpandedFrameId] = useState<string | null>(null)
@@ -108,6 +112,8 @@ export function WSSessionDetail({
             onDirectionChange={onFrameDirectionChange}
             loadedCount={loadedCount}
             totalCount={totalCount}
+            autoScroll={autoScroll}
+            onAutoScrollChange={onAutoScrollChange}
           />
         )}
         {activeTab === 'info' && <InfoTab session={session} />}
@@ -149,6 +155,8 @@ function FramesTab({
   onDirectionChange,
   loadedCount,
   totalCount,
+  autoScroll,
+  onAutoScrollChange,
 }: {
   deviceId: string
   sessionId: string
@@ -162,9 +170,10 @@ function FramesTab({
   onDirectionChange: (direction: string) => void
   loadedCount?: number
   totalCount?: number
+  autoScroll: boolean
+  onAutoScrollChange: (enabled: boolean) => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [autoScroll, setAutoScroll] = useState(true)
   const prevFrameCountRef = useRef(frames.length)
 
   // 统计发送/接收帧数
@@ -229,7 +238,7 @@ function FramesTab({
         </div>
 
         {/* 自动滚动开关 */}
-        <Toggle checked={autoScroll} onChange={(checked) => setAutoScroll(checked)} label="自动滚动" />
+        <Toggle checked={autoScroll} onChange={onAutoScrollChange} label="自动滚动" />
       </div>
 
       {/* 帧列表 - 普通滚动 */}
