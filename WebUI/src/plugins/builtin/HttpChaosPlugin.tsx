@@ -224,7 +224,7 @@ export function ChaosPluginContent({ deviceId, isActive }: { deviceId: string; i
     return (
         <div className="h-full flex flex-col">
             {/* Header */}
-            <div className="px-4 py-2 border-b border-border bg-bg-medium">
+            <div className="px-4 py-1.5 border-b border-border bg-bg-medium">
                 {/* 操作栏 */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">

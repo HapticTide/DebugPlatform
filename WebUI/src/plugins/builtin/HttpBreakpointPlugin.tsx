@@ -255,7 +255,7 @@ export function BreakpointPluginContent({ deviceId, isActive }: { deviceId: stri
     return (
         <div className="h-full flex flex-col">
             {/* 操作栏 */}
-            <div className="flex-shrink-0 px-4 py-2 border-b border-border bg-bg-medium flex items-center justify-between">
+            <div className="flex-shrink-0 px-4 py-1.5 border-b border-border bg-bg-medium flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     {/* 刷新按钮 */}
                     <button

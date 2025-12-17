@@ -496,7 +496,7 @@ function HTTPRequestsContent({
             {/* Toolbar */}
             <div className="bg-bg-medium border-b border-border flex-shrink-0">
                 {/* 第一行：筛选功能 */}
-                <div className="px-3 py-1.5 flex items-center gap-2 flex-nowrap min-w-0">
+                <div className="px-4 py-1.5 flex items-center gap-2 flex-nowrap min-w-0">
                     {/* 左侧：刷新 - 批量选择 - 方法 - 搜索 - 更多筛选 */}
                     <button
                         onClick={onRefresh}
