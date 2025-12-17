@@ -1045,6 +1045,10 @@ export const usePerformanceStore = create<PerformanceState>((set, get) => ({
             pageTimingPage: 1,
             pageTimingSummary: [],
             selectedPageTimingEvent: null,
+            // 同时清除 App Launch 相关状态
+            appLaunchMetrics: null,
+            appLaunchHistory: [],
+            appLaunchStats: null,
         })
     },
 

@@ -202,6 +202,16 @@ struct DeviceController: RouteCollection {
             .filter(\.$deviceId == deviceId)
             .delete()
 
+        // 删除 App 启动数据
+        try await AppLaunchEventModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .delete()
+
+        // 删除页面耗时数据
+        try await PageTimingEventModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .delete()
+
         // 重置该设备的序号缓存
         await SequenceNumberManager.shared.reset(for: deviceId)
 
