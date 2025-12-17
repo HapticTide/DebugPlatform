@@ -16,7 +16,7 @@ import type { MockRule, BreakpointRule, ChaosRule } from "@/types";
 
 /**
  * 全局搜索组件
- * 支持 Cmd/Ctrl + K 或 Cmd/Ctrl + F 快捷键唤起
+ * 支持 Cmd/Ctrl + K 快捷键唤起
  * 搜索范围：HTTP 请求、WebSocket 会话、日志、Mock 规则、断点规则、故障注入规则、流量规则
  */
 export function GlobalSearch() {
@@ -196,8 +196,8 @@ export function GlobalSearch() {
     // 全局快捷键注册
     useEffect(() => {
         const handleGlobalKeyDown = (e: KeyboardEvent) => {
-            // Cmd/Ctrl + K 或 Cmd/Ctrl + F 打开搜索
-            if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "f")) {
+            // Cmd/Ctrl + K 打开搜索
+            if ((e.metaKey || e.ctrlKey) && e.key === "k") {
                 e.preventDefault();
                 if (isOpen) {
                     close();

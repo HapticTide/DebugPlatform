@@ -154,7 +154,7 @@ export function DevicePluginView() {
     }, [activePluginId, setActivePlugin])
 
     // 键盘快捷键
-    // 注意：Cmd/Ctrl + K 或 Cmd/Ctrl + F 由 GlobalSearch 组件全局处理
+    // 注意：Cmd/Ctrl + K 由 GlobalSearch 组件全局处理
     useKeyboardShortcuts([
         {
             key: 'r',
@@ -478,7 +478,7 @@ export function DevicePluginView() {
                         <button
                             onClick={() => useGlobalSearchStore.getState().open()}
                             className="btn btn-ghost p-1.5 rounded"
-                            title="全局搜索 (⌘K / ⌘F)"
+                            title="全局搜索 (⌘K)"
                         >
                             <SearchIcon size={14} />
                         </button>
