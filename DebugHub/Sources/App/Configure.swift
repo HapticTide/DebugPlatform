@@ -19,6 +19,14 @@ let serverStartTime = Date()
 // MARK: - Application Configuration
 
 func configure(_ app: Application) throws {
+    // 配置全局 JSON 编码器，使用 ISO8601 带毫秒格式
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601WithMilliseconds
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601WithMilliseconds
+    ContentConfiguration.global.use(encoder: encoder, for: .json)
+    ContentConfiguration.global.use(decoder: decoder, for: .json)
+
     // 配置数据库（支持 PostgreSQL 和 SQLite 两种模式）
     try configureDatabase(app)
 

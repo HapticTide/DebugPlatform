@@ -2981,6 +2981,9 @@ function PageTimingSummaryView({
     sortKey: SummarySortKey
     sortDesc: boolean
 }) {
+    // 选中的详情项
+    const [selectedItem, setSelectedItem] = useState<PageTimingSummary | null>(null)
+
     // 排序后的数据
     const sortedSummary = useMemo(() => {
         const sorted = [...summary]
@@ -3015,6 +3018,17 @@ function PageTimingSummaryView({
         return sorted
     }, [summary, sortKey, sortDesc])
 
+    // ESC 关闭详情
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && selectedItem) {
+                setSelectedItem(null)
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [selectedItem])
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -3033,70 +3047,191 @@ function PageTimingSummaryView({
     }
 
     return (
-        <div className="space-y-3">
-            {/* 汇总列表 */}
-            {sortedSummary.map((item) => (
-                <div
-                    key={item.pageId}
-                    className="bg-bg-medium rounded-lg p-4 border border-border"
-                >
-                    <div className="flex items-start justify-between mb-3">
-                        <div>
-                            <h3 className="text-sm font-medium text-text-primary">
+        <>
+            {/* 紧凑列表视图 */}
+            <div className="space-y-1">
+                {/* 表头 */}
+                <div className="grid grid-cols-[1fr_80px_70px_70px_70px_70px_60px] gap-2 px-3 py-1.5 text-xs text-text-muted border-b border-border">
+                    <span>页面</span>
+                    <span className="text-right">访问次数</span>
+                    <span className="text-right">平均</span>
+                    <span className="text-right">P50</span>
+                    <span className="text-right">P90</span>
+                    <span className="text-right">P95</span>
+                    <span className="text-right">异常</span>
+                </div>
+
+                {/* 数据行 */}
+                {sortedSummary.map((item, index) => (
+                    <div
+                        key={item.pageId}
+                        onClick={() => setSelectedItem(item)}
+                        className={clsx(
+                            'grid grid-cols-[1fr_80px_70px_70px_70px_70px_60px] gap-2 px-3 py-2 rounded cursor-pointer transition-all duration-200',
+                            'hover:bg-bg-light',
+                            selectedItem?.pageId === item.pageId && 'bg-primary/10'
+                        )}
+                        style={{
+                            animation: `fadeIn 0.3s ease-out ${index * 0.03}s both`
+                        }}
+                    >
+                        {/* 页面名称 */}
+                        <div className="min-w-0">
+                            <p className="text-sm text-text-primary truncate" title={item.pageName}>
                                 {item.pageName}
-                            </h3>
-                            <p className="text-xs text-text-muted mt-0.5">
+                            </p>
+                            <p className="text-[10px] text-text-muted truncate" title={item.pageId}>
                                 {item.pageId}
                             </p>
                         </div>
-                        <div className="text-right">
-                            <span className="text-xs text-text-muted">访问次数</span>
-                            <p className="text-lg font-semibold text-text-primary">{item.count}</p>
-                        </div>
-                    </div>
 
-                    {/* 耗时指标 */}
-                    <div className="grid grid-cols-4 gap-4 mb-3">
-                        <div className="text-center">
-                            <span className="text-xs text-text-muted block mb-1">平均耗时</span>
-                            <span className={clsx('text-sm font-medium', getPageTimingColor(item.avgAppearDuration))}>
-                                {formatPageTiming(item.avgAppearDuration)}
-                            </span>
-                        </div>
-                        <div className="text-center">
-                            <span className="text-xs text-text-muted block mb-1">P50</span>
-                            <span className={clsx('text-sm font-medium', getPageTimingColor(item.p50AppearDuration))}>
-                                {formatPageTiming(item.p50AppearDuration)}
-                            </span>
-                        </div>
-                        <div className="text-center">
-                            <span className="text-xs text-text-muted block mb-1">P90</span>
-                            <span className={clsx('text-sm font-medium', getPageTimingColor(item.p90AppearDuration))}>
-                                {formatPageTiming(item.p90AppearDuration)}
-                            </span>
-                        </div>
-                        <div className="text-center">
-                            <span className="text-xs text-text-muted block mb-1">P95</span>
-                            <span className={clsx('text-sm font-medium', getPageTimingColor(item.p95AppearDuration))}>
-                                {formatPageTiming(item.p95AppearDuration)}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* 范围和错误率 */}
-                    <div className="flex items-center justify-between text-xs text-text-muted">
-                        <span>
-                            范围: {formatPageTiming(item.minAppearDuration)} ~ {formatPageTiming(item.maxAppearDuration)}
+                        {/* 访问次数 */}
+                        <span className="text-sm text-text-primary text-right font-medium tabular-nums">
+                            {item.count}
                         </span>
-                        {item.errorRate !== undefined && item.errorRate > 0 && (
-                            <span className="text-red-400">
-                                异常率: {(item.errorRate * 100).toFixed(1)}%
-                            </span>
-                        )}
+
+                        {/* 平均耗时 */}
+                        <span className={clsx('text-sm text-right tabular-nums', getPageTimingColor(item.avgAppearDuration))}>
+                            {formatPageTiming(item.avgAppearDuration)}
+                        </span>
+
+                        {/* P50 */}
+                        <span className={clsx('text-sm text-right tabular-nums', getPageTimingColor(item.p50AppearDuration))}>
+                            {formatPageTiming(item.p50AppearDuration)}
+                        </span>
+
+                        {/* P90 */}
+                        <span className={clsx('text-sm text-right tabular-nums', getPageTimingColor(item.p90AppearDuration))}>
+                            {formatPageTiming(item.p90AppearDuration)}
+                        </span>
+
+                        {/* P95 */}
+                        <span className={clsx('text-sm text-right tabular-nums', getPageTimingColor(item.p95AppearDuration))}>
+                            {formatPageTiming(item.p95AppearDuration)}
+                        </span>
+
+                        {/* 异常率 */}
+                        <span className={clsx(
+                            'text-sm text-right tabular-nums',
+                            item.errorRate && item.errorRate > 0 ? 'text-red-400' : 'text-text-muted'
+                        )}>
+                            {item.errorRate && item.errorRate > 0
+                                ? `${(item.errorRate * 100).toFixed(0)}%`
+                                : '-'
+                            }
+                        </span>
+                    </div>
+                ))}
+            </div>
+
+            {/* 详情弹窗 */}
+            {selectedItem && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+                    onClick={() => setSelectedItem(null)}
+                >
+                    <div
+                        className="bg-bg-dark border border-border rounded-lg shadow-xl max-w-lg w-full mx-4 overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* 弹窗头部 */}
+                        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-sm font-medium text-text-primary truncate">
+                                    {selectedItem.pageName}
+                                </h3>
+                                <p className="text-xs text-text-muted truncate">{selectedItem.pageId}</p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedItem(null)}
+                                className="text-text-muted hover:text-text-primary transition-colors ml-2 text-lg leading-none"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {/* 弹窗内容 */}
+                        <div className="p-4 space-y-4">
+                            {/* 访问统计 */}
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-text-muted">访问次数</span>
+                                <span className="text-lg font-semibold text-text-primary">{selectedItem.count}</span>
+                            </div>
+
+                            {/* 耗时指标 */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-bg-medium rounded-lg p-3">
+                                    <span className="text-xs text-text-muted block mb-1">平均耗时</span>
+                                    <span className={clsx('text-lg font-medium', getPageTimingColor(selectedItem.avgAppearDuration))}>
+                                        {formatPageTiming(selectedItem.avgAppearDuration)}
+                                    </span>
+                                </div>
+                                <div className="bg-bg-medium rounded-lg p-3">
+                                    <span className="text-xs text-text-muted block mb-1">P50</span>
+                                    <span className={clsx('text-lg font-medium', getPageTimingColor(selectedItem.p50AppearDuration))}>
+                                        {formatPageTiming(selectedItem.p50AppearDuration)}
+                                    </span>
+                                </div>
+                                <div className="bg-bg-medium rounded-lg p-3">
+                                    <span className="text-xs text-text-muted block mb-1">P90</span>
+                                    <span className={clsx('text-lg font-medium', getPageTimingColor(selectedItem.p90AppearDuration))}>
+                                        {formatPageTiming(selectedItem.p90AppearDuration)}
+                                    </span>
+                                </div>
+                                <div className="bg-bg-medium rounded-lg p-3">
+                                    <span className="text-xs text-text-muted block mb-1">P95</span>
+                                    <span className={clsx('text-lg font-medium', getPageTimingColor(selectedItem.p95AppearDuration))}>
+                                        {formatPageTiming(selectedItem.p95AppearDuration)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* 范围 */}
+                            <div className="bg-bg-medium rounded-lg p-3">
+                                <span className="text-xs text-text-muted block mb-1">耗时范围</span>
+                                <span className="text-sm text-text-primary">
+                                    {formatPageTiming(selectedItem.minAppearDuration)} ~ {formatPageTiming(selectedItem.maxAppearDuration)}
+                                </span>
+                            </div>
+
+                            {/* 异常率 */}
+                            {selectedItem.errorRate !== undefined && selectedItem.errorRate > 0 && (
+                                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                                    <span className="text-xs text-red-400 block mb-1">异常率</span>
+                                    <span className="text-lg font-medium text-red-400">
+                                        {(selectedItem.errorRate * 100).toFixed(1)}%
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 弹窗底部 */}
+                        <div className="px-4 py-3 border-t border-border flex justify-end">
+                            <button
+                                onClick={() => setSelectedItem(null)}
+                                className="btn btn-secondary text-xs px-3 py-1.5"
+                            >
+                                关闭
+                            </button>
+                        </div>
                     </div>
                 </div>
-            ))}
-        </div>
+            )}
+
+            {/* CSS 动画 */}
+            <style>{`
+                @keyframes fadeIn {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-4px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+            `}</style>
+        </>
     )
 }
 
