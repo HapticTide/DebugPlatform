@@ -152,13 +152,15 @@ export function HTTPEventDetail({
   onEditMockRule,
   onCreateMockFromRequest,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'headers' | 'params' | 'body' | 'timing'>('headers')
+  const [activeTab, setActiveTab] = useState<'request' | 'response' | 'timing'>('request')
   const [curlCommand, setCurlCommand] = useState<string | null>(null)
   const [curlLoading, setCurlLoading] = useState(false)
   const [curlCopied, setCurlCopied] = useState(false)
   const [replayStatus, setReplayStatus] = useState<string | null>(null)
   const [domainCopied, setDomainCopied] = useState(false)
   const [pathCopied, setPathCopied] = useState(false)
+  // Body Params 视图模式：tree（树形图）或 flat（展平表格）
+  const [bodyParamsViewMode, setBodyParamsViewMode] = useState<'tree' | 'flat'>('tree')
 
   // 使用 URL 级别的收藏状态
   const { isFavorite: isUrlFavorite, toggleFavorite: toggleUrlFavorite } = useFavoriteUrlStore()
@@ -189,6 +191,20 @@ export function HTTPEventDetail({
   const parsedBodyParams = event.bodyParams && Object.keys(event.bodyParams).length > 0
     ? event.bodyParams
     : parseBodyParams(requestBody, requestContentType)
+
+  // 检查请求体是否为 JSON 格式（用于决定是否显示视图切换）
+  const isJsonRequestBody = (() => {
+    if (!requestBody) return false
+    const ct = (requestContentType || '').toLowerCase()
+    if (ct.includes('application/json') || ct.includes('text/json')) return true
+    // 尝试解析以确认是否为 JSON
+    try {
+      JSON.parse(requestBody)
+      return true
+    } catch {
+      return false
+    }
+  })()
 
   const handleCopyCurl = async () => {
     if (curlCommand) {
@@ -389,14 +405,11 @@ export function HTTPEventDetail({
 
       {/* Tabs */}
       <div className="flex border-b border-border bg-bg-dark">
-        <TabButton active={activeTab === 'headers'} onClick={() => setActiveTab('headers')}>
-          Headers
+        <TabButton active={activeTab === 'request'} onClick={() => setActiveTab('request')}>
+          Request
         </TabButton>
-        <TabButton active={activeTab === 'params'} onClick={() => setActiveTab('params')}>
-          Params
-        </TabButton>
-        <TabButton active={activeTab === 'body'} onClick={() => setActiveTab('body')}>
-          Body
+        <TabButton active={activeTab === 'response'} onClick={() => setActiveTab('response')}>
+          Response
         </TabButton>
         {event.timing && (
           <TabButton active={activeTab === 'timing'} onClick={() => setActiveTab('timing')}>
@@ -407,56 +420,100 @@ export function HTTPEventDetail({
 
       {/* Tab Content */}
       <div className="p-4">
-        {activeTab === 'headers' && (
+        {/* Request Tab */}
+        {activeTab === 'request' && (
           <div className="space-y-6">
-            <Section title="请求头">
+            {/* Headers */}
+            <Section title="Headers">
               <HeadersTable headers={event.requestHeaders} />
             </Section>
 
-            {event.responseHeaders && (
-              <Section title="响应头">
-                <HeadersTable headers={event.responseHeaders} />
-              </Section>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'params' && (
-          <div className="space-y-6">
+            {/* Query Params */}
             <Section title="Query Params">
               <HeadersTable headers={event.queryItems || {}} />
             </Section>
 
-            <Section title="Body Params">
-              {parsedBodyParams ? (
-                <HeadersTable headers={parsedBodyParams} />
+            {/* Body */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs uppercase text-text-muted">Body</h4>
+                {/* 视图切换按钮 - 仅 JSON 请求体显示 */}
+                {isJsonRequestBody && requestBody && (
+                  <div className="flex rounded overflow-hidden border border-border">
+                    <button
+                      onClick={() => setBodyParamsViewMode('tree')}
+                      className={clsx(
+                        'px-2 py-0.5 text-xs transition-colors',
+                        bodyParamsViewMode === 'tree'
+                          ? 'bg-primary text-white'
+                          : 'bg-bg-light text-text-muted hover:text-text-primary'
+                      )}
+                      title="树形图视图"
+                    >
+                      🌳 树形
+                    </button>
+                    <button
+                      onClick={() => setBodyParamsViewMode('flat')}
+                      className={clsx(
+                        'px-2 py-0.5 text-xs transition-colors border-l border-border',
+                        bodyParamsViewMode === 'flat'
+                          ? 'bg-primary text-white'
+                          : 'bg-bg-light text-text-muted hover:text-text-primary'
+                      )}
+                      title="展平键值对视图"
+                    >
+                      📋 展平
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Body 内容 */}
+              {requestBody ? (
+                isProtobufRequest ? (
+                  <ProtobufViewer
+                    base64Data={event.requestBody!}
+                    contentType={requestContentType}
+                  />
+                ) : isJsonRequestBody ? (
+                  bodyParamsViewMode === 'tree' ? (
+                    <JSONViewer content={requestBody} />
+                  ) : (
+                    parsedBodyParams ? (
+                      <HeadersTable headers={parsedBodyParams} />
+                    ) : (
+                      <div className="text-text-muted text-sm">无法解析为键值对</div>
+                    )
+                  )
+                ) : (
+                  // 非 JSON 格式，显示展平表格或原始内容
+                  parsedBodyParams ? (
+                    <HeadersTable headers={parsedBodyParams} />
+                  ) : (
+                    <JSONViewer content={requestBody} />
+                  )
+                )
               ) : (
-                <div className="text-text-muted text-sm">
-                  {requestBody ? '无法解析请求体为参数格式' : '无请求体'}
-                </div>
+                <div className="text-text-muted text-sm">无请求体</div>
               )}
-            </Section>
+            </div>
           </div>
         )}
 
-        {activeTab === 'body' && (
+        {/* Response Tab */}
+        {activeTab === 'response' && (
           <div className="space-y-6">
-            {event.requestBody && (
-              <Section title="请求体">
-                {isProtobufRequest ? (
-                  <ProtobufViewer
-                    base64Data={event.requestBody}
-                    contentType={requestContentType}
-                  />
-                ) : (
-                  <JSONViewer content={requestBody ?? ''} />
-                )}
+            {/* Headers */}
+            {event.responseHeaders && (
+              <Section title="Headers">
+                <HeadersTable headers={event.responseHeaders} />
               </Section>
             )}
 
-            {event.responseBody && (
-              <Section title="响应体">
-                {isImageResponse ? (
+            {/* Body */}
+            <Section title="Body">
+              {event.responseBody ? (
+                isImageResponse ? (
                   <ImagePreview
                     base64Data={event.responseBody}
                     contentType={responseContentType ?? null}
@@ -468,14 +525,13 @@ export function HTTPEventDetail({
                   />
                 ) : (
                   <JSONViewer content={responseBody ?? ''} />
-                )}
-              </Section>
-            )}
+                )
+              ) : (
+                <div className="text-text-muted text-sm">无响应体</div>
+              )}
+            </Section>
 
-            {!event.requestBody && !event.responseBody && (
-              <div className="text-text-muted text-sm">无请求体或响应体</div>
-            )}
-
+            {/* Error */}
             {event.errorDescription && (
               <Section title="错误信息">
                 <pre className="text-xs font-mono bg-bg-dark p-3 rounded text-red-400">
@@ -486,6 +542,7 @@ export function HTTPEventDetail({
           </div>
         )}
 
+        {/* Timing Tab */}
         {activeTab === 'timing' && event.timing && (
           <Section title="性能时间线">
             <TimingWaterfall timing={event.timing} totalDuration={event.duration} />
