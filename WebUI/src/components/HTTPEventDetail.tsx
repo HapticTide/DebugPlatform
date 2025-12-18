@@ -30,6 +30,106 @@ function parseUrlParts(url: string): { domain: string; path: string } {
   }
 }
 
+/**
+ * 将嵌套 JSON 对象展平为键值对
+ * 例如: { user: { name: "test" } } => { "user.name": "test" }
+ */
+function flattenJSON(obj: unknown, prefix = ''): Record<string, string> {
+  const result: Record<string, string> = {}
+
+  if (obj === null || obj === undefined) {
+    return result
+  }
+
+  if (Array.isArray(obj)) {
+    obj.forEach((item, index) => {
+      const key = `${prefix}[${index}]`
+      const nested = flattenJSON(item, key)
+      Object.assign(result, nested)
+    })
+  } else if (typeof obj === 'object') {
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      const newKey = prefix ? `${prefix}.${key}` : key
+      const nested = flattenJSON(value, newKey)
+      Object.assign(result, nested)
+    }
+  } else {
+    result[prefix] = String(obj)
+  }
+
+  return result
+}
+
+/**
+ * 解析请求体为键值对参数
+ * 支持 JSON 和 form-urlencoded 格式
+ */
+function parseBodyParams(
+  body: string | null,
+  contentType: string | undefined
+): Record<string, string> | null {
+  if (!body || !body.trim()) {
+    return null
+  }
+
+  const ct = (contentType || '').toLowerCase()
+
+  // 尝试解析 JSON
+  if (ct.includes('application/json') || ct.includes('text/json')) {
+    try {
+      const parsed = JSON.parse(body)
+      const flattened = flattenJSON(parsed)
+      return Object.keys(flattened).length > 0 ? flattened : null
+    } catch {
+      return null
+    }
+  }
+
+  // 尝试解析 form-urlencoded
+  if (ct.includes('application/x-www-form-urlencoded')) {
+    try {
+      const params = new URLSearchParams(body)
+      const result: Record<string, string> = {}
+      params.forEach((value, key) => {
+        result[key] = value
+      })
+      return Object.keys(result).length > 0 ? result : null
+    } catch {
+      return null
+    }
+  }
+
+  // 尝试自动检测格式（当 content-type 未知时）
+  // 先尝试 JSON
+  try {
+    const parsed = JSON.parse(body)
+    if (typeof parsed === 'object' && parsed !== null) {
+      const flattened = flattenJSON(parsed)
+      return Object.keys(flattened).length > 0 ? flattened : null
+    }
+  } catch {
+    // 不是 JSON，尝试 form-urlencoded
+  }
+
+  // 尝试 form-urlencoded
+  if (body.includes('=')) {
+    try {
+      const params = new URLSearchParams(body)
+      const result: Record<string, string> = {}
+      params.forEach((value, key) => {
+        result[key] = value
+      })
+      if (Object.keys(result).length > 0) {
+        return result
+      }
+    } catch {
+      // 解析失败
+    }
+  }
+
+  return null
+}
+
 interface Props {
   event: HTTPEventDetailType | null
   deviceId: string
@@ -84,6 +184,11 @@ export function HTTPEventDetail({
   // 检查请求内容类型
   const requestContentType = event.requestHeaders?.['Content-Type'] || event.requestHeaders?.['content-type']
   const isProtobufRequest = isProtobufContentType(requestContentType)
+
+  // 解析 Body Params（优先使用后端解析的，fallback 到前端解析）
+  const parsedBodyParams = event.bodyParams && Object.keys(event.bodyParams).length > 0
+    ? event.bodyParams
+    : parseBodyParams(requestBody, requestContentType)
 
   const handleCopyCurl = async () => {
     if (curlCommand) {
@@ -323,8 +428,13 @@ export function HTTPEventDetail({
             </Section>
 
             <Section title="Body Params">
-              <HeadersTable headers={event.bodyParams || {}} />
-              {!event.bodyParams && <div className="text-text-muted text-sm">无解析后的 Body 参数</div>}
+              {parsedBodyParams ? (
+                <HeadersTable headers={parsedBodyParams} />
+              ) : (
+                <div className="text-text-muted text-sm">
+                  {requestBody ? '无法解析请求体为参数格式' : '无请求体'}
+                </div>
+              )}
             </Section>
           </div>
         )}
