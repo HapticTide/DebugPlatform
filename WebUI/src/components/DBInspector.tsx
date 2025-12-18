@@ -657,7 +657,11 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                     <div className="space-y-1">
                         {/* 当前用户和共享数据库 */}
                         {getSortedDatabases()
-                            .filter(db => db.descriptor.ownership !== 'otherUser')
+                            .filter(db => {
+                                // 兼容旧版本：ownership 未定义时视为 shared
+                                const ownership = db.descriptor.ownership || 'shared'
+                                return ownership !== 'otherUser'
+                            })
                             .map((db) => (
                                 <DatabaseItem
                                     key={db.descriptor.id}
@@ -675,7 +679,8 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
 
                         {/* 其他账户数据库分组 */}
                         {(() => {
-                            const otherUserDbs = getSortedDatabases().filter(db => db.descriptor.ownership === 'otherUser')
+                            // 兼容旧版本：ownership 未定义时视为 shared
+                            const otherUserDbs = getSortedDatabases().filter(db => (db.descriptor.ownership || 'shared') === 'otherUser')
                             if (otherUserDbs.length === 0) return null
                             return (
                                 <div className="mt-2 pt-2 border-t border-border/50">
@@ -1390,7 +1395,9 @@ function DatabaseItem({
     onCopyPath,
     getDisplayPath,
 }: DatabaseItemProps) {
-    const isCurrentUser = db.descriptor.ownership === 'currentUser'
+    // 兼容旧版本：ownership 未定义时视为 shared
+    const ownership = db.descriptor.ownership || 'shared'
+    const isCurrentUser = ownership === 'currentUser'
 
     return (
         <div className="relative">
