@@ -140,6 +140,13 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
         appLaunchMetrics[deviceId] = nil
     }
 
+    /// 同步清除告警缓存
+    private func clearCachedAlerts(deviceId: String) {
+        alertsLock.lock()
+        defer { alertsLock.unlock() }
+        activeAlerts[deviceId] = []
+    }
+
     /// 同步清除所有缓存
     private func clearAllCachedMetrics() {
         metricsLock.lock()
@@ -321,7 +328,7 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
                 ),
                 pageTiming: nil
             )
-            
+
             // 通过 RealtimeStreamHandler 广播给 WebUI
             RealtimeStreamHandler.shared.broadcast(events: [.performance(perfEventDTO)], deviceId: deviceId)
 
@@ -525,8 +532,8 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
 
         // 内存趋势分析
         let memoryTrend = analyzeTrend(
-            first: firstHalf.compactMap { $0.memoryFootprintRatio }.map { $0 * 100 },
-            second: secondHalf.compactMap { $0.memoryFootprintRatio }.map { $0 * 100 },
+            first: firstHalf.compactMap(\.memoryFootprintRatio).map { $0 * 100 },
+            second: secondHalf.compactMap(\.memoryFootprintRatio).map { $0 * 100 },
             metricName: "Memory"
         )
 
@@ -539,17 +546,16 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
         )
 
         // 综合评估
-        let trends = [cpuTrend?.trend, memoryTrend?.trend, fpsTrend?.trend].compactMap { $0 }
-        let degradingCount = trends.filter { $0 == .degrading }.count
-        let improvingCount = trends.filter { $0 == .improving }.count
+        let trends = [cpuTrend?.trend, memoryTrend?.trend, fpsTrend?.trend].compactMap(\.self)
+        let degradingCount = trends.count(where: { $0 == .degrading })
+        let improvingCount = trends.count(where: { $0 == .improving })
 
-        let overall: TrendDirection
-        if degradingCount >= 2 {
-            overall = .degrading
+        let overall: TrendDirection = if degradingCount >= 2 {
+            .degrading
         } else if improvingCount >= 2 {
-            overall = .improving
+            .improving
         } else {
-            overall = .stable
+            .stable
         }
 
         // 生成建议
@@ -565,7 +571,7 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
             recommendations.append("帧率呈下降趋势（\(String(format: "%.1f", fps.changePercent))%），建议优化 UI 渲染性能")
         }
 
-        if recommendations.isEmpty && overall == .stable {
+        if recommendations.isEmpty, overall == .stable {
             recommendations.append("性能表现稳定，无明显异常")
         } else if overall == .improving {
             recommendations.append("整体性能呈改善趋势")
@@ -686,7 +692,7 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
         // 计算统计指标
         var stats: AppLaunchStats?
         if !historyModels.isEmpty {
-            let totalTimes = historyModels.map { $0.totalTime }.sorted()
+            let totalTimes = historyModels.map(\.totalTime).sorted()
             let count = totalTimes.count
 
             // 计算百分位数
@@ -695,9 +701,9 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
             let p95Index = Int(Double(count) * 0.95)
 
             // 计算各阶段平均值
-            let preMainTimes = historyModels.compactMap { $0.preMainTime }
-            let mainToLaunchTimes = historyModels.compactMap { $0.mainToLaunchTime }
-            let launchToFirstFrameTimes = historyModels.compactMap { $0.launchToFirstFrameTime }
+            let preMainTimes = historyModels.compactMap(\.preMainTime)
+            let mainToLaunchTimes = historyModels.compactMap(\.mainToLaunchTime)
+            let launchToFirstFrameTimes = historyModels.compactMap(\.launchToFirstFrameTime)
 
             stats = AppLaunchStats(
                 count: count,
@@ -708,8 +714,12 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
                 p90TotalTime: totalTimes[min(p90Index, count - 1)],
                 p95TotalTime: totalTimes[min(p95Index, count - 1)],
                 avgPreMainTime: preMainTimes.isEmpty ? nil : preMainTimes.reduce(0, +) / Double(preMainTimes.count),
-                avgMainToLaunchTime: mainToLaunchTimes.isEmpty ? nil : mainToLaunchTimes.reduce(0, +) / Double(mainToLaunchTimes.count),
-                avgLaunchToFirstFrameTime: launchToFirstFrameTimes.isEmpty ? nil : launchToFirstFrameTimes.reduce(0, +) / Double(launchToFirstFrameTimes.count)
+                avgMainToLaunchTime: mainToLaunchTimes.isEmpty
+                    ? nil
+                    : mainToLaunchTimes.reduce(0, +) / Double(mainToLaunchTimes.count),
+                avgLaunchToFirstFrameTime: launchToFirstFrameTimes.isEmpty
+                    ? nil
+                    : launchToFirstFrameTimes.reduce(0, +) / Double(launchToFirstFrameTimes.count)
             )
         }
 
@@ -773,6 +783,7 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
 
         // 清除内存缓存（同步操作）
         clearCachedMetrics(deviceId: deviceId)
+        clearCachedAlerts(deviceId: deviceId)
 
         // 清除数据库数据 - Performance Metrics
         let metricsCount = try await PerformanceMetricsModel.query(on: req.db)
@@ -794,6 +805,11 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
 
         // 清除数据库数据 - App Launch Events
         try await AppLaunchEventModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .delete()
+
+        // 清除数据库数据 - Alerts
+        try await AlertModel.query(on: req.db)
             .filter(\.$deviceId == deviceId)
             .delete()
 
@@ -835,7 +851,7 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
             total: total,
             page: page,
             pageSize: pageSize,
-            activeCount: items.filter { !$0.isResolved }.count
+            activeCount: items.count(where: { !$0.isResolved })
         )
     }
 
@@ -921,8 +937,9 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
 
     /// 删除告警规则
     func deleteAlertRule(req: Request) async throws -> AlertRuleUpdateResponse {
-        guard let deviceId = req.parameters.get("deviceId"),
-              let ruleId = req.parameters.get("ruleId")
+        guard
+            let deviceId = req.parameters.get("deviceId"),
+            let ruleId = req.parameters.get("ruleId")
         else {
             throw Abort(.badRequest, reason: "Missing deviceId or ruleId")
         }
@@ -944,8 +961,9 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
 
     /// 更新告警规则
     func updateAlertRule(req: Request) async throws -> AlertRuleUpdateResponse {
-        guard let deviceId = req.parameters.get("deviceId"),
-              let ruleId = req.parameters.get("ruleId")
+        guard
+            let deviceId = req.parameters.get("deviceId"),
+            let ruleId = req.parameters.get("ruleId")
         else {
             throw Abort(.badRequest, reason: "Missing deviceId or ruleId")
         }
@@ -966,8 +984,9 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
 
     /// 解决告警
     func resolveAlert(req: Request) async throws -> AlertResolveResponse {
-        guard let deviceId = req.parameters.get("deviceId"),
-              let alertId = req.parameters.get("alertId")
+        guard
+            let deviceId = req.parameters.get("deviceId"),
+            let alertId = req.parameters.get("alertId")
         else {
             throw Abort(.badRequest, reason: "Missing deviceId or alertId")
         }
@@ -1228,13 +1247,13 @@ public struct AppLaunchMetricsDTO: Codable, Content {
             "totalTime": totalTime,
             "timestamp": ISO8601DateFormatter().string(from: timestamp),
         ]
-        if let preMainTime = preMainTime {
+        if let preMainTime {
             result["preMainTime"] = preMainTime
         }
-        if let mainToLaunchTime = mainToLaunchTime {
+        if let mainToLaunchTime {
             result["mainToLaunchTime"] = mainToLaunchTime
         }
-        if let launchToFirstFrameTime = launchToFirstFrameTime {
+        if let launchToFirstFrameTime {
             result["launchToFirstFrameTime"] = launchToFirstFrameTime
         }
         return result
@@ -1249,9 +1268,9 @@ public struct PerformanceMetricsBatchDTO: Codable {
 
 /// 趋势方向
 public enum TrendDirection: String, Codable, Content {
-    case improving = "improving"
-    case stable = "stable"
-    case degrading = "degrading"
+    case improving
+    case stable
+    case degrading
 }
 
 /// 单项指标趋势
@@ -1625,16 +1644,16 @@ public struct AlertDTO: Content {
     }
 
     init(from model: AlertModel) {
-        self.id = model.id?.uuidString ?? UUID().uuidString
-        self.ruleId = model.ruleId
-        self.metricType = model.metricType
-        self.severity = model.severity
-        self.message = model.message
-        self.currentValue = model.currentValue
-        self.threshold = model.threshold
-        self.timestamp = model.timestamp
-        self.isResolved = model.isResolved
-        self.resolvedAt = model.resolvedAt
+        id = model.id?.uuidString ?? UUID().uuidString
+        ruleId = model.ruleId
+        metricType = model.metricType
+        severity = model.severity
+        message = model.message
+        currentValue = model.currentValue
+        threshold = model.threshold
+        timestamp = model.timestamp
+        isResolved = model.isResolved
+        resolvedAt = model.resolvedAt
     }
 
     func toDictionary() -> [String: Any] {
@@ -2073,7 +2092,7 @@ extension PerformanceBackendPlugin {
         // 分页查询
         let items = try await query
             .sort(\.$startAt, .descending)
-            .range((page - 1) * pageSize ..< page * pageSize)
+            .range((page - 1) * pageSize..<page * pageSize)
             .all()
 
         return PageTimingListDTO(
@@ -2086,8 +2105,9 @@ extension PerformanceBackendPlugin {
 
     /// 获取单个页面耗时事件
     func getPageTimingEvent(_ req: Request) async throws -> PageTimingEventDTO {
-        guard let deviceId = req.parameters.get("deviceId"),
-              let eventId = req.parameters.get("eventId")
+        guard
+            let deviceId = req.parameters.get("deviceId"),
+            let eventId = req.parameters.get("eventId")
         else {
             throw Abort(.badRequest, reason: "Missing deviceId or eventId")
         }
@@ -2095,10 +2115,11 @@ extension PerformanceBackendPlugin {
             throw Abort(.internalServerError, reason: "Database not available")
         }
 
-        guard let event = try await PageTimingEventModel.query(on: db)
-            .filter(\.$id == eventId)
-            .filter(\.$deviceId == deviceId)
-            .first()
+        guard
+            let event = try await PageTimingEventModel.query(on: db)
+                .filter(\.$id == eventId)
+                .filter(\.$deviceId == deviceId)
+                .first()
         else {
             throw Abort(.notFound, reason: "Page timing event not found")
         }
@@ -2173,7 +2194,7 @@ extension PerformanceBackendPlugin {
             let p95 = percentile(appearDurations, 0.95)
 
             // 计算错误率（endAt 为空的比例）
-            let errorCount = pageEvents.filter { $0.endAt == nil }.count
+            let errorCount = pageEvents.count(where: { $0.endAt == nil })
             let errorRate = count > 0 ? Double(errorCount) / Double(count) : 0
 
             summaries.append(PageTimingSummaryDTO(

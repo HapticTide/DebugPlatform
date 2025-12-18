@@ -694,6 +694,9 @@ export const usePerformanceStore = create<PerformanceState>((set, get) => ({
                 appLaunchMetrics: null,
                 appLaunchHistory: [],
                 appLaunchStats: null,
+                // 同时清除告警相关状态
+                alerts: [],
+                activeAlertCount: 0,
             })
         } catch (error) {
             console.error('Failed to clear metrics:', error)
