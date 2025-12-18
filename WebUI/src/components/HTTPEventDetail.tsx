@@ -31,106 +31,6 @@ function parseUrlParts(url: string): { domain: string; path: string } {
   }
 }
 
-/**
- * 将嵌套 JSON 对象展平为键值对
- * 例如: { user: { name: "test" } } => { "user.name": "test" }
- */
-function flattenJSON(obj: unknown, prefix = ''): Record<string, string> {
-  const result: Record<string, string> = {}
-
-  if (obj === null || obj === undefined) {
-    return result
-  }
-
-  if (Array.isArray(obj)) {
-    obj.forEach((item, index) => {
-      const key = `${prefix}[${index}]`
-      const nested = flattenJSON(item, key)
-      Object.assign(result, nested)
-    })
-  } else if (typeof obj === 'object') {
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      const newKey = prefix ? `${prefix}.${key}` : key
-      const nested = flattenJSON(value, newKey)
-      Object.assign(result, nested)
-    }
-  } else {
-    result[prefix] = String(obj)
-  }
-
-  return result
-}
-
-/**
- * 解析请求体为键值对参数
- * 支持 JSON 和 form-urlencoded 格式
- */
-function parseBodyParams(
-  body: string | null,
-  contentType: string | undefined
-): Record<string, string> | null {
-  if (!body || !body.trim()) {
-    return null
-  }
-
-  const ct = (contentType || '').toLowerCase()
-
-  // 尝试解析 JSON
-  if (ct.includes('application/json') || ct.includes('text/json')) {
-    try {
-      const parsed = JSON.parse(body)
-      const flattened = flattenJSON(parsed)
-      return Object.keys(flattened).length > 0 ? flattened : null
-    } catch {
-      return null
-    }
-  }
-
-  // 尝试解析 form-urlencoded
-  if (ct.includes('application/x-www-form-urlencoded')) {
-    try {
-      const params = new URLSearchParams(body)
-      const result: Record<string, string> = {}
-      params.forEach((value, key) => {
-        result[key] = value
-      })
-      return Object.keys(result).length > 0 ? result : null
-    } catch {
-      return null
-    }
-  }
-
-  // 尝试自动检测格式（当 content-type 未知时）
-  // 先尝试 JSON
-  try {
-    const parsed = JSON.parse(body)
-    if (typeof parsed === 'object' && parsed !== null) {
-      const flattened = flattenJSON(parsed)
-      return Object.keys(flattened).length > 0 ? flattened : null
-    }
-  } catch {
-    // 不是 JSON，尝试 form-urlencoded
-  }
-
-  // 尝试 form-urlencoded
-  if (body.includes('=')) {
-    try {
-      const params = new URLSearchParams(body)
-      const result: Record<string, string> = {}
-      params.forEach((value, key) => {
-        result[key] = value
-      })
-      if (Object.keys(result).length > 0) {
-        return result
-      }
-    } catch {
-      // 解析失败
-    }
-  }
-
-  return null
-}
-
 interface Props {
   event: HTTPEventDetailType | null
   deviceId: string
@@ -160,8 +60,6 @@ export function HTTPEventDetail({
   const [replayStatus, setReplayStatus] = useState<string | null>(null)
   const [domainCopied, setDomainCopied] = useState(false)
   const [pathCopied, setPathCopied] = useState(false)
-  // Body Params 视图模式：tree（树形图）或 flat（展平表格）
-  const [bodyParamsViewMode, setBodyParamsViewMode] = useState<'tree' | 'flat'>('tree')
 
   // 使用 URL 级别的收藏状态
   const { isFavorite: isUrlFavorite, toggleFavorite: toggleUrlFavorite } = useFavoriteUrlStore()
@@ -187,25 +85,6 @@ export function HTTPEventDetail({
   // 检查请求内容类型
   const requestContentType = event.requestHeaders?.['Content-Type'] || event.requestHeaders?.['content-type']
   const isProtobufRequest = isProtobufContentType(requestContentType)
-
-  // 解析 Body Params（优先使用后端解析的，fallback 到前端解析）
-  const parsedBodyParams = event.bodyParams && Object.keys(event.bodyParams).length > 0
-    ? event.bodyParams
-    : parseBodyParams(requestBody, requestContentType)
-
-  // 检查请求体是否为 JSON 格式（用于决定是否显示视图切换）
-  const isJsonRequestBody = (() => {
-    if (!requestBody) return false
-    const ct = (requestContentType || '').toLowerCase()
-    if (ct.includes('application/json') || ct.includes('text/json')) return true
-    // 尝试解析以确认是否为 JSON
-    try {
-      JSON.parse(requestBody)
-      return true
-    } catch {
-      return false
-    }
-  })()
 
   const handleCopyCurl = async () => {
     if (curlCommand) {
@@ -430,69 +309,20 @@ export function HTTPEventDetail({
             </Section>
 
             {/* Body */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs uppercase text-text-muted">Body</h4>
-                {/* 视图切换按钮 - 仅 JSON 请求体显示 */}
-                {isJsonRequestBody && requestBody && (
-                  <div className="flex rounded overflow-hidden border border-border">
-                    <button
-                      onClick={() => setBodyParamsViewMode('tree')}
-                      className={clsx(
-                        'px-2 py-0.5 text-xs transition-colors',
-                        bodyParamsViewMode === 'tree'
-                          ? 'bg-primary text-white'
-                          : 'bg-bg-light text-text-muted hover:text-text-primary'
-                      )}
-                      title="树形图视图"
-                    >
-                      🌳 树形
-                    </button>
-                    <button
-                      onClick={() => setBodyParamsViewMode('flat')}
-                      className={clsx(
-                        'px-2 py-0.5 text-xs transition-colors border-l border-border',
-                        bodyParamsViewMode === 'flat'
-                          ? 'bg-primary text-white'
-                          : 'bg-bg-light text-text-muted hover:text-text-primary'
-                      )}
-                      title="展平键值对视图"
-                    >
-                      📋 展平
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Body 内容 */}
+            <Section title="Body">
               {requestBody ? (
                 isProtobufRequest ? (
                   <ProtobufViewer
                     base64Data={event.requestBody!}
                     contentType={requestContentType}
                   />
-                ) : isJsonRequestBody ? (
-                  bodyParamsViewMode === 'tree' ? (
-                    <JSONViewer content={requestBody} />
-                  ) : (
-                    parsedBodyParams ? (
-                      <HeadersTable headers={parsedBodyParams} />
-                    ) : (
-                      <div className="text-text-muted text-sm">无法解析为键值对</div>
-                    )
-                  )
                 ) : (
-                  // 非 JSON 格式，显示展平表格或原始内容
-                  parsedBodyParams ? (
-                    <HeadersTable headers={parsedBodyParams} />
-                  ) : (
-                    <JSONViewer content={requestBody} />
-                  )
+                  <JSONViewer content={requestBody} />
                 )
               ) : (
                 <div className="text-text-muted text-sm">无请求体</div>
               )}
-            </div>
+            </Section>
 
             {/* Headers */}
             <Section title="Headers">
@@ -590,9 +420,9 @@ function TabButton({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div>
-      <h4 className="text-xs uppercase text-text-muted mb-2">{title}</h4>
-      {children}
+    <div className="bg-bg-dark rounded-lg border border-border">
+      <h4 className="text-xs uppercase text-text-muted px-3 py-2 border-b border-border font-medium">{title}</h4>
+      <div className="p-3">{children}</div>
     </div>
   )
 }
