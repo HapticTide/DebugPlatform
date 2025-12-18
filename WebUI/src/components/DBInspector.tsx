@@ -306,7 +306,9 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
     const [pathPopupDbId, setPathPopupDbId] = useState<string | null>(null)
     const [pathCopied, setPathCopied] = useState(false)
 
-    // 其他账户数据库分组展开状态
+    // 数据库分组展开状态
+    const [sharedDbExpanded, setSharedDbExpanded] = useState(true)
+    const [currentUserDbExpanded, setCurrentUserDbExpanded] = useState(true)
     const [otherUserDbExpanded, setOtherUserDbExpanded] = useState(false)
 
     // 双击单元格弹出框状态
@@ -661,26 +663,32 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                             if (sharedDbs.length === 0) return null
                             return (
                                 <div>
-                                    <div className="px-2 py-1 text-2xs text-accent-blue font-medium flex items-center gap-1">
+                                    <button
+                                        onClick={() => setSharedDbExpanded(!sharedDbExpanded)}
+                                        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-2xs text-accent-blue font-medium hover:text-accent-blue/80 transition-colors"
+                                    >
+                                        {sharedDbExpanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
                                         <span>共享</span>
                                         <span className="opacity-60">({sharedDbs.length})</span>
-                                    </div>
-                                    <div className="mt-1 space-y-1">
-                                        {sharedDbs.map((db) => (
-                                            <DatabaseItem
-                                                key={db.descriptor.id}
-                                                db={db}
-                                                isSelected={selectedDb === db.descriptor.id}
-                                                pathPopupDbId={pathPopupDbId}
-                                                pathCopied={pathCopied}
-                                                onSelect={handleSelectDb}
-                                                onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
-                                                onClosePathPopup={() => setPathPopupDbId(null)}
-                                                onCopyPath={handleCopyPath}
-                                                getDisplayPath={getDisplayPath}
-                                            />
-                                        ))}
-                                    </div>
+                                    </button>
+                                    {sharedDbExpanded && (
+                                        <div className="mt-1 space-y-1">
+                                            {sharedDbs.map((db) => (
+                                                <DatabaseItem
+                                                    key={db.descriptor.id}
+                                                    db={db}
+                                                    isSelected={selectedDb === db.descriptor.id}
+                                                    pathPopupDbId={pathPopupDbId}
+                                                    pathCopied={pathCopied}
+                                                    onSelect={handleSelectDb}
+                                                    onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
+                                                    onClosePathPopup={() => setPathPopupDbId(null)}
+                                                    onCopyPath={handleCopyPath}
+                                                    getDisplayPath={getDisplayPath}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )
                         })()}
@@ -693,26 +701,32 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                             const hasSharedDbs = getSortedDatabases().some(db => (db.descriptor.ownership || 'shared') === 'shared')
                             return (
                                 <div className={hasSharedDbs ? 'mt-2 pt-2 border-t border-border' : ''}>
-                                    <div className="px-2 py-1 text-2xs text-primary font-medium flex items-center gap-1">
+                                    <button
+                                        onClick={() => setCurrentUserDbExpanded(!currentUserDbExpanded)}
+                                        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-2xs text-primary font-medium hover:text-primary/80 transition-colors"
+                                    >
+                                        {currentUserDbExpanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
                                         <span>当前账户</span>
                                         <span className="opacity-60">({currentUserDbs.length})</span>
-                                    </div>
-                                    <div className="mt-1 space-y-1">
-                                        {currentUserDbs.map((db) => (
-                                            <DatabaseItem
-                                                key={db.descriptor.id}
-                                                db={db}
-                                                isSelected={selectedDb === db.descriptor.id}
-                                                pathPopupDbId={pathPopupDbId}
-                                                pathCopied={pathCopied}
-                                                onSelect={handleSelectDb}
-                                                onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
-                                                onClosePathPopup={() => setPathPopupDbId(null)}
-                                                onCopyPath={handleCopyPath}
-                                                getDisplayPath={getDisplayPath}
-                                            />
-                                        ))}
-                                    </div>
+                                    </button>
+                                    {currentUserDbExpanded && (
+                                        <div className="mt-1 space-y-1">
+                                            {currentUserDbs.map((db) => (
+                                                <DatabaseItem
+                                                    key={db.descriptor.id}
+                                                    db={db}
+                                                    isSelected={selectedDb === db.descriptor.id}
+                                                    pathPopupDbId={pathPopupDbId}
+                                                    pathCopied={pathCopied}
+                                                    onSelect={handleSelectDb}
+                                                    onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
+                                                    onClosePathPopup={() => setPathPopupDbId(null)}
+                                                    onCopyPath={handleCopyPath}
+                                                    getDisplayPath={getDisplayPath}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )
                         })()}
