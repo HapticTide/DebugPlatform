@@ -6,6 +6,7 @@ import {
   getMethodClass,
   decodeBase64,
 } from '@/utils/format'
+import { copyToClipboard } from '@/utils/clipboard'
 import { getHTTPEventCurl, replayHTTPEvent } from '@/services/api'
 import { JSONViewer } from './JSONTree'
 import { TimingWaterfall } from './TimingWaterfall'
@@ -208,7 +209,7 @@ export function HTTPEventDetail({
 
   const handleCopyCurl = async () => {
     if (curlCommand) {
-      await navigator.clipboard.writeText(curlCommand)
+      await copyToClipboard(curlCommand)
       setCurlCopied(true)
       setTimeout(() => setCurlCopied(false), 2000)
       return
@@ -218,7 +219,7 @@ export function HTTPEventDetail({
     try {
       const response = await getHTTPEventCurl(deviceId, event.id)
       setCurlCommand(response.curl)
-      await navigator.clipboard.writeText(response.curl)
+      await copyToClipboard(response.curl)
       setCurlCopied(true)
       setTimeout(() => setCurlCopied(false), 2000)
     } catch (error) {
@@ -249,7 +250,7 @@ export function HTTPEventDetail({
   const handleCopyDomain = async () => {
     const { domain } = parseUrlParts(event.url)
     if (domain) {
-      await navigator.clipboard.writeText(domain)
+      await copyToClipboard(domain)
       setDomainCopied(true)
       setTimeout(() => setDomainCopied(false), 2000)
     }
@@ -258,7 +259,7 @@ export function HTTPEventDetail({
   const handleCopyPath = async () => {
     const { path } = parseUrlParts(event.url)
     if (path) {
-      await navigator.clipboard.writeText(path)
+      await copyToClipboard(path)
       setPathCopied(true)
       setTimeout(() => setPathCopied(false), 2000)
     }

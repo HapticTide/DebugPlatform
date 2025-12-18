@@ -14,6 +14,7 @@ import { useNewItemHighlight } from '@/hooks/useNewItemHighlight'
 import { PerformanceIcon, CPUIcon, MemoryIcon, FPSIcon, SettingsIcon, AlertIcon, TrashIcon, ClockIcon, SummaryIcon, ListIcon, DistributionIcon } from '@/components/icons'
 import { Checkbox } from '@/components/Checkbox'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { copyToClipboard } from '@/utils/clipboard'
 import {
     usePerformanceStore,
     formatBytes,
@@ -1756,7 +1757,7 @@ function JankDetailModal({
                         {jank.stackTrace && (
                             <button
                                 onClick={() => {
-                                    navigator.clipboard.writeText(jank.stackTrace || '')
+                                    copyToClipboard(jank.stackTrace || '')
                                 }}
                                 className="text-xs text-accent-primary hover:text-accent-primary/80 transition-colors"
                             >

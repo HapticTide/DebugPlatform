@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { XMarkIcon, ClipboardIcon, CheckIcon } from './icons'
 import { LogEvent } from '../types'
+import { copyToClipboard as copyText } from '@/utils/clipboard'
 import clsx from 'clsx'
 
 interface Props {
@@ -94,7 +95,7 @@ export const LogDetailModal: React.FC<Props> = ({ event, onClose }) => {
     // 复制功能
     const copyToClipboard = useCallback(async (text: string, field: string) => {
         try {
-            await navigator.clipboard.writeText(text)
+            await copyText(text)
             setCopiedField(field)
             setTimeout(() => setCopiedField(null), 2000)
         } catch (err) {

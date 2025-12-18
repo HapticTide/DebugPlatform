@@ -17,6 +17,7 @@ import { WarningIcon, PackageIcon, SparklesIcon, ClipboardIcon, CheckIcon } from
 import { tryAutoDecode, formatDecodedMessage } from '@/utils/protobufDescriptor'
 import { GroupedFilterSelect } from './GroupedFilterSelect'
 import { useDraggable } from '@/hooks/useDraggable'
+import { copyToClipboard } from '@/utils/clipboard'
 
 interface BlobCellProps {
     /** Base64 编码的 BLOB 数据 */
@@ -302,7 +303,7 @@ export function BlobCell({
 
     // 复制内容到剪贴板
     const handleCopy = useCallback((content: string) => {
-        navigator.clipboard.writeText(content).then(() => {
+        copyToClipboard(content).then(() => {
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
         })

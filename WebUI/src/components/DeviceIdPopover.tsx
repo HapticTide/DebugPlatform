@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'react-hot-toast'
 import { CopyIcon, CheckIcon } from '@/components/icons'
+import { copyToClipboard } from '@/utils/clipboard'
 import clsx from 'clsx'
 
 interface DeviceIdPopoverProps {
@@ -64,7 +65,7 @@ export function DeviceIdPopover({ deviceId, children }: DeviceIdPopoverProps) {
     const handleCopy = async (e: React.MouseEvent) => {
         e.stopPropagation()
         try {
-            await navigator.clipboard.writeText(deviceId)
+            await copyToClipboard(deviceId)
             setCopied(true)
             toast.success('设备 ID 已复制')
             // 1.5 秒后重置状态
