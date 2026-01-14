@@ -281,6 +281,10 @@ sync_code() {
         rsync -avz "$SCRIPT_DIR/deploy.local" "$target:$remote_dir/deploy.local"
     fi
     
+    # 确保脚本有可执行权限
+    log_info "设置脚本权限..."
+    ssh "$target" "chmod +x '$remote_dir/DebugHub/deploy.sh' '$remote_dir/remote-deploy.sh' 2>/dev/null || true"
+    
     log_success "代码同步完成"
 }
 
