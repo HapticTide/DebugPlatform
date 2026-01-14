@@ -55,12 +55,12 @@ function JSONNode({ keyName, value, depth, initialExpanded, maxInitialDepth, isL
   }
 
   const renderExpandable = () => {
-    const entries = type === 'array' 
+    const entries = type === 'array'
       ? (value as unknown[]).map((v, i) => [String(i), v] as const)
       : Object.entries(value as object)
 
     const bracket = type === 'array' ? ['[', ']'] : ['{', '}']
-    const preview = type === 'array' 
+    const preview = type === 'array'
       ? `Array(${(value as unknown[]).length})`
       : `Object(${Object.keys(value as object).length})`
 
@@ -127,8 +127,8 @@ interface JSONViewerProps {
 }
 
 export function JSONViewer({ content, className }: JSONViewerProps) {
-  const [viewMode, setViewMode] = useState<'tree' | 'raw'>('tree')
-  
+  const [viewMode, setViewMode] = useState<'tree' | 'raw'>('raw')
+
   const parsedData = useMemo(() => {
     try {
       return JSON.parse(content)
@@ -151,26 +151,26 @@ export function JSONViewer({ content, className }: JSONViewerProps) {
     <div className={className}>
       <div className="flex gap-2 mb-2">
         <button
-          onClick={() => setViewMode('tree')}
-          className={clsx(
-            'px-2 py-1 text-xs rounded',
-            viewMode === 'tree' 
-              ? 'bg-primary text-white' 
-              : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
-          )}
-        >
-          树形
-        </button>
-        <button
           onClick={() => setViewMode('raw')}
           className={clsx(
             'px-2 py-1 text-xs rounded',
-            viewMode === 'raw' 
-              ? 'bg-primary text-white' 
+            viewMode === 'raw'
+              ? 'bg-primary text-white'
               : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
           )}
         >
           原始
+        </button>
+        <button
+          onClick={() => setViewMode('tree')}
+          className={clsx(
+            'px-2 py-1 text-xs rounded',
+            viewMode === 'tree'
+              ? 'bg-primary text-white'
+              : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
+          )}
+        >
+          树形
         </button>
       </div>
       {viewMode === 'tree' ? (

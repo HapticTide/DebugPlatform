@@ -1,0 +1,29 @@
+# =====================================
+# DebugPlatform 远程部署配置模板
+# =====================================
+# 复制此文件为 deploy.local 并修改
+# deploy.local 不会被提交到 Git
+
+# SSH 目标 (user@host)
+DEPLOY_TARGET="root@192.168.1.100"
+
+# 远程部署目录
+DEPLOY_DIR="\$HOME/DebugPlatform"
+
+# 服务端口
+PORT=8081
+
+# 监听地址
+HOST="0.0.0.0"
+
+# 数据库模式: sqlite 或 postgres
+DATABASE_MODE="postgres"
+
+# =====================================
+# PostgreSQL 配置（仅当 DATABASE_MODE=postgres 时使用）
+# =====================================
+# POSTGRES_USER="debug_hub"
+# POSTGRES_PASSWORD="debug_hub_password"
+# POSTGRES_DB="debug_hub"
+# POSTGRES_HOST="localhost"
+# POSTGRES_PORT="5432"

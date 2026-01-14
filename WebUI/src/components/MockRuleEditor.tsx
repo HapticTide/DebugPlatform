@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { MockRule, MockTargetType, MockRuleCondition, MockRuleAction } from '@/types'
 import { createEmptyRule } from '@/stores/mockStore'
 import { Checkbox } from './Checkbox'
+import { decodeBase64 } from '@/utils/format'
 
 interface MockRuleEditorProps {
   rule: MockRule | null
@@ -49,13 +50,13 @@ export function MockRuleEditor({ rule, isOpen, onClose, onSave, loading, httpOnl
     initialData.action.mockResponseStatusCode?.toString() || '200'
   )
   const [mockResponseBody, setMockResponseBody] = useState(
-    initialData.action.mockResponseBody ? atob(initialData.action.mockResponseBody) : ''
+    initialData.action.mockResponseBody ? decodeBase64(initialData.action.mockResponseBody) : ''
   )
   const [mockHeaders, setMockHeaders] = useState(
     JSON.stringify(initialData.action.mockResponseHeaders || {}, null, 2)
   )
   const [mockWsPayload, setMockWsPayload] = useState(
-    initialData.action.mockWebSocketPayload ? atob(initialData.action.mockWebSocketPayload) : ''
+    initialData.action.mockWebSocketPayload ? decodeBase64(initialData.action.mockWebSocketPayload) : ''
   )
   const [delayMs, setDelayMs] = useState(initialData.action.delayMilliseconds?.toString() || '')
 
@@ -73,9 +74,9 @@ export function MockRuleEditor({ rule, isOpen, onClose, onSave, loading, httpOnl
       setBodyContains(data.condition.bodyContains || '')
       setWsPayloadContains(data.condition.wsPayloadContains || '')
       setMockStatusCode(data.action.mockResponseStatusCode?.toString() || '200')
-      setMockResponseBody(data.action.mockResponseBody ? atob(data.action.mockResponseBody) : '')
+      setMockResponseBody(data.action.mockResponseBody ? decodeBase64(data.action.mockResponseBody) : '')
       setMockHeaders(JSON.stringify(data.action.mockResponseHeaders || {}, null, 2))
-      setMockWsPayload(data.action.mockWebSocketPayload ? atob(data.action.mockWebSocketPayload) : '')
+      setMockWsPayload(data.action.mockWebSocketPayload ? decodeBase64(data.action.mockWebSocketPayload) : '')
       setDelayMs(data.action.delayMilliseconds?.toString() || '')
     }
   }, [isOpen, rule])

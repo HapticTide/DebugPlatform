@@ -237,11 +237,20 @@ export function getMethodClass(method: string): string {
 }
 
 /**
- * Base64 解码
+ * Base64 解码为 UTF-8 字符串
+ * 使用 TextDecoder 正确处理多字节字符（如中文）
  */
 export function decodeBase64(str: string): string {
   try {
-    return atob(str)
+    // 1. 使用 atob 将 Base64 解码为二进制字符串
+    const binaryString = atob(str)
+    // 2. 将二进制字符串转换为 Uint8Array
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    // 3. 使用 TextDecoder 以 UTF-8 解码为正确的字符串
+    return new TextDecoder('utf-8').decode(bytes)
   } catch {
     return str
   }

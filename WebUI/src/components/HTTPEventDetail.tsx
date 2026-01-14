@@ -53,7 +53,7 @@ export function HTTPEventDetail({
   onEditMockRule,
   onCreateMockFromRequest,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'request' | 'response' | 'timing'>('request')
+  const [activeTab, setActiveTab] = useState<'request' | 'response' | 'timing'>('response')
   const [curlCommand, setCurlCommand] = useState<string | null>(null)
   const [curlLoading, setCurlLoading] = useState(false)
   const [curlCopied, setCurlCopied] = useState(false)
@@ -285,11 +285,11 @@ export function HTTPEventDetail({
 
       {/* Tabs */}
       <div className="flex border-b border-border bg-bg-dark">
-        <TabButton active={activeTab === 'request'} onClick={() => setActiveTab('request')}>
-          Request
-        </TabButton>
         <TabButton active={activeTab === 'response'} onClick={() => setActiveTab('response')}>
           Response
+        </TabButton>
+        <TabButton active={activeTab === 'request'} onClick={() => setActiveTab('request')}>
+          Request
         </TabButton>
         {event.timing && (
           <TabButton active={activeTab === 'timing'} onClick={() => setActiveTab('timing')}>

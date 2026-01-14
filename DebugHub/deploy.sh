@@ -799,15 +799,33 @@ run_server() {
         export DATA_DIR="$DATA_DIR"
     fi
     
-    # 写入 PID 文件
-    echo $$ > "$PID_FILE"
-    CLEANUP_NEEDED=true
+    # 后台启动服务
+    log_info "启动服务..."
+    nohup "$binary_path" serve --hostname "$host" --port "$port" >> "$LOG_FILE" 2>&1 &
+    local new_pid=$!
+    echo "$new_pid" > "$PID_FILE"
     
-    log_success "服务启动中... 按 Ctrl+C 停止"
-    echo ""
+    # 等待服务启动
+    sleep 2
     
-    # 启动服务
-    exec "$binary_path" serve --hostname "$host" --port "$port"
+    if ps -p "$new_pid" > /dev/null 2>&1; then
+        log_success "服务已启动 (PID: $new_pid)"
+        echo ""
+        echo "=============================================="
+        echo "  访问地址: http://${host}:${port}"
+        echo "=============================================="
+        echo ""
+        echo "  常用命令:"
+        echo "    ./deploy.sh --status   # 查看状态"
+        echo "    ./deploy.sh --restart  # 重启服务"
+        echo "    ./deploy.sh --stop     # 停止服务"
+        echo "    ./deploy.sh --logs     # 查看日志"
+        echo ""
+    else
+        log_error "服务启动失败，请查看日志: $LOG_FILE"
+        rm -f "$PID_FILE"
+        return 1
+    fi
 }
 
 # ============================================================================
@@ -835,6 +853,12 @@ ${BOLD}选项:${NC}
     ${CYAN}--verbose, -v${NC}       显示详细输出
     ${CYAN}--help, -h${NC}          显示此帮助信息
 
+${BOLD}服务管理:${NC}
+    ${CYAN}--stop${NC}              停止服务
+    ${CYAN}--restart${NC}           重启服务
+    ${CYAN}--status${NC}            查看服务状态
+    ${CYAN}--logs${NC}              查看实时日志
+
 ${BOLD}示例:${NC}
     ./deploy.sh                                     # 使用默认配置 (PostgreSQL)
     ./deploy.sh --port 3000                         # 使用端口 3000
@@ -843,6 +867,10 @@ ${BOLD}示例:${NC}
     ./deploy.sh --build-only                        # 仅编译
     ./deploy.sh --with-webui                        # 同时构建 WebUI
     ./deploy.sh --verbose                           # 显示详细日志
+    ./deploy.sh --stop                              # 停止服务
+    ./deploy.sh --restart                           # 重启服务
+    ./deploy.sh --status                            # 查看状态
+    ./deploy.sh --logs                              # 查看日志
 
 ${BOLD}环境变量:${NC}
     DATABASE_MODE       数据库模式: postgres (默认) 或 sqlite
@@ -871,6 +899,162 @@ EOF
 
 show_version() {
     echo "$PROJECT_NAME deploy script v1.0.0"
+}
+
+# ============================================================================
+# 服务管理函数
+# ============================================================================
+
+# 获取服务 PID
+get_server_pid() {
+    if [[ -f "$PID_FILE" ]]; then
+        local pid=$(cat "$PID_FILE")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            echo "$pid"
+            return 0
+        fi
+    fi
+    
+    # 如果 PID 文件不存在或无效，尝试通过进程名查找
+    local pid=$(pgrep -f "DebugHub serve" 2>/dev/null | head -1)
+    if [[ -n "$pid" ]]; then
+        echo "$pid"
+        return 0
+    fi
+    
+    echo ""
+    return 1
+}
+
+# 停止服务
+stop_server() {
+    local pid=$(get_server_pid)
+    if [[ -z "$pid" ]]; then
+        log_warn "服务未在运行"
+        rm -f "$PID_FILE"
+        return 0
+    fi
+    
+    log_info "停止服务 (PID: $pid)..."
+    kill "$pid" 2>/dev/null || true
+    
+    # 等待进程退出
+    local count=0
+    while ps -p "$pid" > /dev/null 2>&1 && [[ $count -lt 10 ]]; do
+        sleep 1
+        ((count++))
+    done
+    
+    if ps -p "$pid" > /dev/null 2>&1; then
+        log_warn "服务未响应，强制终止..."
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+    
+    rm -f "$PID_FILE"
+    log_success "服务已停止"
+}
+
+# 查看服务状态
+show_status() {
+    local pid=$(get_server_pid)
+    
+    echo ""
+    echo "=============================================="
+    echo -e "  ${BOLD}$PROJECT_NAME 服务状态${NC}"
+    echo "=============================================="
+    echo ""
+    
+    if [[ -n "$pid" ]]; then
+        log_success "服务正在运行 (PID: $pid)"
+        echo ""
+        
+        # 显示进程信息
+        if command -v ps &> /dev/null; then
+            local mem=$(ps -o rss= -p "$pid" 2>/dev/null | awk '{printf "%.1f MB", $1/1024}')
+            local cpu=$(ps -o %cpu= -p "$pid" 2>/dev/null | tr -d ' ')
+            local start_time=$(ps -o lstart= -p "$pid" 2>/dev/null | xargs)
+            echo "  内存: $mem"
+            echo "  CPU:  ${cpu}%"
+            echo "  启动: $start_time"
+        fi
+        
+        # 显示端口信息
+        local port=$(lsof -Pan -p "$pid" -i 2>/dev/null | grep LISTEN | awk '{print $9}' | cut -d: -f2 | head -1)
+        if [[ -n "$port" ]]; then
+            echo "  端口: $port"
+            echo "  地址: http://localhost:$port"
+        fi
+        
+        echo ""
+        echo "  日志: $LOG_FILE"
+        echo "  PID:  $PID_FILE"
+        echo ""
+    else
+        log_warn "服务未在运行"
+        echo ""
+        echo "  启动服务: ./deploy.sh"
+        echo ""
+    fi
+}
+
+# 重启服务
+restart_server() {
+    log_info "重启服务..."
+    stop_server
+    sleep 1
+    
+    # 重新运行完整部署流程
+    log_info "重新启动服务..."
+    
+    # 确定二进制路径
+    local binary_path
+    if [[ "$BUILD_MODE" == "release" ]]; then
+        binary_path="$SCRIPT_DIR/.build/release/DebugHub"
+    else
+        binary_path="$SCRIPT_DIR/.build/debug/DebugHub"
+    fi
+    
+    if [[ ! -f "$binary_path" ]]; then
+        log_error "可执行文件不存在: $binary_path"
+        log_info "请先运行 ./deploy.sh 进行编译"
+        return 1
+    fi
+    
+    # 后台启动服务
+    local port=$DEFAULT_PORT
+    local host=$DEFAULT_HOST
+    
+    export DATABASE_MODE="${DATABASE_MODE:-postgres}"
+    export POSTGRES_HOST="$POSTGRES_HOST"
+    export POSTGRES_PORT="$POSTGRES_PORT"
+    export POSTGRES_USER="$POSTGRES_USER"
+    export POSTGRES_PASSWORD="$POSTGRES_PASSWORD"
+    export POSTGRES_DB="$POSTGRES_DB"
+    
+    nohup "$binary_path" serve --hostname "$host" --port "$port" >> "$LOG_FILE" 2>&1 &
+    local new_pid=$!
+    echo "$new_pid" > "$PID_FILE"
+    
+    sleep 2
+    
+    if ps -p "$new_pid" > /dev/null 2>&1; then
+        log_success "服务已启动 (PID: $new_pid)"
+        log_info "访问地址: http://${host}:${port}"
+    else
+        log_error "服务启动失败，请查看日志: $LOG_FILE"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+}
+
+# 查看日志
+show_logs() {
+    if [[ -f "$LOG_FILE" ]]; then
+        log_info "实时日志 (Ctrl+C 退出)..."
+        tail -f "$LOG_FILE"
+    else
+        log_warn "日志文件不存在: $LOG_FILE"
+    fi
 }
 
 # ============================================================================
@@ -939,6 +1123,22 @@ main() {
             --with-webui)
                 BUILD_WEBUI=true
                 shift
+                ;;
+            --stop)
+                stop_server
+                exit 0
+                ;;
+            --restart)
+                restart_server
+                exit 0
+                ;;
+            --status)
+                show_status
+                exit 0
+                ;;
+            --logs)
+                show_logs
+                exit 0
                 ;;
             --verbose|-v)
                 VERBOSE=true

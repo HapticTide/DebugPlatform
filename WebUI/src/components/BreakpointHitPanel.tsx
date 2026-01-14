@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { BreakpointHit, BreakpointAction, BreakpointRequestSnapshot, BreakpointResponseSnapshot } from '@/types'
+import { decodeBase64 } from '@/utils/format'
 import clsx from 'clsx'
 import {
     CheckIcon,
@@ -288,11 +289,7 @@ interface RequestEditorProps {
 function RequestEditor({ request, onChange, editable }: RequestEditorProps) {
     const decodedBody = useMemo(() => {
         if (!request.body) return ''
-        try {
-            return atob(request.body)
-        } catch {
-            return request.body
-        }
+        return decodeBase64(request.body)
     }, [request.body])
 
     const formatJson = (str: string): string => {
@@ -391,11 +388,7 @@ function ResponseEditor({ response, onChange, editable, showCreateButton, onCrea
 
     const decodedBody = useMemo(() => {
         if (!response.body) return ''
-        try {
-            return atob(response.body)
-        } catch {
-            return response.body
-        }
+        return decodeBase64(response.body)
     }, [response.body])
 
     const formatJson = (str: string): string => {
