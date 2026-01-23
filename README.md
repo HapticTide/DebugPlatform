@@ -149,7 +149,7 @@ cd DebugPlatform/DebugHub
 
 ### 2. App 集成
 
-SDK 已独立为 [DebugProbe](https://github.com/sunimp/iOS-DebugProbe) 仓库，请参阅该仓库的 README 获取详细集成文档。
+SDK 已独立为 [DebugProbe](https://github.com/AIAugmentLab/iOS-DebugProbe) 仓库，请参阅该仓库的 README 获取详细集成文档。
 
 **快速开始：**
 
@@ -158,7 +158,7 @@ SDK 已独立为 [DebugProbe](https://github.com/sunimp/iOS-DebugProbe) 仓库�
 dependencies: [
     .package(path: "../DebugProbe")  // 本地路径
     // 或使用远程仓库
-    // .package(url: "https://github.com/sunimp/iOS-DebugProbe.git", branch: "main")
+    // .package(url: "https://github.com/AIAugmentLab/iOS-DebugProbe.git", branch: "main")
 ]
 
 // 集成代码
@@ -258,7 +258,7 @@ npm run deploy
 
 ## 📖 相关文档
 
-- [DebugProbe SDK (iOS)](../DebugProbe/README.md) - iOS 端 SDK
+- [DebugProbe SDK (iOS)](https://github.com/AIAugmentLab/iOS-DebugProbe/blob/main/README.md) - iOS 端 SDK
 - [Android Probe 开发指南](docs/ANDROID_PROBE_GUIDE.md) - Android 端 SDK 开发指南
 - [WebUI](WebUI/README.md) - 前端界面
 - [开发路线图](docs/ROADMAP.md) - 功能规划
