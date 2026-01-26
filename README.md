@@ -6,7 +6,7 @@
 >
 > **本项目全部代码和文档均由 AI Agent 生成**
 
-> **当前版本**: 1.6.0 | [更新日志](docs/CHANGELOG.md) | [开发路线图](docs/ROADMAP.md)
+> **当前版本**: 1.2.0 | [更新日志](docs/CHANGELOG.md) | [开发路线图](docs/ROADMAP.md)
 >
 > **最后更新**: 2025-01-27
 
