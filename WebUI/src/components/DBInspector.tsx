@@ -718,30 +718,31 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                                 const displayName = dbs[0]?.descriptor.ownerDisplayName || null
                                                 const hasDisplayName = !!displayName
                                                 return (
-                                                <div key={ownerId} className="space-y-1">
-                                                    <TextPopover text={ownerId} title="账户 ID" trigger="dblclick">
-                                                        <div className={`px-2 py-0.5 text-2xs text-text-muted/70 truncate hover:text-text-muted transition-colors ${hasDisplayName ? '' : 'font-mono'}`} title={hasDisplayName ? `账户 ID: ${ownerId}` : '双击查看完整 ID'}>
-                                                            {hasDisplayName 
-                                                                ? displayName 
-                                                                : (ownerId.length > 20 ? `${ownerId.slice(0, 8)}...${ownerId.slice(-8)}` : ownerId)}
-                                                        </div>
-                                                    </TextPopover>
-                                                    {dbs.map((db) => (
-                                                        <DatabaseItem
-                                                            key={db.descriptor.id}
-                                                            db={db}
-                                                            isSelected={selectedDb === db.descriptor.id}
-                                                            pathPopupDbId={pathPopupDbId}
-                                                            pathCopied={pathCopied}
-                                                            onSelect={handleSelectDb}
-                                                            onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
-                                                            onClosePathPopup={() => setPathPopupDbId(null)}
-                                                            onCopyPath={handleCopyPath}
-                                                            getDisplayPath={getDisplayPath}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            )})}
+                                                    <div key={ownerId} className="space-y-1">
+                                                        <TextPopover text={ownerId} title="账户 ID" trigger="dblclick">
+                                                            <div className={`px-2 py-0.5 text-2xs text-text-muted/70 truncate hover:text-text-muted transition-colors ${hasDisplayName ? '' : 'font-mono'}`} title={hasDisplayName ? `账户 ID: ${ownerId}` : '双击查看完整 ID'}>
+                                                                {hasDisplayName
+                                                                    ? displayName
+                                                                    : (ownerId.length > 20 ? `${ownerId.slice(0, 8)}...${ownerId.slice(-8)}` : ownerId)}
+                                                            </div>
+                                                        </TextPopover>
+                                                        {dbs.map((db) => (
+                                                            <DatabaseItem
+                                                                key={db.descriptor.id}
+                                                                db={db}
+                                                                isSelected={selectedDb === db.descriptor.id}
+                                                                pathPopupDbId={pathPopupDbId}
+                                                                pathCopied={pathCopied}
+                                                                onSelect={handleSelectDb}
+                                                                onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
+                                                                onClosePathPopup={() => setPathPopupDbId(null)}
+                                                                onCopyPath={handleCopyPath}
+                                                                getDisplayPath={getDisplayPath}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )
+                                            })}
                                         </div>
                                     )}
                                 </div>
