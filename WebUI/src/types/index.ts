@@ -388,11 +388,16 @@ export interface DatabaseDescriptor {
   encryptionType: string | null
 }
 
+/** 加密数据库的解锁状态 */
+export type EncryptionStatus = 'none' | 'unlocked' | 'locked'
+
 export interface DBInfo {
   descriptor: DatabaseDescriptor
   tableCount: number
   fileSizeBytes: number | null
   absolutePath: string | null
+  /** 加密状态：none=未加密, unlocked=已解锁, locked=已锁定 */
+  encryptionStatus: EncryptionStatus
 }
 
 export interface DBTableInfo {

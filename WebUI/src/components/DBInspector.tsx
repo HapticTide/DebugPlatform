@@ -14,7 +14,7 @@ import { BlobCell, isBase64Blob } from './BlobCell'
 import { SQLEditor } from './SQLEditor'
 import { ListLoadingOverlay } from './ListLoadingOverlay'
 import { TextPopover } from './TextPopover'
-import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, ArrowUpIcon, ArrowDownIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon, FolderIcon, CheckIcon, SQLIcon, ChevronDownIcon, ChevronRightIcon } from './icons'
+import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, UnlockIcon, ArrowUpIcon, ArrowDownIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon, FolderIcon, CheckIcon, SQLIcon, ChevronDownIcon, ChevronRightIcon } from './icons'
 import { useToastStore } from '@/stores/toastStore'
 import type { DatabaseLocation, DBInfo, DBQueryError } from '@/types'
 interface DBInspectorProps {
@@ -22,8 +22,8 @@ interface DBInspectorProps {
 }
 
 // 格式化文件大小
-function formatBytes(bytes: number | null): string {
-    if (bytes === null) return '-'
+function formatBytes(bytes: number | null | undefined): string {
+    if (bytes === null || bytes === undefined) return '-'
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -649,6 +649,8 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                             if (currentUserDbs.length === 0) return null
                             // 判断前面是否有共享分组，决定是否显示分割线
                             const hasSharedDbs = getSortedDatabases().some(db => (db.descriptor.ownership || 'shared') === 'shared')
+                            // 优先使用 ownerDisplayName 作为分组标题
+                            const displayName = currentUserDbs[0]?.descriptor.ownerDisplayName || '当前账户'
                             return (
                                 <div className={hasSharedDbs ? 'mt-2 pt-2 border-t border-border' : ''}>
                                     <button
@@ -656,7 +658,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                         className="w-full flex items-center gap-1.5 px-2 py-1.5 text-2xs text-primary font-medium hover:text-primary/80 transition-colors"
                                     >
                                         {currentUserDbExpanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
-                                        <span>当前账户</span>
+                                        <span>{displayName}</span>
                                         <span className="opacity-60">({currentUserDbs.length})</span>
                                     </button>
                                     {currentUserDbExpanded && (
@@ -1404,12 +1406,23 @@ function DatabaseItem({
                         </div>
                     </div>
                     <div className="flex items-center gap-1">
-                        {db.descriptor.isEncrypted && (
+                        {/* 加密状态图标 */}
+                        {db.encryptionStatus === 'unlocked' && (
                             <span
                                 className={clsx(
                                     isSelected ? 'text-emerald-300' : 'text-emerald-500'
                                 )}
-                                title={`加密数据库 (${db.descriptor.encryptionType || 'Unknown'})`}
+                                title={`已解锁 (${db.descriptor.encryptionType || 'SQLCipher'})`}
+                            >
+                                <UnlockIcon size={12} />
+                            </span>
+                        )}
+                        {db.encryptionStatus === 'locked' && (
+                            <span
+                                className={clsx(
+                                    isSelected ? 'text-red-300' : 'text-red-500'
+                                )}
+                                title={`已锁定 - 需要密钥 (${db.descriptor.encryptionType || 'SQLCipher'})`}
                             >
                                 <LockIcon size={12} />
                             </span>

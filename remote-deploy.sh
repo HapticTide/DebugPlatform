@@ -283,7 +283,7 @@ sync_code() {
     
     # 确保脚本有可执行权限
     log_info "设置脚本权限..."
-    ssh "$target" "chmod +x '$remote_dir/DebugHub/deploy.sh' '$remote_dir/remote-deploy.sh' 2>/dev/null || true"
+    ssh "$target" "chmod +x '$remote_dir/deploy.sh' '$remote_dir/remote-deploy.sh' 2>/dev/null || true"
     
     log_success "代码同步完成"
 }
@@ -326,7 +326,7 @@ build_and_start() {
     
     # 停止旧服务（如果正在运行）
     log_info "检查并停止旧服务..."
-    local stop_output=$(ssh "$target" "cd '$remote_dir/DebugHub' && ./deploy.sh --stop 2>&1" || true)
+    local stop_output=$(ssh "$target" "cd '$remote_dir' && ./deploy.sh --stop 2>&1" || true)
     if echo "$stop_output" | grep -q "服务已停止\|服务未在运行"; then
         echo "$stop_output" | grep -E "服务已停止|服务未在运行" | head -1
     fi
@@ -345,7 +345,7 @@ build_and_start() {
     fi
     
     # 过滤掉冗长的编译输出，只显示关键信息
-    ssh "$target" "cd '$remote_dir/DebugHub' && ./deploy.sh --port $deploy_port --host $deploy_host $db_flag 2>&1" | \
+    ssh "$target" "cd '$remote_dir' && ./deploy.sh --port $deploy_port --host $deploy_host $db_flag 2>&1" | \
         grep -E "^\[|已启动|已停止|完成|成功|失败|错误|访问地址|http://" || true
     
     log_success "服务已启动"
@@ -364,7 +364,7 @@ show_result() {
     echo -e "  访问地址: ${CYAN}${BOLD}http://$server_ip:$port${NC}"
     echo ""
     echo -e "  ${BLUE}常用命令 (SSH 到服务器后):${NC}"
-    echo "    cd ~/$PROJECT_NAME/DebugHub"
+    echo "    cd ~/$PROJECT_NAME"
     echo "    ./deploy.sh --status   # 查看状态"
     echo "    ./deploy.sh --restart  # 重启服务"
     echo "    ./deploy.sh --stop     # 停止服务"

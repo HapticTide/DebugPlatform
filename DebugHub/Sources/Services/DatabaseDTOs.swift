@@ -56,6 +56,18 @@ struct DatabaseDescriptorDTO: Content {
     let encryptionType: String?
 }
 
+// MARK: - Encryption Status
+
+/// 加密数据库的解锁状态
+enum EncryptionStatusDTO: String, Content {
+    /// 未加密（普通数据库）
+    case none
+    /// 加密且已解锁（有 keyProvider 且验证成功）
+    case unlocked
+    /// 加密但未解锁（无 keyProvider 或验证失败）
+    case locked
+}
+
 // MARK: - DB Info DTO
 
 /// 数据库信息（包含表数量）
@@ -65,6 +77,8 @@ struct DBInfoDTO: Content {
     let fileSizeBytes: Int64?
     /// 数据库文件的绝对路径
     let absolutePath: String?
+    /// 加密状态
+    let encryptionStatus: EncryptionStatusDTO
 }
 
 // MARK: - Table Info DTO

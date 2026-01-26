@@ -38,9 +38,10 @@ trap 'on_interrupt' INT TERM
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly PROJECT_NAME="DebugHub"
-readonly WEBUI_DIR="$SCRIPT_DIR/../WebUI"
-readonly LOG_FILE="$SCRIPT_DIR/deploy.log"
-readonly PID_FILE="$SCRIPT_DIR/.debughub.pid"
+readonly DEBUGHUB_DIR="$SCRIPT_DIR/DebugHub"
+readonly WEBUI_DIR="$SCRIPT_DIR/WebUI"
+readonly LOG_FILE="$DEBUGHUB_DIR/deploy.log"
+readonly PID_FILE="$DEBUGHUB_DIR/.debughub.pid"
 readonly MIN_SWIFT_VERSION="5.9"
 readonly MIN_NODE_VERSION="18"
 
@@ -213,15 +214,45 @@ validate_port() {
     return 0
 }
 
-# 检查端口是否被占用
+# 检查端口是否被占用，如果是 DebugHub 进程则自动杀掉
 check_port_available() {
     local port="$1"
-    if lsof -i ":$port" >/dev/null 2>&1; then
-        local process=$(lsof -i ":$port" -t 2>/dev/null | head -1)
+    # 只检查 LISTEN 状态的进程（不包括连接中的客户端）
+    if lsof -sTCP:LISTEN -i ":$port" >/dev/null 2>&1; then
+        local process=$(lsof -sTCP:LISTEN -i ":$port" -t 2>/dev/null | head -1)
         local pname=""
+        local ppath=""
         if [[ -n "$process" ]]; then
+            # 获取进程名和完整命令路径
             pname=$(ps -p "$process" -o comm= 2>/dev/null || echo "unknown")
+            ppath=$(ps -p "$process" -o command= 2>/dev/null || echo "")
         fi
+        
+        # 检查是否是 DebugHub 进程（检查路径中是否包含 DebugHub）
+        if [[ "$ppath" == *"DebugHub"* ]] || [[ "$(basename "$pname")" == "DebugHub" ]]; then
+            log_info "端口 $port 被旧的 DebugHub 进程占用 (PID: $process)，正在停止..."
+            kill "$process" 2>/dev/null || true
+            
+            # 等待进程退出
+            local count=0
+            while ps -p "$process" > /dev/null 2>&1 && [[ $count -lt 5 ]]; do
+                sleep 1
+                ((count++))
+            done
+            
+            # 如果还没退出，强制杀掉
+            if ps -p "$process" > /dev/null 2>&1; then
+                log_warning "进程未响应，强制终止..."
+                kill -9 "$process" 2>/dev/null || true
+                sleep 1
+            fi
+            
+            # 清理 PID 文件
+            rm -f "$PID_FILE"
+            log_success "旧进程已停止"
+            return 0
+        fi
+        
         log_error "端口 $port 已被占用 (进程: $pname, PID: $process)"
         log_info "释放端口: kill $process 或使用其他端口: --port <新端口>"
         return 1
@@ -629,7 +660,7 @@ build_webui() {
     # 部署到 Public 目录
     log_info "部署到 DebugHub/Public..."
     
-    local public_dir="$SCRIPT_DIR/Public"
+    local public_dir="$DEBUGHUB_DIR/Public"
     
     # 备份旧文件（可选）
     if [[ -d "$public_dir" ]] && [[ -n "$(ls -A "$public_dir" 2>/dev/null)" ]]; then
@@ -662,7 +693,7 @@ build_webui() {
 
 resolve_dependencies() {
     log_info "解析 Swift 包依赖..."
-    cd "$SCRIPT_DIR"
+    cd "$DEBUGHUB_DIR"
     
     # 检查 Package.swift
     if [[ ! -f "Package.swift" ]]; then
@@ -690,7 +721,7 @@ resolve_dependencies() {
 
 build_project() {
     log_info "编译项目 (${BUILD_MODE} 模式)..."
-    cd "$SCRIPT_DIR"
+    cd "$DEBUGHUB_DIR"
     
     # 检查磁盘空间（编译需要较多空间）
     check_disk_space 1000 || return 1
@@ -754,9 +785,9 @@ run_server() {
     # 确定二进制路径
     local binary_path
     if [[ "$BUILD_MODE" == "release" ]]; then
-        binary_path="$SCRIPT_DIR/.build/release/DebugHub"
+        binary_path="$DEBUGHUB_DIR/.build/release/DebugHub"
     else
-        binary_path="$SCRIPT_DIR/.build/debug/DebugHub"
+        binary_path="$DEBUGHUB_DIR/.build/debug/DebugHub"
     fi
     
     if [[ ! -f "$binary_path" ]]; then
@@ -766,7 +797,7 @@ run_server() {
     fi
     
     # 检查 Public 目录
-    if [[ ! -f "$SCRIPT_DIR/Public/index.html" ]]; then
+    if [[ ! -f "$DEBUGHUB_DIR/Public/index.html" ]]; then
         log_warning "Public/index.html 不存在，WebUI 可能无法访问"
         log_info "运行 --with-webui 构建前端"
     fi
@@ -1009,9 +1040,9 @@ restart_server() {
     # 确定二进制路径
     local binary_path
     if [[ "$BUILD_MODE" == "release" ]]; then
-        binary_path="$SCRIPT_DIR/.build/release/DebugHub"
+        binary_path="$DEBUGHUB_DIR/.build/release/DebugHub"
     else
-        binary_path="$SCRIPT_DIR/.build/debug/DebugHub"
+        binary_path="$DEBUGHUB_DIR/.build/debug/DebugHub"
     fi
     
     if [[ ! -f "$binary_path" ]]; then
@@ -1234,9 +1265,9 @@ main() {
         echo ""
         log_info "手动运行服务:"
         if [[ "$BUILD_MODE" == "release" ]]; then
-            echo "  .build/release/DebugHub serve --port $port"
+            echo "  cd DebugHub && .build/release/DebugHub serve --port $port"
         else
-            echo "  swift run DebugHub serve --port $port"
+            echo "  cd DebugHub && swift run DebugHub serve --port $port"
         fi
         echo ""
     fi
