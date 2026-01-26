@@ -7,6 +7,35 @@
 
 ---
 
+## [1.6.0] - 2025-01-27
+
+### 新增
+
+#### 加密数据库状态显示
+- **WebUI**: 新增 `EncryptionStatus` 类型（none/unlocked/locked）
+- **WebUI**: 新增 `UnlockIcon` 解锁图标组件
+- **WebUI**: 加密数据库列表显示锁定/解锁状态图标
+  - 🔓 绿色解锁图标：已解锁的加密数据库
+  - 🔒 红色锁定图标：未解锁的加密数据库
+- **Hub**: 新增 `EncryptionStatusDTO` 枚举类型
+
+#### 数据库归属显示增强
+- **WebUI**: "当前账户"分组标题优先使用 `ownerDisplayName`（显示用户昵称而非通用标签）
+
+#### 部署脚本
+- **新增**: `deploy.sh` 根目录统一部署脚本
+  - 支持 `--sqlite` / `--postgres` 数据库模式切换
+  - 支持 `--port` / `--host` 自定义端口和地址
+  - 支持 `--with-webui` 同时构建前端
+  - 支持 `--status` / `--stop` / `--restart` / `--logs` 服务管理
+  - 自动处理旧 DebugHub 进程端口占用
+
+### 修复
+
+- **远程部署**: 修复 `remote-deploy.sh` 中脚本路径问题（`DebugHub/deploy.sh` → `deploy.sh`）
+
+---
+
 ## [1.5.0] - 2025-12-17
 
 ### 新增
