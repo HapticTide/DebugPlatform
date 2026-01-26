@@ -380,6 +380,12 @@ export interface DatabaseDescriptor {
   ownership: DatabaseOwnership
   /** 数据库所有者标识符（用于其他账户分组） */
   ownerIdentifier: string | null
+  /** 数据库所有者的显示名称（易读标识） */
+  ownerDisplayName: string | null
+  /** 是否为加密数据库 */
+  isEncrypted: boolean
+  /** 加密类型（如 "SQLCipher"、"SQLite SEE" 等） */
+  encryptionType: string | null
 }
 
 export interface DBInfo {

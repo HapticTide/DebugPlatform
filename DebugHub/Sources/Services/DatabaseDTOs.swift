@@ -46,6 +46,14 @@ struct DatabaseDescriptorDTO: Content {
     /// - 对于 otherUser：其他用户 UUID
     /// - 对于 shared：nil
     let ownerIdentifier: String?
+    /// 数据库所有者的显示名称（易读标识）
+    /// 用于在 Inspector 中展示更友好的用户名
+    /// - 如果未提供，WebUI 将回退显示 ownerIdentifier
+    let ownerDisplayName: String?
+    /// 是否为加密数据库
+    let isEncrypted: Bool
+    /// 加密类型（如 "SQLCipher"、"SQLite SEE" 等）
+    let encryptionType: String?
 }
 
 // MARK: - DB Info DTO

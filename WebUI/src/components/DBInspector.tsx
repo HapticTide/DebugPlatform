@@ -713,11 +713,17 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                     </button>
                                     {otherUserDbExpanded && (
                                         <div className="mt-1 space-y-2 opacity-50">
-                                            {Object.entries(groupedByOwner).map(([ownerId, dbs]) => (
+                                            {Object.entries(groupedByOwner).map(([ownerId, dbs]) => {
+                                                // 优先使用 ownerDisplayName 作为显示名称
+                                                const displayName = dbs[0]?.descriptor.ownerDisplayName || null
+                                                const hasDisplayName = !!displayName
+                                                return (
                                                 <div key={ownerId} className="space-y-1">
                                                     <TextPopover text={ownerId} title="账户 ID" trigger="dblclick">
-                                                        <div className="px-2 py-0.5 text-2xs text-text-muted/70 font-mono truncate hover:text-text-muted transition-colors" title="双击查看完整 ID">
-                                                            {ownerId.length > 20 ? `${ownerId.slice(0, 8)}...${ownerId.slice(-8)}` : ownerId}
+                                                        <div className={`px-2 py-0.5 text-2xs text-text-muted/70 truncate hover:text-text-muted transition-colors ${hasDisplayName ? '' : 'font-mono'}`} title={hasDisplayName ? `账户 ID: ${ownerId}` : '双击查看完整 ID'}>
+                                                            {hasDisplayName 
+                                                                ? displayName 
+                                                                : (ownerId.length > 20 ? `${ownerId.slice(0, 8)}...${ownerId.slice(-8)}` : ownerId)}
                                                         </div>
                                                     </TextPopover>
                                                     {dbs.map((db) => (
@@ -735,7 +741,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                                         />
                                                     ))}
                                                 </div>
-                                            ))}
+                                            )})}
                                         </div>
                                     )}
                                 </div>
@@ -1397,6 +1403,16 @@ function DatabaseItem({
                         </div>
                     </div>
                     <div className="flex items-center gap-1">
+                        {db.descriptor.isEncrypted && (
+                            <span
+                                className={clsx(
+                                    isSelected ? 'text-emerald-300' : 'text-emerald-500'
+                                )}
+                                title={`加密数据库 (${db.descriptor.encryptionType || 'Unknown'})`}
+                            >
+                                <LockIcon size={12} />
+                            </span>
+                        )}
                         {db.descriptor.isSensitive && (
                             <span className="text-yellow-500" title="敏感数据"><LockIcon size={12} /></span>
                         )}
