@@ -67,17 +67,14 @@ export function HTTPEventDetail({
   const { isFavorite: isUrlFavorite, toggleFavorite: toggleUrlFavorite } = useFavoriteUrlStore()
   const isFavorite = event ? isUrlFavorite(deviceId, event.url) : false
 
-  if (!event) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-text-muted">
-        <span className="text-4xl mb-3 opacity-50">👈</span>
-        <p className="text-sm">选择一个请求查看详情</p>
-      </div>
-    )
-  }
-
-  const requestBody = event.requestBody ? decodeBase64(event.requestBody) : null
-  const responseBody = event.responseBody ? decodeBase64(event.responseBody) : null
+  const requestBody = useMemo(() => {
+    if (!event?.requestBody) return null
+    return decodeBase64(event.requestBody)
+  }, [event?.requestBody])
+  const responseBody = useMemo(() => {
+    if (!event?.responseBody) return null
+    return decodeBase64(event.responseBody)
+  }, [event?.responseBody])
   const requestRawForCopy = useMemo(() => {
     if (!requestBody) return ''
     try {
@@ -94,6 +91,15 @@ export function HTTPEventDetail({
       return responseBody
     }
   }, [responseBody])
+
+  if (!event) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-text-muted">
+        <span className="text-4xl mb-3 opacity-50">👈</span>
+        <p className="text-sm">选择一个请求查看详情</p>
+      </div>
+    )
+  }
 
   // 检查响应内容类型
   const responseContentType = event.responseHeaders?.['Content-Type'] || event.responseHeaders?.['content-type']
