@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { HTTPEventDetail as HTTPEventDetailType, MockRule } from '@/types'
 import {
   formatDuration,
@@ -60,6 +60,8 @@ export function HTTPEventDetail({
   const [replayStatus, setReplayStatus] = useState<string | null>(null)
   const [domainCopied, setDomainCopied] = useState(false)
   const [pathCopied, setPathCopied] = useState(false)
+  const [responseBodyCopied, setResponseBodyCopied] = useState(false)
+  const [requestBodyCopied, setRequestBodyCopied] = useState(false)
 
   // 使用 URL 级别的收藏状态
   const { isFavorite: isUrlFavorite, toggleFavorite: toggleUrlFavorite } = useFavoriteUrlStore()
@@ -76,6 +78,22 @@ export function HTTPEventDetail({
 
   const requestBody = event.requestBody ? decodeBase64(event.requestBody) : null
   const responseBody = event.responseBody ? decodeBase64(event.responseBody) : null
+  const requestRawForCopy = useMemo(() => {
+    if (!requestBody) return ''
+    try {
+      return JSON.stringify(JSON.parse(requestBody), null, 2)
+    } catch {
+      return requestBody
+    }
+  }, [requestBody])
+  const responseRawForCopy = useMemo(() => {
+    if (!responseBody) return ''
+    try {
+      return JSON.stringify(JSON.parse(responseBody), null, 2)
+    } catch {
+      return responseBody
+    }
+  }, [responseBody])
 
   // 检查响应内容类型
   const responseContentType = event.responseHeaders?.['Content-Type'] || event.responseHeaders?.['content-type']
@@ -142,6 +160,20 @@ export function HTTPEventDetail({
       setPathCopied(true)
       setTimeout(() => setPathCopied(false), 2000)
     }
+  }
+
+  const handleCopyResponseBody = async () => {
+    if (!responseRawForCopy) return
+    await copyToClipboard(responseRawForCopy)
+    setResponseBodyCopied(true)
+    setTimeout(() => setResponseBodyCopied(false), 2000)
+  }
+
+  const handleCopyRequestBody = async () => {
+    if (!requestRawForCopy) return
+    await copyToClipboard(requestRawForCopy)
+    setRequestBodyCopied(true)
+    setTimeout(() => setRequestBodyCopied(false), 2000)
   }
 
   // 解析 URL 获取域名和路径
@@ -310,18 +342,39 @@ export function HTTPEventDetail({
 
             {/* Body */}
             <Section title="Body">
-              {requestBody ? (
-                isProtobufRequest ? (
-                  <ProtobufViewer
-                    base64Data={event.requestBody!}
-                    contentType={requestContentType}
-                  />
+              <div className="space-y-2">
+                {requestBody ? (
+                  isProtobufRequest ? (
+                    <ProtobufViewer
+                      base64Data={event.requestBody!}
+                      contentType={requestContentType}
+                    />
+                  ) : (
+                    <JSONViewer content={requestBody} />
+                  )
                 ) : (
-                  <JSONViewer content={requestBody} />
-                )
-              ) : (
-                <div className="text-text-muted text-sm">无请求体</div>
-              )}
+                  <div className="text-text-muted text-sm">无请求体</div>
+                )}
+                {requestBody && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleCopyRequestBody}
+                      className="px-2 py-1 bg-bg-light border border-border-subtle rounded hover:bg-bg-lighter transition-colors flex items-center"
+                      title="复制原始请求内容"
+                    >
+                      {requestBodyCopied ? (
+                        <>
+                          <CheckIcon size={12} className="mr-1" /> 已复制
+                        </>
+                      ) : (
+                        <>
+                          <ClipboardIcon size={12} className="mr-1" /> 复制
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
             </Section>
 
             {/* Headers */}
@@ -336,23 +389,50 @@ export function HTTPEventDetail({
           <div className="space-y-6">
             {/* Body */}
             <Section title="Body">
-              {event.responseBody ? (
-                isImageResponse ? (
-                  <ImagePreview
-                    base64Data={event.responseBody}
-                    contentType={responseContentType ?? null}
-                  />
-                ) : isProtobufResponse ? (
-                  <ProtobufViewer
-                    base64Data={event.responseBody}
-                    contentType={responseContentType}
-                  />
+              <div className="space-y-2">
+                {event.responseBody ? (
+                  isImageResponse ? (
+                    <ImagePreview
+                      base64Data={event.responseBody}
+                      contentType={responseContentType ?? null}
+                    />
+                  ) : isProtobufResponse ? (
+                    <ProtobufViewer
+                      base64Data={event.responseBody}
+                      contentType={responseContentType}
+                    />
+                  ) : (
+                    <JSONViewer
+                      content={responseBody ?? ''}
+                      initialViewMode="tree"
+                      treeInitialExpanded={true}
+                      treeMaxInitialDepth={Number.MAX_SAFE_INTEGER}
+                      buttonOrder="tree-first"
+                    />
+                  )
                 ) : (
-                  <JSONViewer content={responseBody ?? ''} />
-                )
-              ) : (
-                <div className="text-text-muted text-sm">无响应体</div>
-              )}
+                  <div className="text-text-muted text-sm">无响应体</div>
+                )}
+                {event.responseBody && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleCopyResponseBody}
+                      className="px-2 py-1 bg-bg-light border border-border-subtle rounded hover:bg-bg-lighter transition-colors flex items-center"
+                      title="复制原始响应内容"
+                    >
+                      {responseBodyCopied ? (
+                        <>
+                          <CheckIcon size={12} className="mr-1" /> 已复制
+                        </>
+                      ) : (
+                        <>
+                          <ClipboardIcon size={12} className="mr-1" /> 复制
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
             </Section>
 
             {/* Headers */}

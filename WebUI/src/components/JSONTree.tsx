@@ -124,10 +124,21 @@ function JSONNode({ keyName, value, depth, initialExpanded, maxInitialDepth, isL
 interface JSONViewerProps {
   content: string
   className?: string
+  initialViewMode?: 'tree' | 'raw'
+  treeInitialExpanded?: boolean
+  treeMaxInitialDepth?: number
+  buttonOrder?: 'raw-first' | 'tree-first'
 }
 
-export function JSONViewer({ content, className }: JSONViewerProps) {
-  const [viewMode, setViewMode] = useState<'tree' | 'raw'>('raw')
+export function JSONViewer({
+  content,
+  className,
+  initialViewMode = 'raw',
+  treeInitialExpanded = true,
+  treeMaxInitialDepth = 2,
+  buttonOrder = 'raw-first',
+}: JSONViewerProps) {
+  const [viewMode, setViewMode] = useState<'tree' | 'raw'>(initialViewMode)
 
   const parsedData = useMemo(() => {
     try {
@@ -150,32 +161,65 @@ export function JSONViewer({ content, className }: JSONViewerProps) {
   return (
     <div className={className}>
       <div className="flex gap-2 mb-2">
-        <button
-          onClick={() => setViewMode('raw')}
-          className={clsx(
-            'px-2 py-1 text-xs rounded',
-            viewMode === 'raw'
-              ? 'bg-primary text-white'
-              : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
-          )}
-        >
-          原始
-        </button>
-        <button
-          onClick={() => setViewMode('tree')}
-          className={clsx(
-            'px-2 py-1 text-xs rounded',
-            viewMode === 'tree'
-              ? 'bg-primary text-white'
-              : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
-          )}
-        >
-          树形
-        </button>
+        {buttonOrder === 'tree-first' ? (
+          <>
+            <button
+              onClick={() => setViewMode('tree')}
+              className={clsx(
+                'px-2 py-1 text-xs rounded',
+                viewMode === 'tree'
+                  ? 'bg-primary text-white'
+                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
+              )}
+            >
+              树形
+            </button>
+            <button
+              onClick={() => setViewMode('raw')}
+              className={clsx(
+                'px-2 py-1 text-xs rounded',
+                viewMode === 'raw'
+                  ? 'bg-primary text-white'
+                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
+              )}
+            >
+              原始
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setViewMode('raw')}
+              className={clsx(
+                'px-2 py-1 text-xs rounded',
+                viewMode === 'raw'
+                  ? 'bg-primary text-white'
+                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
+              )}
+            >
+              原始
+            </button>
+            <button
+              onClick={() => setViewMode('tree')}
+              className={clsx(
+                'px-2 py-1 text-xs rounded',
+                viewMode === 'tree'
+                  ? 'bg-primary text-white'
+                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
+              )}
+            >
+              树形
+            </button>
+          </>
+        )}
       </div>
       {viewMode === 'tree' ? (
         <div className="bg-bg-dark p-3 rounded overflow-x-auto max-h-96 overflow-y-auto">
-          <JSONTree data={parsedData} />
+          <JSONTree
+            data={parsedData}
+            initialExpanded={treeInitialExpanded}
+            maxInitialDepth={treeMaxInitialDepth}
+          />
         </div>
       ) : (
         <pre className="text-xs font-mono bg-bg-dark p-3 rounded overflow-x-auto whitespace-pre-wrap break-all max-h-96 overflow-y-auto">
