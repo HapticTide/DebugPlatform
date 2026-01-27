@@ -365,7 +365,7 @@ export function HTTPEventDetail({
                   <div className="flex justify-end">
                     <button
                       onClick={handleCopyRequestBody}
-                      className="px-2 py-1 bg-bg-light border border-border-subtle rounded hover:bg-bg-lighter transition-colors flex items-center"
+                      className="px-2 py-1 text-xs bg-bg-light border border-border-subtle rounded hover:bg-bg-lighter transition-colors flex items-center"
                       title="复制原始请求内容"
                     >
                       {requestBodyCopied ? (
@@ -423,7 +423,7 @@ export function HTTPEventDetail({
                   <div className="flex justify-end">
                     <button
                       onClick={handleCopyResponseBody}
-                      className="px-2 py-1 bg-bg-light border border-border-subtle rounded hover:bg-bg-lighter transition-colors flex items-center"
+                      className="px-2 py-1 text-xs bg-bg-light border border-border-subtle rounded hover:bg-bg-lighter transition-colors flex items-center"
                       title="复制原始响应内容"
                     >
                       {responseBodyCopied ? (
