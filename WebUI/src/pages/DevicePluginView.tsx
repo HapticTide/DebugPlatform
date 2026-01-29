@@ -62,7 +62,7 @@ export function DevicePluginView() {
     const [activePluginId, setActivePluginId] = useState(getDefaultPluginId)
 
     // Stores
-    const { currentDevice, selectDevice, clearSelection, clearDeviceData, toggleFavorite, isFavorite, refreshDevice, updatePluginStates } =
+    const { devices, currentDevice, selectDevice, clearSelection, clearDeviceData, toggleFavorite, isFavorite, refreshDevice, updatePluginStates, error, fetchDevices } =
         useDeviceStore()
     const { setConnected, setInDeviceDetail } = useConnectionStore()
     const toggleTheme = useThemeStore((s) => s.toggleTheme)
@@ -312,6 +312,22 @@ export function DevicePluginView() {
             setInDeviceDetail(false)
         }
     }, [deviceId])
+
+    // 设备不存在时自动退回设备列表，避免继续请求 404
+    useEffect(() => {
+        if (!error || !deviceId) return
+        const isNotFound = error.includes('404') || error.toLowerCase().includes('not found')
+        if (!isNotFound) return
+        const existsInList = devices.some((device) => device.deviceId === deviceId)
+        if (existsInList) {
+            // 设备在列表中但详情不可用（可能离线），保持在详情页
+            return
+        }
+        toast.error('设备不存在，已返回设备列表')
+        clearSelection()
+        fetchDevices()
+        navigate('/')
+    }, [error, deviceId, devices, clearSelection, fetchDevices, navigate])
 
     // 同步 URL 参数到状态
     useEffect(() => {

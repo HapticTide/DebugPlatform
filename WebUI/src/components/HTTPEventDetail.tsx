@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { HTTPEventDetail as HTTPEventDetailType, MockRule } from '@/types'
 import {
   formatDuration,
   getStatusClass,
   getMethodClass,
-  decodeBase64,
 } from '@/utils/format'
 import { copyToClipboard } from '@/utils/clipboard'
 import { getHTTPEventCurl, replayHTTPEvent } from '@/services/api'
@@ -16,6 +15,13 @@ import { MockRulePopover } from './MockRulePopover'
 import { useFavoriteUrlStore } from '@/stores/favoriteUrlStore'
 import clsx from 'clsx'
 import { MockIcon, ClipboardIcon, CheckIcon, ArrowPathIcon, RefreshIcon } from './icons'
+import { BinaryPreview } from './BinaryPreview'
+import {
+  decodeBodyForDisplay,
+  getHeaderValue,
+  parseContentDispositionFilename,
+  type BodyDisplayResult,
+} from '@/utils/httpBody'
 
 /** 解析 URL 获取域名和路径 */
 function parseUrlParts(url: string): { domain: string; path: string } {
@@ -62,35 +68,102 @@ export function HTTPEventDetail({
   const [pathCopied, setPathCopied] = useState(false)
   const [responseBodyCopied, setResponseBodyCopied] = useState(false)
   const [requestBodyCopied, setRequestBodyCopied] = useState(false)
+  const [decodedRequest, setDecodedRequest] = useState<BodyDisplayResult | null>(null)
+  const [decodedResponse, setDecodedResponse] = useState<BodyDisplayResult | null>(null)
+  const [isDecodingRequest, setIsDecodingRequest] = useState(false)
+  const [isDecodingResponse, setIsDecodingResponse] = useState(false)
 
   // 使用 URL 级别的收藏状态
   const { isFavorite: isUrlFavorite, toggleFavorite: toggleUrlFavorite } = useFavoriteUrlStore()
   const isFavorite = event ? isUrlFavorite(deviceId, event.url) : false
 
-  const requestBody = useMemo(() => {
-    if (!event?.requestBody) return null
-    return decodeBase64(event.requestBody)
-  }, [event?.requestBody])
-  const responseBody = useMemo(() => {
-    if (!event?.responseBody) return null
-    return decodeBase64(event.responseBody)
-  }, [event?.responseBody])
   const requestRawForCopy = useMemo(() => {
-    if (!requestBody) return ''
+    if (decodedRequest?.kind !== 'text' || !decodedRequest.text) return ''
     try {
-      return JSON.stringify(JSON.parse(requestBody), null, 2)
+      return JSON.stringify(JSON.parse(decodedRequest.text), null, 2)
     } catch {
-      return requestBody
+      return decodedRequest.text
     }
-  }, [requestBody])
+  }, [decodedRequest])
   const responseRawForCopy = useMemo(() => {
-    if (!responseBody) return ''
+    if (decodedResponse?.kind !== 'text' || !decodedResponse.text) return ''
     try {
-      return JSON.stringify(JSON.parse(responseBody), null, 2)
+      return JSON.stringify(JSON.parse(decodedResponse.text), null, 2)
     } catch {
-      return responseBody
+      return decodedResponse.text
     }
-  }, [responseBody])
+  }, [decodedResponse])
+
+  // 检查响应内容类型
+  const responseContentType = getHeaderValue(event?.responseHeaders ?? null, 'content-type')
+  const responseContentEncoding = getHeaderValue(event?.responseHeaders ?? null, 'content-encoding')
+  const hasResponseEncoding = Boolean(
+    responseContentEncoding && responseContentEncoding.toLowerCase() !== 'identity'
+  )
+  const responseFilename = parseContentDispositionFilename(
+    getHeaderValue(event?.responseHeaders ?? null, 'content-disposition')
+  )
+  const isImageResponse = isImageContentType(responseContentType)
+  const isProtobufResponse = isProtobufContentType(responseContentType)
+  const canPreviewImageResponse = isImageResponse && !hasResponseEncoding
+  const canPreviewProtobufResponse = isProtobufResponse && !hasResponseEncoding
+  const isResponsePending = Boolean(
+    event?.responseBody && !canPreviewImageResponse && !canPreviewProtobufResponse && !decodedResponse && !isDecodingResponse
+  )
+
+  // 检查请求内容类型
+  const requestContentType = getHeaderValue(event?.requestHeaders ?? null, 'content-type')
+  const requestContentEncoding = getHeaderValue(event?.requestHeaders ?? null, 'content-encoding')
+  const isProtobufRequest = isProtobufContentType(requestContentType)
+  const isRequestPending = Boolean(
+    event?.requestBody && !isProtobufRequest && !decodedRequest && !isDecodingRequest
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    if (!event?.requestBody || isProtobufRequest) {
+      setDecodedRequest(null)
+      setIsDecodingRequest(false)
+      return
+    }
+    setDecodedRequest(null)
+    setIsDecodingRequest(true)
+    decodeBodyForDisplay(event.requestBody, event.requestHeaders, {
+      contentType: requestContentType,
+    })
+      .then((result) => {
+        if (!cancelled) setDecodedRequest(result)
+      })
+      .finally(() => {
+        if (!cancelled) setIsDecodingRequest(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [event?.requestBody, event?.requestHeaders, requestContentType, requestContentEncoding, isProtobufRequest])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!event?.responseBody || canPreviewImageResponse || canPreviewProtobufResponse) {
+      setDecodedResponse(null)
+      setIsDecodingResponse(false)
+      return
+    }
+    setDecodedResponse(null)
+    setIsDecodingResponse(true)
+    decodeBodyForDisplay(event.responseBody, event.responseHeaders, {
+      contentType: responseContentType,
+    })
+      .then((result) => {
+        if (!cancelled) setDecodedResponse(result)
+      })
+      .finally(() => {
+        if (!cancelled) setIsDecodingResponse(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [event?.responseBody, event?.responseHeaders, responseContentType, responseContentEncoding, canPreviewImageResponse, canPreviewProtobufResponse])
 
   if (!event) {
     return (
@@ -100,15 +173,6 @@ export function HTTPEventDetail({
       </div>
     )
   }
-
-  // 检查响应内容类型
-  const responseContentType = event.responseHeaders?.['Content-Type'] || event.responseHeaders?.['content-type']
-  const isImageResponse = isImageContentType(responseContentType)
-  const isProtobufResponse = isProtobufContentType(responseContentType)
-
-  // 检查请求内容类型
-  const requestContentType = event.requestHeaders?.['Content-Type'] || event.requestHeaders?.['content-type']
-  const isProtobufRequest = isProtobufContentType(requestContentType)
 
   const handleCopyCurl = async () => {
     if (curlCommand) {
@@ -349,19 +413,37 @@ export function HTTPEventDetail({
             {/* Body */}
             <Section title="Body">
               <div className="space-y-2">
-                {requestBody ? (
+                {event.requestBody ? (
                   isProtobufRequest ? (
                     <ProtobufViewer
-                      base64Data={event.requestBody!}
+                      base64Data={event.requestBody}
                       contentType={requestContentType}
                     />
+                  ) : isDecodingRequest || isRequestPending ? (
+                    <div className="text-text-muted text-sm">解析中...</div>
+                  ) : decodedRequest?.kind === 'binary' ? (
+                    <BinaryPreview
+                      base64Data={event.requestBody}
+                      contentType={decodedRequest.contentType}
+                      contentEncoding={decodedRequest.contentEncoding}
+                      size={decodedRequest.size}
+                      url={event.url}
+                      suggestedName="request-body"
+                      warning={
+                        decodedRequest.warning ||
+                        (decodedRequest.contentEncoding ? '请求体已压缩，暂不支持预览' : undefined)
+                      }
+                    />
                   ) : (
-                    <JSONViewer content={requestBody} />
+                    <JSONViewer content={decodedRequest?.text ?? ''} />
                   )
                 ) : (
                   <div className="text-text-muted text-sm">无请求体</div>
                 )}
-                {requestBody && (
+                {decodedRequest?.warning && decodedRequest.kind === 'text' && (
+                  <div className="text-xs text-yellow-400">{decodedRequest.warning}</div>
+                )}
+                {decodedRequest?.kind === 'text' && decodedRequest.text && (
                   <div className="flex justify-end">
                     <button
                       onClick={handleCopyRequestBody}
@@ -385,7 +467,7 @@ export function HTTPEventDetail({
 
             {/* Headers */}
             <Section title="Headers">
-              <HeadersTable headers={event.requestHeaders} />
+              <HeadersTable headers={event.requestHeaders} enableRaw />
             </Section>
           </div>
         )}
@@ -397,19 +479,35 @@ export function HTTPEventDetail({
             <Section title="Body">
               <div className="space-y-2">
                 {event.responseBody ? (
-                  isImageResponse ? (
+                  canPreviewImageResponse ? (
                     <ImagePreview
                       base64Data={event.responseBody}
                       contentType={responseContentType ?? null}
                     />
-                  ) : isProtobufResponse ? (
+                  ) : canPreviewProtobufResponse ? (
                     <ProtobufViewer
                       base64Data={event.responseBody}
                       contentType={responseContentType}
                     />
+                  ) : isDecodingResponse || isResponsePending ? (
+                    <div className="text-text-muted text-sm">解析中...</div>
+                  ) : decodedResponse?.kind === 'binary' ? (
+                    <BinaryPreview
+                      base64Data={event.responseBody}
+                      contentType={decodedResponse.contentType}
+                      contentEncoding={decodedResponse.contentEncoding}
+                      size={decodedResponse.size}
+                      filename={responseFilename}
+                      url={event.url}
+                      suggestedName="response-body"
+                      warning={
+                        decodedResponse.warning ||
+                        (decodedResponse.contentEncoding ? '响应体已压缩，暂不支持预览' : undefined)
+                      }
+                    />
                   ) : (
                     <JSONViewer
-                      content={responseBody ?? ''}
+                      content={decodedResponse?.text ?? ''}
                       initialViewMode="tree"
                       treeInitialExpanded={true}
                       treeMaxInitialDepth={Number.MAX_SAFE_INTEGER}
@@ -419,7 +517,10 @@ export function HTTPEventDetail({
                 ) : (
                   <div className="text-text-muted text-sm">无响应体</div>
                 )}
-                {event.responseBody && (
+                {decodedResponse?.warning && decodedResponse.kind === 'text' && (
+                  <div className="text-xs text-yellow-400">{decodedResponse.warning}</div>
+                )}
+                {decodedResponse?.kind === 'text' && decodedResponse.text && (
                   <div className="flex justify-end">
                     <button
                       onClick={handleCopyResponseBody}
@@ -444,7 +545,7 @@ export function HTTPEventDetail({
             {/* Headers */}
             {event.responseHeaders && (
               <Section title="Headers">
-                <HeadersTable headers={event.responseHeaders} />
+                <HeadersTable headers={event.responseHeaders} enableRaw />
               </Section>
             )}
 
@@ -513,24 +614,86 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function HeadersTable({ headers }: { headers: Record<string, string> }) {
+function HeadersTable({ headers, enableRaw = false }: { headers: Record<string, string>; enableRaw?: boolean }) {
   const entries = Object.entries(headers)
+  const [viewMode, setViewMode] = useState<'kv' | 'raw'>('kv')
+  const [copied, setCopied] = useState(false)
+  const rawText = useMemo(
+    () => entries.map(([key, value]) => `${key}: ${value}`).join('\n'),
+    [entries]
+  )
 
   if (entries.length === 0) {
     return <span className="text-text-muted text-sm">无</span>
   }
 
   return (
-    <table className="w-full text-xs font-mono">
-      <tbody>
-        {entries.map(([key, value]) => (
-          <tr key={key} className="border-b border-border last:border-0">
-            <td className="py-1.5 pr-4 text-primary align-top whitespace-nowrap">{key}</td>
-            <td className="py-1.5 break-all">{value}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="space-y-2">
+      {enableRaw && (
+        <div className="flex items-center justify-between">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('kv')}
+              className={clsx(
+                'px-2 py-1 text-xs rounded',
+                viewMode === 'kv'
+                  ? 'bg-primary text-white'
+                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
+              )}
+            >
+              键值
+            </button>
+            <button
+              onClick={() => setViewMode('raw')}
+              className={clsx(
+                'px-2 py-1 text-xs rounded',
+                viewMode === 'raw'
+                  ? 'bg-primary text-white'
+                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
+              )}
+            >
+              原始
+            </button>
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'raw' && enableRaw ? (
+        <pre className="text-xs font-mono whitespace-pre-wrap break-all">{rawText}</pre>
+      ) : (
+        <table className="w-full text-xs font-mono">
+          <tbody>
+            {entries.map(([key, value]) => (
+              <tr key={key} className="border-b border-border last:border-0">
+                <td className="py-1.5 pr-4 text-primary align-top whitespace-nowrap">{key}</td>
+                <td className="py-1.5 break-all">{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div className="flex justify-end">
+        <button
+          onClick={async () => {
+            await copyToClipboard(rawText)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+          }}
+          className="px-2 py-1 text-xs bg-bg-light border border-border-subtle rounded hover:bg-bg-lighter transition-colors flex items-center"
+          title="复制原始 Headers"
+        >
+          {copied ? (
+            <>
+              <CheckIcon size={12} className="mr-1" /> 已复制
+            </>
+          ) : (
+            <>
+              <ClipboardIcon size={12} className="mr-1" /> 复制
+            </>
+          )}
+        </button>
+      </div>
+    </div>
   )
 }
 

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import type { HTTPEventDetail } from '@/types'
-import { formatTime, formatDuration, getStatusClass, getMethodClass, decodeBase64 } from '@/utils/format'
+import { formatTime, formatDuration, getStatusClass, getMethodClass } from '@/utils/format'
+import { summarizeBodyForDiff } from '@/utils/httpBody'
 import clsx from 'clsx'
 
 interface Props {
@@ -314,10 +315,10 @@ function HeadersDiffTable({ diffs, mode }: { diffs: HeaderDiff[]; mode: DiffView
 
 // Body Diff
 function BodyDiff({ eventA, eventB, mode }: { eventA: HTTPEventDetail; eventB: HTTPEventDetail; mode: DiffViewMode }) {
-  const requestBodyA = eventA.requestBody ? decodeBase64(eventA.requestBody) : null
-  const requestBodyB = eventB.requestBody ? decodeBase64(eventB.requestBody) : null
-  const responseBodyA = eventA.responseBody ? decodeBase64(eventA.responseBody) : null
-  const responseBodyB = eventB.responseBody ? decodeBase64(eventB.responseBody) : null
+  const requestBodyA = summarizeBodyForDiff(eventA.requestBody, eventA.requestHeaders)
+  const requestBodyB = summarizeBodyForDiff(eventB.requestBody, eventB.requestHeaders)
+  const responseBodyA = summarizeBodyForDiff(eventA.responseBody, eventA.responseHeaders)
+  const responseBodyB = summarizeBodyForDiff(eventB.responseBody, eventB.responseHeaders)
 
   return (
     <div className="h-full overflow-auto p-4 space-y-6">
