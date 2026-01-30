@@ -422,6 +422,7 @@ interface DecompressError extends Error {
   encoding: string
   originalSize: number
   decompressedSoFar: number
+  cause?: unknown
 }
 
 /**
