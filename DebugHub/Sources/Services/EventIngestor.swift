@@ -130,6 +130,7 @@ final class EventIngestor: @unchecked Sendable {
         if !bodyParams.isEmpty {
             let paramModels = bodyParams.map { key, value in
                 HTTPEventParamModel(
+                    id: UUID().uuidString,
                     eventId: event.request.id,
                     paramKey: key,
                     paramValue: value

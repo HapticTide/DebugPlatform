@@ -148,7 +148,12 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
         // 批量保存参数
         if !bodyParams.isEmpty {
             let paramModels = bodyParams.map { key, value in
-                HTTPEventParamModel(eventId: event.request.id, paramKey: key, paramValue: value)
+                HTTPEventParamModel(
+                    id: UUID().uuidString,
+                    eventId: event.request.id,
+                    paramKey: key,
+                    paramValue: value
+                )
             }
             try await paramModels.create(on: db)
         }
