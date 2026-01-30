@@ -26,6 +26,45 @@ function isZlibBytes(bytes: Uint8Array): boolean {
   return second === 0x01 || second === 0x9c || second === 0xda
 }
 
+/**
+ * 检测字节序列是否可能是 Brotli 压缩数据
+ * Brotli 没有固定的 magic bytes，但可以通过以下特征进行启发式检测：
+ * 1. 第一个字节的高 4 位表示窗口大小
+ * 2. 有效的窗口大小范围是 10-24 (即 1KB - 16MB)
+ * 3. 某些字节组合在未压缩文本中极不可能出现
+ */
+function isBrotliBytes(bytes: Uint8Array): boolean {
+  if (bytes.length < 4) return false
+  
+  // Brotli 流的第一个字节包含 WBITS 信息
+  // 格式: WBITS = (first_byte >> 1) & 0x7F
+  // 有效范围: 10-24 (对应 1KB-16MB 窗口)
+  const wbits = (bytes[0] >> 1) & 0x7f
+  
+  // 检查窗口大小是否在有效范围内
+  // 注意: 实际 Brotli 流可能使用更复杂的编码
+  if (wbits >= 10 && wbits <= 24) {
+    // 额外检查: 如果前几个字节看起来像明文，则可能不是压缩数据
+    // 检查是否以常见的 ASCII 文本模式开头
+    const isAsciiStart = bytes.slice(0, Math.min(4, bytes.length))
+      .every(b => (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13)
+    
+    if (isAsciiStart) {
+      return false
+    }
+    
+    return true
+  }
+  
+  // 备选检测: 检查是否有 Brotli 常见的字节模式
+  // Brotli 空流或极短内容的特征
+  if (bytes[0] === 0x1b || bytes[0] === 0x0b || bytes[0] === 0x81) {
+    return true
+  }
+  
+  return false
+}
+
 function shouldAttemptDecompress(encoding: string, sniffBytes: Uint8Array, sniffText: boolean): boolean {
   if (!sniffText) return true
   switch (encoding) {
@@ -34,8 +73,7 @@ function shouldAttemptDecompress(encoding: string, sniffBytes: Uint8Array, sniff
     case 'deflate':
       return isZlibBytes(sniffBytes)
     case 'br':
-      // Brotli 没有明确的 magic bytes，若内容明显是文本则跳过解压
-      return false
+      return isBrotliBytes(sniffBytes)
     default:
       return true
   }
@@ -57,16 +95,64 @@ const TEXT_MIME_HINTS = [
 ]
 
 const BINARY_MIME_HINTS = [
+  // 通用二进制格式
   'application/octet-stream',
+  
+  // 压缩/归档格式
   'application/zip',
   'application/x-zip-compressed',
   'application/gzip',
+  'application/x-gzip',
+  'application/x-tar',
+  'application/x-bzip2',
+  'application/x-7z-compressed',
+  'application/x-rar-compressed',
+  
+  // 文档格式
   'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  
+  // 字体格式
   'application/vnd.ms-fontobject',
   'font/woff',
   'font/woff2',
+  'font/ttf',
+  'font/otf',
   'application/font-woff',
   'application/font-woff2',
+  'application/x-font-ttf',
+  'application/x-font-otf',
+  
+  // 序列化/RPC 协议
+  'application/protobuf',
+  'application/x-protobuf',
+  'application/vnd.google.protobuf',
+  'application/grpc',
+  'application/grpc+proto',
+  'application/grpc-web+proto',
+  'application/msgpack',
+  'application/x-msgpack',
+  'application/vnd.msgpack',
+  'application/cbor',
+  'application/thrift',
+  'application/x-thrift',
+  'application/avro',
+  'application/flatbuffers',
+  
+  // 数据库/存储格式
+  'application/x-sqlite3',
+  'application/vnd.sqlite3',
+  
+  // 其他二进制格式
+  'application/wasm',
+  'application/x-shockwave-flash',
+  'application/java-archive',
+  'application/x-java-archive',
 ]
 
 export function getHeaderValue(
@@ -146,31 +232,126 @@ export function decodeBytesToText(bytes: Uint8Array, charset: string | null): st
   }
 }
 
+/**
+ * 检测字节序列是否可能是文本内容
+ * 使用多重验证策略：
+ * 1. 检查是否包含 NUL 字节（二进制特征）
+ * 2. 验证 UTF-8 多字节序列的有效性
+ * 3. 统计可打印字符与控制字符的比例
+ */
 export function isProbablyText(bytes: Uint8Array): boolean {
   if (bytes.length === 0) return true
+
   let printable = 0
   let control = 0
-  let zero = 0
-  for (let i = 0; i < bytes.length; i++) {
+  let invalidUtf8 = 0
+  let i = 0
+
+  while (i < bytes.length) {
     const byte = bytes[i]
+
+    // NUL 字节是二进制文件的强特征
     if (byte === 0) {
-      zero++
-      continue
+      return false
     }
+
+    // 常见的文本控制字符（换行、回车、制表符）
     if (byte === 9 || byte === 10 || byte === 13) {
       printable++
+      i++
       continue
     }
+
+    // ASCII 可打印字符范围
     if (byte >= 32 && byte <= 126) {
       printable++
-    } else if (byte >= 128) {
-      printable++
-    } else {
-      control++
+      i++
+      continue
     }
+
+    // 验证 UTF-8 多字节序列
+    if (byte >= 128) {
+      const seqResult = validateUtf8Sequence(bytes, i)
+      if (seqResult.valid) {
+        printable += seqResult.length // UTF-8 序列视为可打印
+        i += seqResult.length
+      } else {
+        // 无效的 UTF-8 序列
+        invalidUtf8++
+        i++
+      }
+      continue
+    }
+
+    // 其他控制字符
+    control++
+    i++
   }
-  if (zero > 0) return false
+
+  // 如果有过多无效的 UTF-8 序列，可能是二进制
+  if (invalidUtf8 > bytes.length * 0.05) {
+    return false
+  }
+
+  // 控制字符比例过高则判定为二进制
   return control / bytes.length < 0.1 && printable / bytes.length > 0.7
+}
+
+/**
+ * 验证从指定位置开始的 UTF-8 多字节序列
+ * 返回序列是否有效及其长度
+ */
+function validateUtf8Sequence(
+  bytes: Uint8Array,
+  start: number
+): { valid: boolean; length: number } {
+  const first = bytes[start]
+
+  // 2 字节序列: 110xxxxx 10xxxxxx
+  if ((first & 0xe0) === 0xc0) {
+    if (start + 1 >= bytes.length) return { valid: false, length: 1 }
+    if ((bytes[start + 1] & 0xc0) !== 0x80) return { valid: false, length: 1 }
+    // 检查是否为过长编码 (< 0x80 应使用单字节)
+    if ((first & 0x1e) === 0) return { valid: false, length: 1 }
+    return { valid: true, length: 2 }
+  }
+
+  // 3 字节序列: 1110xxxx 10xxxxxx 10xxxxxx
+  if ((first & 0xf0) === 0xe0) {
+    if (start + 2 >= bytes.length) return { valid: false, length: 1 }
+    if ((bytes[start + 1] & 0xc0) !== 0x80) return { valid: false, length: 1 }
+    if ((bytes[start + 2] & 0xc0) !== 0x80) return { valid: false, length: 1 }
+    // 检查过长编码和代理对范围
+    const codePoint =
+      ((first & 0x0f) << 12) |
+      ((bytes[start + 1] & 0x3f) << 6) |
+      (bytes[start + 2] & 0x3f)
+    if (codePoint < 0x800 || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+      return { valid: false, length: 1 }
+    }
+    return { valid: true, length: 3 }
+  }
+
+  // 4 字节序列: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+  if ((first & 0xf8) === 0xf0) {
+    if (start + 3 >= bytes.length) return { valid: false, length: 1 }
+    if ((bytes[start + 1] & 0xc0) !== 0x80) return { valid: false, length: 1 }
+    if ((bytes[start + 2] & 0xc0) !== 0x80) return { valid: false, length: 1 }
+    if ((bytes[start + 3] & 0xc0) !== 0x80) return { valid: false, length: 1 }
+    // 检查过长编码和有效范围 (0x10000 - 0x10FFFF)
+    const codePoint =
+      ((first & 0x07) << 18) |
+      ((bytes[start + 1] & 0x3f) << 12) |
+      ((bytes[start + 2] & 0x3f) << 6) |
+      (bytes[start + 3] & 0x3f)
+    if (codePoint < 0x10000 || codePoint > 0x10ffff) {
+      return { valid: false, length: 1 }
+    }
+    return { valid: true, length: 4 }
+  }
+
+  // 无效的起始字节 (10xxxxxx 或 11111xxx)
+  return { valid: false, length: 1 }
 }
 
 export function parseContentDispositionFilename(value: string | null | undefined): string | null {
@@ -234,6 +415,41 @@ async function readStreamWithLimit(
   return { bytes: merged, truncated }
 }
 
+/**
+ * 解压错误类型
+ */
+interface DecompressError extends Error {
+  encoding: string
+  originalSize: number
+  decompressedSoFar: number
+}
+
+/**
+ * 创建详细的解压错误
+ */
+function createDecompressError(
+  message: string,
+  encoding: string,
+  originalSize: number,
+  decompressedSoFar: number,
+  cause?: unknown
+): DecompressError {
+  const error = new Error(message) as DecompressError
+  error.name = 'DecompressError'
+  error.encoding = encoding
+  error.originalSize = originalSize
+  error.decompressedSoFar = decompressedSoFar
+  if (cause) {
+    error.cause = cause
+  }
+  return error
+}
+
+/**
+ * 解压字节数据
+ * 支持多层压缩（如 gzip + br）
+ * @throws {DecompressError} 解压失败时抛出详细错误信息
+ */
 async function decompressBytes(
   bytes: Uint8Array,
   encodings: string[],
@@ -241,25 +457,67 @@ async function decompressBytes(
 ): Promise<{ bytes: Uint8Array; truncated: boolean }> {
   const DecompressionStreamCtor = (globalThis as { DecompressionStream?: unknown }).DecompressionStream
   if (!DecompressionStreamCtor) {
-    throw new Error('DecompressionStream not supported')
+    throw createDecompressError(
+      '当前浏览器不支持 DecompressionStream API',
+      encodings.join(', '),
+      bytes.length,
+      0
+    )
   }
 
+  const supportedEncodings = ['gzip', 'br', 'deflate']
   let current = bytes
   let truncated = false
+  
   for (let i = encodings.length - 1; i >= 0; i--) {
     const encoding = encodings[i]
-    if (!['gzip', 'br', 'deflate'].includes(encoding)) {
-      throw new Error(`Unsupported encoding: ${encoding}`)
+    
+    if (!supportedEncodings.includes(encoding)) {
+      throw createDecompressError(
+        `不支持的压缩编码: ${encoding}`,
+        encoding,
+        current.length,
+        0
+      )
     }
-    const decompressor = new (DecompressionStreamCtor as any)(encoding) as TransformStream<
-      Uint8Array,
-      Uint8Array
-    >
-    const stream = new Blob([current]).stream().pipeThrough(decompressor) as ReadableStream<Uint8Array>
-    const result = await readStreamWithLimit(stream, maxBytes)
-    current = result.bytes
-    truncated = truncated || result.truncated
+    
+    try {
+      const decompressor = new (DecompressionStreamCtor as any)(encoding) as TransformStream<
+        Uint8Array,
+        Uint8Array
+      >
+      const stream = new Blob([current]).stream().pipeThrough(decompressor) as ReadableStream<Uint8Array>
+      const result = await readStreamWithLimit(stream, maxBytes)
+      
+      // 检查解压结果是否有效
+      if (result.bytes.length === 0 && current.length > 0) {
+        throw createDecompressError(
+          `${encoding} 解压后数据为空，可能是数据损坏或编码不匹配`,
+          encoding,
+          current.length,
+          0
+        )
+      }
+      
+      current = result.bytes
+      truncated = truncated || result.truncated
+    } catch (error) {
+      // 重新包装错误，添加更多上下文
+      if ((error as DecompressError).name === 'DecompressError') {
+        throw error
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw createDecompressError(
+        `${encoding} 解压失败: ${errorMessage}`,
+        encoding,
+        current.length,
+        0,
+        error
+      )
+    }
   }
+  
   return { bytes: current, truncated }
 }
 
