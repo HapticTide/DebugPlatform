@@ -4,7 +4,7 @@
 #
 # 用法:
 #   ./deploy.sh              # 使用默认配置启动
-#   ./deploy.sh --port 8081  # 指定端口
+#   ./deploy.sh --port 9527  # 指定端口
 #   ./deploy.sh --sqlite     # 使用 SQLite 数据库
 #   ./deploy.sh --build-only # 仅编译不运行
 #   ./deploy.sh --with-webui # 同时构建 WebUI
@@ -50,7 +50,7 @@ CLEANUP_NEEDED=false
 START_TIME=$(date +%s)
 
 # 默认配置
-DEFAULT_PORT=8081
+DEFAULT_PORT=9527
 DEFAULT_HOST="0.0.0.0"
 DATABASE_MODE="postgres"
 BUILD_MODE="release"

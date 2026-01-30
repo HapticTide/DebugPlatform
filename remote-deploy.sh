@@ -43,7 +43,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_NAME="DebugPlatform"
 DEPLOY_TARGET=""                        # SSH 目标 (user@host)
 DEPLOY_DIR="\$HOME/$PROJECT_NAME"       # 远程部署目录
-PORT=8081                               # 服务端口
+PORT=9527                               # 服务端口
 HOST="0.0.0.0"                          # 监听地址
 DATABASE_MODE="postgres"                # 数据库模式: sqlite 或 postgres
 
@@ -296,7 +296,7 @@ configure_remote() {
     
     log_step "配置远程环境"
     
-    local deploy_port="${PORT:-8081}"
+    local deploy_port="${PORT:-9527}"
     local deploy_host="${HOST:-0.0.0.0}"
     local deploy_db_mode="${DATABASE_MODE:-postgres}"
     
@@ -320,7 +320,7 @@ build_and_start() {
     
     log_step "构建并启动服务"
     
-    local deploy_port="${PORT:-8081}"
+    local deploy_port="${PORT:-9527}"
     local deploy_host="${HOST:-0.0.0.0}"
     local deploy_db_mode="${DATABASE_MODE:-postgres}"
     
@@ -354,7 +354,7 @@ build_and_start() {
 # 显示部署结果
 show_result() {
     local server_ip="$1"
-    local port="${PORT:-8081}"
+    local port="${PORT:-9527}"
     
     echo ""
     echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"

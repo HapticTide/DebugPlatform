@@ -779,7 +779,7 @@ class MyApplication : Application() {
             // 配置 DebugProbe
             DebugProbeSettings.apply {
                 hubHost = "192.168.1.100"  // Debug Hub 地址
-                hubPort = 8081
+                hubPort = 9527
                 token = "your-token"       // 可选
             }
             

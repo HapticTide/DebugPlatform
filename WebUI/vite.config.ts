@@ -13,15 +13,15 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8081',
+        target: 'http://localhost:9527',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8081',
+        target: 'ws://localhost:9527',
         ws: true,
       },
       '/debug-bridge': {
-        target: 'ws://localhost:8081',
+        target: 'ws://localhost:9527',
         ws: true,
       },
     },

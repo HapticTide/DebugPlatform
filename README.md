@@ -143,9 +143,9 @@ cd DebugPlatform/DebugHub
 ```
 
 服务启动后：
-- Web UI: http://localhost:8081
-- API 文档: http://localhost:8081/api-docs
-- 健康检查: http://localhost:8081/health
+- Web UI: http://localhost:9527
+- API 文档: http://localhost:9527/api-docs
+- 健康检查: http://localhost:9527/health
 
 ### 2. App 集成
 
@@ -169,7 +169,7 @@ func setupDebugProbe() {
     // 可选：预先配置参数
     let settings = DebugProbeSettings.shared
     settings.hubHost = "your-debug-hub"  // 局域网 IP 或 hostname
-    settings.hubPort = 8081
+    settings.hubPort = 9527
     settings.enablePersistence = true
     
     // 启动 DebugProbe
@@ -194,7 +194,7 @@ npm run deploy
 
 ## 📡 API 参考
 
-详见 http://localhost:8081/api-docs
+详见 http://localhost:9527/api-docs
 
 ### 主要端点
 

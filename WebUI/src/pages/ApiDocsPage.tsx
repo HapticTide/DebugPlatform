@@ -198,7 +198,7 @@ export function ApiDocsPage() {
               <pre className="bg-bg-darkest border border-border rounded-lg p-4 font-mono text-sm overflow-x-auto">
                 <code>
                   <span className="text-info">curl</span>{' '}
-                  <span className="text-green-400">http://localhost:8081/api/devices</span>
+                  <span className="text-green-400">http://localhost:9527/api/devices</span>
                 </code>
               </pre>
             </div>
@@ -207,7 +207,7 @@ export function ApiDocsPage() {
               <pre className="bg-bg-darkest border border-border rounded-lg p-4 font-mono text-sm overflow-x-auto">
                 <code>
                   <span className="text-info">websocat</span>{' '}
-                  <span className="text-green-400">ws://localhost:8081/ws/live</span>
+                  <span className="text-green-400">ws://localhost:9527/ws/live</span>
                 </code>
               </pre>
             </div>

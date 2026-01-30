@@ -13,7 +13,7 @@ npm install
 # 启动开发服务器 (localhost:3000)
 npm run dev
 
-# 开发时需要同时运行 DebugHub 后端 (localhost:8081)
+# 开发时需要同时运行 DebugHub 后端 (localhost:9527)
 # Vite 会自动代理 /api 和 /ws 请求到后端
 ```
 
