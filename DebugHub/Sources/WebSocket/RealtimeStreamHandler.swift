@@ -35,6 +35,7 @@ struct DeviceSessionEvent: Content {
     let deviceId: String
     let deviceName: String
     var deviceAlias: String? // 设备别名（可选）
+    var appSessionId: String? // App 本次启动的会话标识（可选）
     let timestamp: Date
     var pluginStates: [String: Bool]? // 插件启用状态（可选，仅在连接/重连时携带）
 }
@@ -114,6 +115,7 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
         deviceId: String,
         deviceName: String,
         sessionId: String,
+        appSessionId: String? = nil,
         pluginStates: [String: Bool] = [:]
     ) {
         var event = DeviceSessionEvent(
@@ -123,6 +125,7 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
             timestamp: Date()
         )
         event.pluginStates = pluginStates
+        event.appSessionId = appSessionId
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601WithMilliseconds
@@ -162,13 +165,14 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
     }
 
     /// 广播设备重连事件
-    func broadcastDeviceReconnected(deviceId: String, deviceName: String, sessionId: String) {
-        let event = DeviceSessionEvent(
+    func broadcastDeviceReconnected(deviceId: String, deviceName: String, sessionId: String, appSessionId: String? = nil) {
+        var event = DeviceSessionEvent(
             sessionId: sessionId,
             deviceId: deviceId,
             deviceName: deviceName,
             timestamp: Date()
         )
+        event.appSessionId = appSessionId
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601WithMilliseconds

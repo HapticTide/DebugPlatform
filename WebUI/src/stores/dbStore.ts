@@ -6,7 +6,7 @@
 //
 
 import { create } from 'zustand'
-import type { DBInfo, DBTableInfo, DBColumnInfo, DBTablePageResult, DBQueryResponse, DBQueryError } from '@/types'
+import type { DBInfo, DBTableInfo, DBColumnInfo, DBTablePageResult, DBQueryResponse, DBQueryError, DBSearchResponse } from '@/types'
 import * as api from '@/services/api'
 
 // 数据库排序方式
@@ -50,11 +50,20 @@ interface DBState {
     queryLoading: boolean
     queryError: DBQueryError | string | null  // 支持结构化错误或简单字符串
 
+    // 跨表搜索
+    globalSearchKeyword: string
+    globalSearchResult: DBSearchResponse | null
+    globalSearchLoading: boolean
+    globalSearchError: string | null
+    searchHistory: string[]  // 搜索历史记录
+    highlightRowId: string | null  // 高亮的行 rowid（搜索结果跳转时使用）
+    pendingTargetRowId: string | null  // 待定位的行 rowid
+
     // Actions
     loadDatabases: (deviceId: string) => Promise<void>
     loadTables: (deviceId: string, dbId: string) => Promise<void>
     loadSchema: (deviceId: string, dbId: string, table: string) => Promise<void>
-    loadTableData: (deviceId: string, dbId: string, table: string) => Promise<void>
+    loadTableData: (deviceId: string, dbId: string, table: string, targetRowId?: string) => Promise<void>
 
     selectDb: (dbId: string | null) => void
     selectTable: (table: string | null) => void
@@ -73,6 +82,17 @@ interface DBState {
     setQueryInput: (input: string) => void
     executeQuery: (deviceId: string) => Promise<void>
     clearQueryResult: () => void
+
+    // 跨表搜索 Actions
+    setGlobalSearchKeyword: (keyword: string) => void
+    executeGlobalSearch: (deviceId: string) => Promise<void>
+    clearGlobalSearch: () => void
+    navigateToSearchResult: (tableName: string, rowId?: string) => void
+    jumpToSearchResultRow: (deviceId: string, dbId: string, tableName: string, rowId: string) => Promise<void>
+    clearHighlightRow: () => void
+    addToSearchHistory: (keyword: string) => void
+    removeFromSearchHistory: (keyword: string) => void
+    clearSearchHistory: () => void
 
     // 重置状态（切换设备时调用）
     reset: () => void
@@ -106,6 +126,14 @@ const initialState = {
     queryResult: null,
     queryLoading: false,
     queryError: null,
+    // 跨表搜索
+    globalSearchKeyword: '',
+    globalSearchResult: null,
+    globalSearchLoading: false,
+    globalSearchError: null,
+    searchHistory: [] as string[],
+    highlightRowId: null,
+    pendingTargetRowId: null,
 }
 
 export const useDBStore = create<DBState>((set, get) => ({
@@ -165,7 +193,7 @@ export const useDBStore = create<DBState>((set, get) => ({
         }
     },
 
-    loadTableData: async (deviceId: string, dbId: string, table: string) => {
+    loadTableData: async (deviceId: string, dbId: string, table: string, targetRowId?: string) => {
         const { page, pageSize, orderBy, ascending, tables } = get()
         set({ dataLoading: true, dataError: null })
         try {
@@ -174,18 +202,35 @@ export const useDBStore = create<DBState>((set, get) => ({
                 pageSize,
                 orderBy: orderBy ?? undefined,
                 ascending,
+                targetRowId,
             })
+            
+            // 如果使用了 targetRowId，更新当前页码
+            if (targetRowId && result.page !== page) {
+                set({ page: result.page })
+            }
+
             // 同时更新 tables 列表中对应表的 rowCount
             const updatedTables = tables.map(t =>
                 t.name === table && result.totalRows !== null
                     ? { ...t, rowCount: result.totalRows }
                     : t
             )
-            set({ tableData: result, dataLoading: false, tables: updatedTables })
+            set({
+                tableData: result,
+                dataLoading: false,
+                tables: updatedTables,
+                pendingTargetRowId: targetRowId ? null : get().pendingTargetRowId,
+            })
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Failed to load table data'
             console.error('Failed to load table data:', error)
-            set({ tableData: null, dataLoading: false, dataError: errorMsg })
+            set({
+                tableData: null,
+                dataLoading: false,
+                dataError: errorMsg,
+                pendingTargetRowId: targetRowId ? null : get().pendingTargetRowId,
+            })
         }
     },
 
@@ -200,6 +245,10 @@ export const useDBStore = create<DBState>((set, get) => ({
                 tableData: null,
                 page: 1,
                 orderBy: null,
+                // 切换数据库时清除搜索状态
+                globalSearchKeyword: '',
+                globalSearchResult: null,
+                globalSearchError: null,
             })
         }
     },
@@ -389,7 +438,173 @@ export const useDBStore = create<DBState>((set, get) => ({
         return sorted
     },
 
+    // 跨表搜索 Actions
+    setGlobalSearchKeyword: (keyword: string) => {
+        set({ globalSearchKeyword: keyword })
+    },
+
+    executeGlobalSearch: async (deviceId: string) => {
+        const { selectedDb, globalSearchKeyword } = get()
+
+        if (!selectedDb) {
+            set({ globalSearchError: '请先选择数据库' })
+            return
+        }
+
+        const keyword = globalSearchKeyword.trim()
+        if (!keyword) {
+            set({ globalSearchError: '请输入搜索关键词' })
+            return
+        }
+
+        set({
+            globalSearchLoading: true,
+            globalSearchError: null,
+            globalSearchResult: null,
+        })
+
+        try {
+            const result = await api.searchDatabase(deviceId, selectedDb, {
+                keyword,
+                maxResultsPerTable: 10,
+            })
+            set({
+                globalSearchResult: result,
+                globalSearchLoading: false,
+            })
+            // 搜索成功后添加到历史记录
+            get().addToSearchHistory(keyword)
+        } catch (error) {
+            set({
+                globalSearchError: error instanceof Error ? error.message : '搜索失败',
+                globalSearchLoading: false,
+            })
+        }
+    },
+
+    clearGlobalSearch: () => {
+        set({
+            globalSearchKeyword: '',
+            globalSearchResult: null,
+            globalSearchError: null,
+        })
+    },
+
+    navigateToSearchResult: (tableName: string, rowId?: string) => {
+        // 导航到搜索结果对应的表
+        // 清除搜索结果，选中表，可选设置高亮行
+        set((state) => {
+            const isTableChanged = state.selectedTable !== tableName
+            return {
+                selectedTable: tableName,
+                highlightRowId: rowId ?? null,
+                pendingTargetRowId: null,
+                ...(isTableChanged
+                    ? {
+                        schema: [],
+                        tableData: null,
+                        page: 1,
+                        orderBy: null,
+                        showSchema: false,
+                        queryMode: false,
+                        queryInput: '',
+                        queryResult: null,
+                        queryError: null,
+                    }
+                    : rowId
+                        ? { tableData: null, page: 1 }
+                        : {})
+                // 保留搜索关键词，方便用户再次搜索
+            }
+        })
+    },
+
+    jumpToSearchResultRow: async (deviceId: string, dbId: string, tableName: string, rowId: string) => {
+        const isTableChanged = get().selectedTable !== tableName
+        set({
+            selectedTable: tableName,
+            highlightRowId: rowId,
+            pendingTargetRowId: rowId,
+            dataLoading: true,
+            dataError: null,
+            ...(isTableChanged
+                ? {
+                    schema: [],
+                    tableData: null,
+                    page: 1,
+                    orderBy: null,
+                    showSchema: false,
+                    queryMode: false,
+                    queryInput: '',
+                    queryResult: null,
+                    queryError: null,
+                }
+                : { tableData: null, page: 1 })
+        })
+
+        await get().loadSchema(deviceId, dbId, tableName)
+        await get().loadTableData(deviceId, dbId, tableName, rowId)
+    },
+
+    clearHighlightRow: () => {
+        set({ highlightRowId: null })
+    },
+
+    addToSearchHistory: (keyword: string) => {
+        const { searchHistory } = get()
+        const trimmed = keyword.trim()
+        if (!trimmed) return
+
+        // 移除已存在的相同关键词（如果有的话）
+        const filtered = searchHistory.filter(k => k !== trimmed)
+        // 添加到最前面，最多保留 10 条历史
+        const newHistory = [trimmed, ...filtered].slice(0, 10)
+        set({ searchHistory: newHistory })
+
+        // 持久化到 localStorage
+        try {
+            localStorage.setItem('db_search_history', JSON.stringify(newHistory))
+        } catch {
+            // localStorage 可能不可用，忽略错误
+        }
+    },
+
+    removeFromSearchHistory: (keyword: string) => {
+        const { searchHistory } = get()
+        const newHistory = searchHistory.filter(k => k !== keyword)
+        set({ searchHistory: newHistory })
+
+        // 持久化到 localStorage
+        try {
+            localStorage.setItem('db_search_history', JSON.stringify(newHistory))
+        } catch {
+            // localStorage 可能不可用，忽略错误
+        }
+    },
+
+    clearSearchHistory: () => {
+        set({ searchHistory: [] })
+        try {
+            localStorage.removeItem('db_search_history')
+        } catch {
+            // localStorage 可能不可用，忽略错误
+        }
+    },
+
     reset: () => {
         set(initialState)
     },
 }))
+
+// 初始化时从 localStorage 加载搜索历史
+try {
+    const savedHistory = localStorage.getItem('db_search_history')
+    if (savedHistory) {
+        const history = JSON.parse(savedHistory)
+        if (Array.isArray(history)) {
+            useDBStore.setState({ searchHistory: history.slice(0, 10) })
+        }
+    }
+} catch {
+    // localStorage 可能不可用，忽略错误
+}

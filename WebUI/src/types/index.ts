@@ -1,6 +1,8 @@
 // 设备信息
 export interface DeviceInfo {
   deviceId: string
+  /** App 本次启动的会话标识（重连不变，重启变化） */
+  appSessionId?: string
   /** 原始设备名称（系统设备名） */
   deviceName: string
   /** 用户设置的设备别名 */
@@ -464,6 +466,33 @@ export interface DBQueryResponse {
   executionTimeMs?: number
   /// 错误信息（当 success 为 false 时）
   error?: DBQueryError
+}
+
+// 跨表搜索相关类型
+export interface DBTableSearchResult {
+  /// 表名
+  tableName: string
+  /// 匹配的总行数
+  matchCount: number
+  /// 匹配的列名列表
+  matchedColumns: string[]
+  /// 预览行数据
+  previewRows: DBRow[]
+  /// 表的列信息
+  columns: DBColumnInfo[]
+}
+
+export interface DBSearchResponse {
+  /// 数据库 ID
+  dbId: string
+  /// 搜索关键词
+  keyword: string
+  /// 各表的搜索结果
+  tableResults: DBTableSearchResult[]
+  /// 匹配的总行数
+  totalMatches: number
+  /// 搜索耗时（毫秒）
+  searchDurationMs: number
 }
 
 // ============================================================================

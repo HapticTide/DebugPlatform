@@ -432,11 +432,44 @@ export async function deleteAllMockRules(deviceId: string): Promise<void> {
 // 导出 API
 // ============================================================================
 
-export function getExportLogsUrl(
-  deviceId: string,
-  format: 'json' | 'ndjson' | 'csv' = 'json'
-): string {
-  return `${API_BASE}/devices/${deviceId}/export/logs?format=${format}`
+/**
+ * 触发日志下载 (ZIP)
+ */
+export async function downloadLogs(deviceId: string): Promise<void> {
+  const url = `${API_BASE}/devices/${deviceId}/export/logs-zip`
+  
+  const response = await fetch(url)
+  
+  if (!response.ok) {
+    let errorMsg = 'Export failed'
+    try {
+      const errorData = await response.json()
+      errorMsg = errorData.reason || errorData.message || errorMsg
+    } catch {}
+    throw new Error(errorMsg)
+  }
+  
+  const blob = await response.blob()
+  
+  // 获取文件名
+  const contentDisposition = response.headers.get('Content-Disposition')
+  let filename = `logs-${new Date().toISOString().slice(0, 10)}.zip`
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename="?([^"]+)"?/)
+    if (match) {
+      filename = match[1]
+    }
+  }
+  
+  // 创建下载链接
+  const downloadUrl = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = downloadUrl
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(downloadUrl)
 }
 
 export function getExportHTTPUrl(
@@ -563,6 +596,7 @@ import type {
   DBDescribeTableResponse,
   DBTablePageResult,
   DBQueryResponse,
+  DBSearchResponse,
 } from '@/types'
 
 export async function listDatabases(deviceId: string): Promise<DBListDatabasesResponse> {
@@ -586,6 +620,7 @@ export interface FetchTablePageParams {
   pageSize?: number
   orderBy?: string
   ascending?: boolean
+  targetRowId?: string
 }
 
 export async function fetchTablePage(
@@ -599,6 +634,7 @@ export async function fetchTablePage(
   if (params?.pageSize) searchParams.set('pageSize', params.pageSize.toString())
   if (params?.orderBy) searchParams.set('orderBy', params.orderBy)
   if (params?.ascending !== undefined) searchParams.set('ascending', params.ascending.toString())
+  if (params?.targetRowId) searchParams.set('targetRowId', params.targetRowId)
 
   const queryString = searchParams.toString()
   const url = `${API_BASE}/devices/${deviceId}/databases/${dbId}/tables/${table}/rows${queryString ? '?' + queryString : ''}`
@@ -616,6 +652,25 @@ export async function executeQuery(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ query }),
+  })
+}
+
+export interface SearchDatabaseParams {
+  keyword: string
+  maxResultsPerTable?: number
+}
+
+export async function searchDatabase(
+  deviceId: string,
+  dbId: string,
+  params: SearchDatabaseParams
+): Promise<DBSearchResponse> {
+  return fetchJSON(`${API_BASE}/devices/${deviceId}/databases/${dbId}/search`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params),
   })
 }
 

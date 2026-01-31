@@ -33,7 +33,7 @@ interface HTTPState {
   pageSize: number
   isLoading: boolean
   autoScroll: boolean
-  currentSessionId: string | null
+  currentAppSessionId: string | null
   currentDeviceId: string | null // 当前设备 ID，用于收藏过滤
 
   // 分组模式
@@ -93,6 +93,7 @@ interface HTTPState {
   clearScreen: () => void // 清屏：清除当前显示的数据，刷新不恢复
   setShowCurrentSessionOnly: (value: boolean) => void // 切换是否只显示本次启动的请求
   setSessionStartTimestamp: (timestamp: string) => void // 设置会话开始时间
+  setCurrentAppSessionId: (sessionId: string | null) => void // 设置 App 会话 ID
 }
 
 // 清屏和会话过滤选项
@@ -205,7 +206,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   autoScroll: true,
   selectedIds: new Set(),
   isSelectMode: false,
-  currentSessionId: null,
+  currentAppSessionId: null,
   currentDeviceId: null,
   groupMode: 'none' as GroupMode,
 
@@ -358,11 +359,11 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
       selectedEventId: null,
       selectedEvent: null,
       selectedIds: new Set(),
-      currentSessionId: null,
-      // 重置清屏状态（重新进入设备页面时调用）
-      clearedBeforeTimestamp: null,
-      showCurrentSessionOnly: true,
-      sessionStartTimestamp: null,
+      currentAppSessionId: null,
+      // 不重置清屏状态，保留用户的过滤设置
+      // clearedBeforeTimestamp: null,
+      // showCurrentSessionOnly: true,
+      // sessionStartTimestamp: null,
     })
   },
 
@@ -579,6 +580,10 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
       })
       return { sessionStartTimestamp: timestamp, filteredItems }
     })
+  },
+
+  setCurrentAppSessionId: (sessionId: string | null) => {
+    set({ currentAppSessionId: sessionId })
   },
 }
 ))

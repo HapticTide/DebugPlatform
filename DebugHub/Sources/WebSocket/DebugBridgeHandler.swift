@@ -120,6 +120,10 @@ final class DebugBridgeHandler: @unchecked Sendable {
                 print("[DebugBridge] Received DB response: requestId=\(response.requestId)")
                 DBResponseManager.shared.handleResponse(response)
 
+            case let .pluginCommandResponse(response):
+                print("[DebugBridge] Received plugin command response: commandId=\(response.commandId)")
+                PluginResponseManager.shared.handleResponse(response)
+
             case let .pluginEvent(event):
                 if let deviceId = deviceIdHolder.deviceId {
                     print("[DebugBridge] Received plugin event from \(deviceId): \(event.pluginId)/\(event.eventType)")
@@ -188,6 +192,7 @@ final class DebugBridgeHandler: @unchecked Sendable {
                 deviceId: deviceInfo.deviceId,
                 deviceName: deviceInfo.deviceName,
                 sessionId: sessionId,
+                appSessionId: deviceInfo.appSessionId,
                 pluginStates: pluginStates
             )
         case .quickReconnect:

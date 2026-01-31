@@ -102,6 +102,7 @@ interface LogState {
   showCurrentSessionOnly: boolean // 是否只显示本次启动的日志
   clearedBeforeTimestamp: string | null // 清屏时间戳
   sessionStartTimestamp: string | null // 会话开始时间
+  currentAppSessionId: string | null // App 会话 ID
 
   // Filter options
   subsystems: string[]
@@ -135,6 +136,7 @@ interface LogState {
   clearScreen: () => void
   setShowCurrentSessionOnly: (value: boolean) => void
   setSessionStartTimestamp: (timestamp: string) => void
+  setCurrentAppSessionId: (sessionId: string | null) => void
 
   // 分页
   loadMore: (deviceId: string) => Promise<void>
@@ -157,6 +159,7 @@ export const useLogStore = create<LogState>((set, get) => ({
   showCurrentSessionOnly: true, // 默认只显示本次启动的日志
   clearedBeforeTimestamp: null,
   sessionStartTimestamp: null,
+  currentAppSessionId: null,
 
   subsystems: [],
   categories: [],
@@ -227,10 +230,11 @@ export const useLogStore = create<LogState>((set, get) => ({
       events: [],
       filteredEvents: [],
       total: 0,
-      // 重置清屏状态
-      clearedBeforeTimestamp: null,
-      showCurrentSessionOnly: true,
-      sessionStartTimestamp: null,
+      // 不重置清屏状态，保留用户的过滤设置
+      // clearedBeforeTimestamp: null,
+      // showCurrentSessionOnly: true,
+      // sessionStartTimestamp: null,
+      currentAppSessionId: null,
     })
   },
 
@@ -382,6 +386,10 @@ export const useLogStore = create<LogState>((set, get) => ({
     })
   },
 
+  setCurrentAppSessionId: (sessionId: string | null) => {
+    set({ currentAppSessionId: sessionId })
+  },
+
   loadMore: async (deviceId: string) => {
     const { pageSize, page, total, events, filters, isLoading, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
 
@@ -418,4 +426,3 @@ export const useLogStore = create<LogState>((set, get) => ({
     return events.length < total
   },
 }))
-

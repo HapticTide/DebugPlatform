@@ -13,6 +13,7 @@ struct ExportController: RouteCollection {
         let export = routes.grouped("devices", ":deviceId", "export")
 
         export.get("logs", use: exportLogs)
+        export.get("logs-zip", use: exportLogsZip)
         export.get("http", use: exportHTTP)
         export.get("har", use: exportHAR)
     }
@@ -76,6 +77,145 @@ struct ExportController: RouteCollection {
         }
 
         return try generateExportResponse(items: items, format: format, filename: "logs", req: req)
+    }
+
+    // MARK: - 导出日志 ZIP 包
+
+    func exportLogsZip(req: Request) async throws -> Response {
+        guard let deviceId = req.parameters.get("deviceId") else {
+            throw Abort(.badRequest, reason: "Missing deviceId")
+        }
+
+        // 检查设备连接
+        guard let session = DeviceRegistry.shared.getSession(deviceId: deviceId) else {
+            throw Abort(.notFound, reason: "Device not connected")
+        }
+
+        // 构造导出命令
+        let commandId = UUID().uuidString
+        let command = PluginCommandDTO(
+            pluginId: "log", // BuiltinPluginId.log
+            commandType: "export_logs",
+            commandId: commandId,
+            payload: nil
+        )
+
+        // 发送命令
+        let message = BridgeMessageDTO.pluginCommand(command)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601WithMilliseconds
+        let data = try encoder.encode(message)
+        
+        // 发送二进制消息
+        try await session.webSocket.send(raw: data, opcode: .binary)
+
+        // 等待响应
+        return try await withCheckedThrowingContinuation { continuation in
+            // 导出可能需要较长时间，设置 5 分钟超时
+            PluginResponseManager.shared.registerWaiter(commandId: commandId, timeout: 300) { response in
+                guard let response = response else {
+                    continuation.resume(throwing: Abort(.gatewayTimeout, reason: "Export logs timed out"))
+                    return
+                }
+
+                if response.success, let zipData = response.payload {
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd_HHmmss"
+                    let timestamp = dateFormatter.string(from: Date())
+                    let shortDeviceId = String(deviceId.prefix(8))
+                    let zipFilename = "Logs-\(shortDeviceId)-\(timestamp).zip"
+
+                    var headers = HTTPHeaders()
+                    headers.add(name: .contentType, value: "application/zip")
+                    headers.add(name: .contentDisposition, value: "attachment; filename=\"\(zipFilename)\"")
+
+                    continuation.resume(returning: Response(status: .ok, headers: headers, body: .init(data: zipData)))
+                } else {
+                    let errorMsg = response.errorMessage ?? "Unknown error from device"
+                    continuation.resume(throwing: Abort(.internalServerError, reason: errorMsg))
+                }
+            }
+        }
+    }
+
+    /// 生成 ZIP 导出头部信息
+    private func generateZipExportHeader(device: DeviceModel?, eventCount: Int) -> String {
+        let exportTime = ISO8601DateFormatter().string(from: Date())
+        let deviceName = device?.deviceAlias ?? device?.deviceName ?? "Unknown"
+        let appVersion = device.map { "\($0.appVersion) (\($0.buildNumber))" } ?? "Unknown"
+        let osInfo = device.map { "\($0.systemName) \($0.systemVersion)" } ?? "Unknown"
+        let deviceModel = device?.deviceModel ?? "Unknown"
+
+        return """
+        ========================================
+        Debug Platform Log Export
+        ========================================
+        Export Time: \(exportTime)
+        Device ID: \(device?.deviceId ?? "Unknown")
+        Device Name: \(deviceName)
+        Device Model: \(deviceModel)
+        App Version: \(appVersion)
+        OS: \(osInfo)
+        ========================================
+        Total Logs: \(eventCount)
+        ========================================
+
+        """
+    }
+
+    /// 生成 ZIP 统计信息
+    private func generateZipStats(events: [LogEventModel], device: DeviceModel?) -> String {
+        let exportTime = ISO8601DateFormatter().string(from: Date())
+        let deviceName = device?.deviceAlias ?? device?.deviceName ?? "Unknown"
+
+        // 按级别统计
+        var levelCounts: [String: Int] = [:]
+        for event in events {
+            levelCounts[event.level, default: 0] += 1
+        }
+
+        // 按 subsystem 统计
+        var subsystemCounts: [String: Int] = [:]
+        for event in events {
+            let key = event.subsystem ?? "(none)"
+            subsystemCounts[key, default: 0] += 1
+        }
+
+        let levelStats = levelCounts
+            .sorted { $0.key < $1.key }
+            .map { "  \($0.key): \($0.value)" }
+            .joined(separator: "\n")
+
+        let subsystemStats = subsystemCounts
+            .sorted { $0.value > $1.value }
+            .prefix(10)
+            .map { "  \($0.key): \($0.value)" }
+            .joined(separator: "\n")
+
+        let timeRange: String
+        if let first = events.first, let last = events.last {
+            let formatter = ISO8601DateFormatter()
+            timeRange = "\(formatter.string(from: first.timestamp)) ~ \(formatter.string(from: last.timestamp))"
+        } else {
+            timeRange = "N/A"
+        }
+
+        return """
+        =================================
+        Log Export Statistics
+        =================================
+        Generated: \(exportTime)
+        Device: \(deviceName)
+        Total Logs: \(events.count)
+        Time Range: \(timeRange)
+
+        --- By Level ---
+        \(levelStats)
+
+        --- Top Subsystems ---
+        \(subsystemStats)
+        =================================
+        """
     }
 
     // MARK: - 导出 HTTP 事件

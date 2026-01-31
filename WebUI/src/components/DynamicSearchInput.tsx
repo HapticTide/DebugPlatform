@@ -28,7 +28,7 @@ export function DynamicSearchInput({
     placeholder = '搜索...',
     className = '',
     minWidth = 160, // 默认 160px (w-40)
-    maxWidthMultiplier = 3, // 默认最大 3 倍
+    maxWidthMultiplier = 5, // 默认最大 5 倍
 }: DynamicSearchInputProps) {
     const inputRef = useRef<HTMLInputElement>(null)
     const [inputWidth, setInputWidth] = useState(minWidth)

@@ -432,6 +432,7 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         db.get(":dbId", "tables", ":table", "schema", use: describeTable)
         db.get(":dbId", "tables", ":table", "rows", use: fetchTablePage)
         db.post(":dbId", "query", use: executeQuery)
+        db.post(":dbId", "search", use: searchDatabase)
     }
 
     public func handleEvent(_ event: PluginEventDTO, from deviceId: String) async {
@@ -555,6 +556,7 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         let pageSize = min(req.query[Int.self, at: "pageSize"] ?? 50, 500)
         let orderBy = req.query[String.self, at: "orderBy"]
         let ascending = req.query[Bool.self, at: "ascending"] ?? true
+        let targetRowId = req.query[String.self, at: "targetRowId"]
 
         guard DeviceRegistry.shared.getSession(deviceId: deviceId) != nil else {
             throw Abort(.notFound, reason: "Device not connected")
@@ -568,7 +570,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
             page: page,
             pageSize: pageSize,
             orderBy: orderBy,
-            ascending: ascending
+            ascending: ascending,
+            targetRowId: targetRowId
         )
 
         let response = try await sendCommandAndWaitResponse(command: command, to: deviceId, timeout: 15)
@@ -657,6 +660,63 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
             rowCount: rawResult.rowCount,
             executionTimeMs: rawResult.executionTimeMs
         )
+    }
+
+    func searchDatabase(req: Request) async throws -> DBSearchResponseDTO {
+        guard
+            let deviceId = req.parameters.get("deviceId"),
+            let dbId = req.parameters.get("dbId")
+        else {
+            throw Abort(.badRequest, reason: "Missing parameters")
+        }
+
+        struct SearchInput: Content {
+            let keyword: String
+            let maxResultsPerTable: Int?
+        }
+        let input = try req.content.decode(SearchInput.self)
+
+        guard !input.keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw Abort(.badRequest, reason: "Keyword cannot be empty")
+        }
+
+        guard DeviceRegistry.shared.getSession(deviceId: deviceId) != nil else {
+            throw Abort(.notFound, reason: "Device not connected")
+        }
+
+        let command = DBCommandDTO(
+            requestId: UUID().uuidString,
+            kind: .searchDatabase,
+            dbId: dbId,
+            table: nil,
+            page: nil,
+            pageSize: nil,
+            orderBy: nil,
+            ascending: nil,
+            query: nil,
+            keyword: input.keyword,
+            maxResultsPerTable: input.maxResultsPerTable ?? 10
+        )
+
+        // 搜索可能需要更长时间，设置 60 秒超时
+        let response = try await sendCommandAndWaitResponse(command: command, to: deviceId, timeout: 60)
+
+        guard response.success, let payload = response.payload else {
+            let errorMsg = response.error?.message ?? "Unknown error"
+            if errorMsg.contains("not found") {
+                throw Abort(.notFound, reason: errorMsg)
+            } else if errorMsg.contains("Access denied") || errorMsg.contains("sensitive") {
+                throw Abort(.forbidden, reason: errorMsg)
+            } else if errorMsg.contains("timeout") {
+                throw Abort(.gatewayTimeout, reason: errorMsg)
+            } else {
+                throw Abort(.internalServerError, reason: errorMsg)
+            }
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601WithMilliseconds
+        return try decoder.decode(DBSearchResponseDTO.self, from: payload)
     }
 
     /// 解析 SQL 错误并生成友好的错误信息和建议

@@ -255,6 +255,20 @@ function HttpPluginView({ context, isActive }: PluginRenderProps) {
     const [isClearingAll, setIsClearingAll] = useState(false)
     const [showMoreMenu, setShowMoreMenu] = useState(false)
 
+    const ensureHistoryLoaded = useCallback(async () => {
+        if (!deviceId || !httpStore.sessionStartTimestamp) return
+
+        let attempts = 0
+        while (attempts < 3) {
+            const state = useHTTPStore.getState()
+            if (!state.hasMore()) break
+            const oldestEvent = state.events[state.events.length - 1]
+            if (!oldestEvent?.startTime || oldestEvent.startTime < httpStore.sessionStartTimestamp) break
+            await state.loadMore(deviceId)
+            attempts += 1
+        }
+    }, [deviceId, httpStore.sessionStartTimestamp])
+
     // 计算过滤后的事件列表
     const filteredEvents = httpStore.filteredItems.filter((item) => !isSessionDivider(item))
     const allSelected = httpStore.selectedIds.size === filteredEvents.length && filteredEvents.length > 0
@@ -265,6 +279,8 @@ function HttpPluginView({ context, isActive }: PluginRenderProps) {
         if (!deviceId || !isActive) return
 
         // 确保 sessionStartTimestamp 已设置（用于"仅本次启动"过滤）
+        // 如果 store 中还没有 sessionStartTimestamp，使用当前时间作为默认值
+        // 注意：DevicePluginView 会尝试获取真实的会话时间来更新这个值
         if (!httpStore.sessionStartTimestamp) {
             httpStore.setSessionStartTimestamp(new Date().toISOString())
         }
@@ -280,6 +296,9 @@ function HttpPluginView({ context, isActive }: PluginRenderProps) {
 
         // 加载 Chaos 规则（用于显示子标签状态）
         chaosStore.fetchRules(deviceId)
+        
+        // 组件卸载时不清除 store 中的事件，保留状态以便切回时恢复
+        // 只有在 DevicePluginView 卸载（离开设备详情页）时才清除
     }, [deviceId, isActive])
 
     // 选择事件
@@ -401,28 +420,29 @@ function HttpPluginView({ context, isActive }: PluginRenderProps) {
             {/* 内容区域 */}
             <div className="flex-1 min-h-0 overflow-hidden">
                 {activeSubTab === 'requests' && (
-                    <HTTPRequestsContent
-                        deviceId={deviceId}
-                        httpStore={httpStore}
-                        mockStore={mockStore}
-                        isConnected={isConnected}
-                        onSelectEvent={onSelectEvent}
-                        onFavoriteChange={onFavoriteChange}
-                        onRefresh={handleRefresh}
-                        filteredEvents={filteredEvents}
-                        allSelected={allSelected}
-                        showBatchDeleteConfirm={showBatchDeleteConfirm}
-                        setShowBatchDeleteConfirm={setShowBatchDeleteConfirm}
-                        showClearAllConfirm={showClearAllConfirm}
-                        setShowClearAllConfirm={setShowClearAllConfirm}
-                        isClearingAll={isClearingAll}
-                        handleClearAll={handleClearAll}
-                        showMoreMenu={showMoreMenu}
-                        setShowMoreMenu={setShowMoreMenu}
-                        handleExportSelected={handleExportSelected}
-                        handleBatchDelete={handleBatchDelete}
-                        toast={toast}
-                    />
+                        <HTTPRequestsContent
+                            deviceId={deviceId}
+                            httpStore={httpStore}
+                            mockStore={mockStore}
+                            isConnected={isConnected}
+                            onSelectEvent={onSelectEvent}
+                            onFavoriteChange={onFavoriteChange}
+                            onRefresh={handleRefresh}
+                            filteredEvents={filteredEvents}
+                            allSelected={allSelected}
+                            showBatchDeleteConfirm={showBatchDeleteConfirm}
+                            setShowBatchDeleteConfirm={setShowBatchDeleteConfirm}
+                            showClearAllConfirm={showClearAllConfirm}
+                            setShowClearAllConfirm={setShowClearAllConfirm}
+                            isClearingAll={isClearingAll}
+                            handleClearAll={handleClearAll}
+                            showMoreMenu={showMoreMenu}
+                            setShowMoreMenu={setShowMoreMenu}
+                            handleExportSelected={handleExportSelected}
+                            handleBatchDelete={handleBatchDelete}
+                            ensureHistoryLoaded={ensureHistoryLoaded}
+                            toast={toast}
+                        />
                 )}
                 {activeSubTab === 'mock' && (
                     isPluginEnabled(BuiltinPluginId.MOCK) ? (
@@ -471,6 +491,7 @@ function HTTPRequestsContent({
     setShowMoreMenu,
     handleExportSelected,
     handleBatchDelete,
+    ensureHistoryLoaded,
     toast,
 }: {
     deviceId: string
@@ -492,6 +513,7 @@ function HTTPRequestsContent({
     setShowMoreMenu: (show: boolean) => void
     handleExportSelected: () => void
     handleBatchDelete: () => void
+    ensureHistoryLoaded: () => Promise<void>
     toast: ReturnType<typeof useToastStore.getState>
 }) {
     // 滚动控制状态
@@ -537,7 +559,7 @@ function HTTPRequestsContent({
                         onChange={(value) => httpStore.setFilter('urlContains', value)}
                         placeholder="搜索 URL..."
                         minWidth={160}
-                        maxWidthMultiplier={3}
+                        maxWidthMultiplier={5}
                     />
 
                     <FilterPopover
@@ -660,7 +682,12 @@ function HTTPRequestsContent({
                                     <label className="flex items-center gap-2 px-3 py-2 text-xs text-text-secondary cursor-pointer hover:bg-bg-light border-b border-border">
                                         <Checkbox
                                             checked={httpStore.showCurrentSessionOnly}
-                                            onChange={(checked) => httpStore.setShowCurrentSessionOnly(checked)}
+                                            onChange={async (checked) => {
+                                                httpStore.setShowCurrentSessionOnly(checked)
+                                                if (!checked) {
+                                                    await ensureHistoryLoaded()
+                                                }
+                                            }}
                                         />
                                         仅显示本次启动
                                     </label>

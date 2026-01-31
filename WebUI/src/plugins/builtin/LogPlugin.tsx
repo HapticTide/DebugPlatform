@@ -11,7 +11,7 @@ import {
     PluginState,
     BuiltinPluginId,
 } from '../types'
-import { LogIcon, TrashIcon, FilterIcon, ArrowUpIcon, ArrowDownIcon } from '@/components/icons'
+import { LogIcon, TrashIcon, FilterIcon, ArrowUpIcon, ArrowDownIcon, DownloadIcon } from '@/components/icons'
 import { useLogStore } from '@/stores/logStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useToastStore } from '@/stores/toastStore'
@@ -23,7 +23,7 @@ import { Checkbox } from '@/components/Checkbox'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LogDetailModal } from '@/components/LogDetailModal'
 import { DynamicSearchInput } from '@/components/DynamicSearchInput'
-import { deleteAllLogs } from '@/services/api'
+import { deleteAllLogs, downloadLogs } from '@/services/api'
 import { LogEvent } from '@/types'
 import clsx from 'clsx'
 
@@ -114,6 +114,7 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
         hasMore,
         // 清屏相关
         showCurrentSessionOnly,
+        sessionStartTimestamp,
         setShowCurrentSessionOnly,
         clearScreen,
     } = useLogStore()
@@ -130,11 +131,46 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
     const [isClearingAll, setIsClearingAll] = useState(false)
     // 日志详情弹窗状态
     const [detailEvent, setDetailEvent] = useState<LogEvent | null>(null)
+    const [isDownloading, setIsDownloading] = useState(false)
+
+    const ensureHistoryLoaded = useCallback(async () => {
+        if (!deviceId || !sessionStartTimestamp) return
+
+        let attempts = 0
+        while (attempts < 3) {
+            const state = useLogStore.getState()
+            if (!state.hasMore()) break
+            const oldestEvent = state.events[state.events.length - 1]
+            if (!oldestEvent?.timestamp || oldestEvent.timestamp < sessionStartTimestamp) break
+            await state.loadMore(deviceId)
+            attempts += 1
+        }
+    }, [deviceId, sessionStartTimestamp])
+
+    // 导出日志
+    const handleDownload = async () => {
+        if (!deviceId || isDownloading) return
+
+        setIsDownloading(true)
+        setShowMoreMenu(false)
+        try {
+            toast.show('info', '正在请求设备导出日志...')
+            await downloadLogs(deviceId)
+            toast.show('success', '日志导出成功')
+        } catch (error) {
+            console.error('Export logs failed:', error)
+            toast.show('error', '导出失败: ' + (error instanceof Error ? error.message : '未知错误'))
+        } finally {
+            setIsDownloading(false)
+        }
+    }
 
     // 初始加载
     useEffect(() => {
         if (isActive && deviceId) {
             // 确保 sessionStartTimestamp 已设置（用于"仅本次启动"过滤）
+            // 如果 store 中还没有 sessionStartTimestamp，使用当前时间作为默认值
+            // 注意：DevicePluginView 会尝试获取真实的会话时间来更新这个值
             const logStore = useLogStore.getState()
             if (!logStore.sessionStartTimestamp) {
                 logStore.setSessionStartTimestamp(new Date().toISOString())
@@ -142,6 +178,9 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
             fetchEvents(deviceId)
             fetchFilterOptions(deviceId)
         }
+        
+        // 组件卸载时不清除 store 中的事件，保留状态以便切回时恢复
+        // 只有在 DevicePluginView 卸载（离开设备详情页）时才清除
     }, [isActive, deviceId, fetchEvents, fetchFilterOptions])
 
     // 刷新
@@ -224,7 +263,7 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
                         onChange={(value) => setSearchQuery(value)}
                         placeholder="搜索日志..."
                         minWidth={160}
-                        maxWidthMultiplier={3}
+                        maxWidthMultiplier={5}
                     />
 
                     {/* 过滤器按钮 */}
@@ -314,10 +353,32 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
                                     <label className="flex items-center gap-2 px-3 py-2 text-xs text-text-secondary cursor-pointer hover:bg-bg-light border-b border-border">
                                         <Checkbox
                                             checked={showCurrentSessionOnly}
-                                            onChange={(checked) => setShowCurrentSessionOnly(checked)}
+                                            onChange={async (checked) => {
+                                                setShowCurrentSessionOnly(checked)
+                                                if (!checked) {
+                                                    await ensureHistoryLoaded()
+                                                }
+                                            }}
                                         />
                                         仅显示本次启动
                                     </label>
+
+                                    {/* 导出日志 */}
+                                    <button
+                                        onClick={handleDownload}
+                                        disabled={isDownloading}
+                                        className={clsx(
+                                            "w-full flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:bg-bg-light hover:text-text-primary border-b border-border",
+                                            isDownloading && "opacity-50 cursor-wait"
+                                        )}
+                                    >
+                                        {isDownloading ? (
+                                            <div className="w-3.5 h-3.5 border-2 border-text-secondary border-t-transparent rounded-full animate-spin" />
+                                        ) : (
+                                            <DownloadIcon size={14} />
+                                        )}
+                                        {isDownloading ? '正在导出设备日志...' : '导出设备日志 (ZIP)'}
+                                    </button>
 
                                     {/* 清空全部（从数据库删除） */}
                                     {filteredEvents.length > 0 && (

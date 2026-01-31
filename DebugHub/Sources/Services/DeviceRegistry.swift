@@ -13,6 +13,8 @@ import Vapor
 
 public struct DeviceInfoDTO: Content {
     public let deviceId: String
+    /// App 本次启动的会话标识（重连不变，重启变化）
+    public let appSessionId: String?
     /// 原始设备名称（系统设备名）
     public let deviceName: String
     /// 用户设置的设备别名（可选）
@@ -31,6 +33,7 @@ public struct DeviceInfoDTO: Content {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         deviceId = try container.decode(String.self, forKey: .deviceId)
+        appSessionId = try container.decodeIfPresent(String.self, forKey: .appSessionId)
         deviceName = try container.decode(String.self, forKey: .deviceName)
         deviceAlias = try container.decodeIfPresent(String.self, forKey: .deviceAlias)
         deviceModel = try container.decodeIfPresent(String.self, forKey: .deviceModel) ?? "Unknown"
@@ -45,7 +48,7 @@ public struct DeviceInfoDTO: Content {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case deviceId, deviceName, deviceAlias, deviceModel, systemName, systemVersion
+        case deviceId, appSessionId, deviceName, deviceAlias, deviceModel, systemName, systemVersion
         case appName, appVersion, buildNumber, platform
         case isSimulator
         case appIcon
@@ -123,14 +126,14 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
     var database: Database?
 
     /// 新设备连接事件回调
-    var onDeviceConnected: ((String, String, String, [String: Bool])
-        -> Void)? // deviceId, deviceName, sessionId, pluginStates
+    var onDeviceConnected: ((String, String, String, String?, [String: Bool])
+        -> Void)? // deviceId, deviceName, sessionId, appSessionId, pluginStates
 
     /// 断开事件回调
     var onDeviceDisconnected: ((String) -> Void)?
 
     /// 重连事件回调
-    var onDeviceReconnected: ((String, String, String) -> Void)? // deviceId, deviceName, sessionId
+    var onDeviceReconnected: ((String, String, String, String?) -> Void)? // deviceId, deviceName, sessionId, appSessionId
 
     private init() {}
 
@@ -210,11 +213,11 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
         if isQuickReconnect {
             connectionType = .quickReconnect
             // 快速重连：广播重连事件
-            onDeviceReconnected?(deviceInfo.deviceId, deviceInfo.deviceName, sessionId)
+            onDeviceReconnected?(deviceInfo.deviceId, deviceInfo.deviceName, sessionId, deviceInfo.appSessionId)
         } else if isNewConnection {
             connectionType = .newConnection
             // 新设备连接：广播连接事件
-            onDeviceConnected?(deviceInfo.deviceId, deviceInfo.deviceName, sessionId, pluginStates)
+            onDeviceConnected?(deviceInfo.deviceId, deviceInfo.deviceName, sessionId, deviceInfo.appSessionId, pluginStates)
             // 记录到数据库
             Task {
                 await self.recordSessionStart(deviceInfo: deviceInfo, sessionId: sessionId)
@@ -222,7 +225,7 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
         } else {
             // 替换了已存在的连接（上面的 existingSession != nil 分支）
             connectionType = .quickReconnect
-            onDeviceReconnected?(deviceInfo.deviceId, deviceInfo.deviceName, sessionId)
+            onDeviceReconnected?(deviceInfo.deviceId, deviceInfo.deviceName, sessionId, deviceInfo.appSessionId)
         }
 
         return DeviceRegistrationResult(session: session, connectionType: connectionType)
@@ -461,6 +464,7 @@ enum BridgeMessageDTO: Codable {
     case dbResponse(DBResponseDTO)
     // 插件命令
     case pluginCommand(PluginCommandDTO)
+    case pluginCommandResponse(PluginCommandResponseDTO)
     case pluginEvent(PluginEventDTO)
     // 插件状态变化
     case pluginStateChange(pluginId: String, isEnabled: Bool)
@@ -488,6 +492,7 @@ enum BridgeMessageDTO: Codable {
         case dbCommand
         case dbResponse
         case pluginCommand
+        case pluginCommandResponse
         case pluginEvent
         case pluginStateChange
         case updateDeviceInfo
@@ -540,6 +545,9 @@ enum BridgeMessageDTO: Codable {
         case .pluginCommand:
             let command = try container.decode(PluginCommandDTO.self, forKey: .payload)
             self = .pluginCommand(command)
+        case .pluginCommandResponse:
+            let response = try container.decode(PluginCommandResponseDTO.self, forKey: .payload)
+            self = .pluginCommandResponse(response)
         case .pluginEvent:
             let event = try container.decode(PluginEventDTO.self, forKey: .payload)
             self = .pluginEvent(event)
@@ -603,6 +611,9 @@ enum BridgeMessageDTO: Codable {
         case let .pluginCommand(command):
             try container.encode(MessageType.pluginCommand, forKey: .type)
             try container.encode(command, forKey: .payload)
+        case let .pluginCommandResponse(response):
+            try container.encode(MessageType.pluginCommandResponse, forKey: .type)
+            try container.encode(response, forKey: .payload)
         case let .pluginEvent(event):
             try container.encode(MessageType.pluginEvent, forKey: .type)
             try container.encode(event, forKey: .payload)

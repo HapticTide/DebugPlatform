@@ -34,6 +34,7 @@ import {
     SearchIcon,
 } from '@/components/icons'
 import { realtimeService, parseHTTPEvent, parseLogEvent } from '@/services/realtime'
+import { getDeviceSessions } from '@/services/api'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import type { BreakpointHit, PerformanceEventData } from '@/types'
 import clsx from 'clsx'
@@ -228,13 +229,47 @@ export function DevicePluginView() {
         // 标记进入设备详情页
         setInDeviceDetail(true)
 
-        // 设置会话开始时间（进入设备页面的时间）
-        const sessionStartTime = new Date().toISOString()
-        httpStore.setSessionStartTimestamp(sessionStartTime)
-        logStore.setSessionStartTimestamp(sessionStartTime)
+        // 获取设备最新会话的连接时间作为 sessionStartTimestamp
+        // 这样可以显示 "设备启动以来" 的数据，而非 "进入页面以来"
+        const initSessionTimestamp = async () => {
+            try {
+                const sessions = await getDeviceSessions(deviceId, 1)
+                const latestSession = sessions[0]
+                // 使用最新会话的连接时间，如果没有会话则使用当前时间
+                const sessionStartTime = latestSession?.connectedAt ?? new Date().toISOString()
+
+                // 初始化 HTTP/Log Store
+                httpStore.setSessionStartTimestamp(sessionStartTime)
+                logStore.setSessionStartTimestamp(sessionStartTime)
+            } catch {
+                // 获取会话失败时，fallback 到当前时间
+                const sessionStartTime = new Date().toISOString()
+                httpStore.setSessionStartTimestamp(sessionStartTime)
+                logStore.setSessionStartTimestamp(sessionStartTime)
+            }
+        }
+        initSessionTimestamp()
 
         selectDevice(deviceId)
         loadDeviceActivities(deviceId)
+
+        const handleAppSessionUpdate = (appSessionId: string, connectedTimestamp: string) => {
+            const httpState = useHTTPStore.getState()
+            if (httpState.currentAppSessionId !== appSessionId) {
+                httpStore.setCurrentAppSessionId(appSessionId)
+                if (httpState.showCurrentSessionOnly) {
+                    httpStore.setSessionStartTimestamp(connectedTimestamp)
+                }
+            }
+
+            const logState = useLogStore.getState()
+            if (logState.currentAppSessionId !== appSessionId) {
+                logStore.setCurrentAppSessionId(appSessionId)
+                if (logState.showCurrentSessionOnly) {
+                    logStore.setSessionStartTimestamp(connectedTimestamp)
+                }
+            }
+        }
 
         // 连接实时流
         realtimeService.connect(deviceId)
@@ -257,18 +292,39 @@ export function DevicePluginView() {
                 }
                 case 'deviceConnected': {
                     const data = JSON.parse(message.payload)
+                    const connectedTimestamp = new Date().toISOString()
                     addActivity({
                         id: `${data.sessionId}-connected`,
                         deviceId: deviceId,
                         sessionId: data.sessionId,
-                        timestamp: new Date().toISOString(),
+                        timestamp: connectedTimestamp,
                         type: 'connected',
                         deviceName: data.deviceName,
                     })
+
+                    const newAppSessionId = data.appSessionId ?? data.sessionId
+                    handleAppSessionUpdate(newAppSessionId, connectedTimestamp)
+
                     // 更新插件状态
                     if (data.pluginStates) {
                         updatePluginStates(data.pluginStates)
                     }
+                    break
+                }
+                case 'deviceReconnected': {
+                    const data = JSON.parse(message.payload)
+                    const connectedTimestamp = new Date().toISOString()
+                    addActivity({
+                        id: `${data.sessionId}-reconnected`,
+                        deviceId: deviceId,
+                        sessionId: data.sessionId,
+                        timestamp: connectedTimestamp,
+                        type: 'connected',
+                        deviceName: data.deviceName,
+                    })
+
+                    const newAppSessionId = data.appSessionId ?? data.sessionId
+                    handleAppSessionUpdate(newAppSessionId, connectedTimestamp)
                     break
                 }
                 case 'deviceDisconnected': {
@@ -317,6 +373,18 @@ export function DevicePluginView() {
             setInDeviceDetail(false)
         }
     }, [deviceId])
+
+    // 同步 App 会话 ID（重连不变，重启变化）
+    useEffect(() => {
+        if (!deviceId || !currentDevice?.deviceInfo?.appSessionId) return
+        const appSessionId = currentDevice.deviceInfo.appSessionId
+        if (httpStore.currentAppSessionId !== appSessionId) {
+            httpStore.setCurrentAppSessionId(appSessionId)
+        }
+        if (logStore.currentAppSessionId !== appSessionId) {
+            logStore.setCurrentAppSessionId(appSessionId)
+        }
+    }, [deviceId, currentDevice?.deviceInfo?.appSessionId])
 
     // 设备不存在时自动退回设备列表，避免继续请求 404
     useEffect(() => {

@@ -129,6 +129,7 @@ enum DBCommandKindDTO: String, Content {
     case describeTable
     case fetchTablePage
     case executeQuery
+    case searchDatabase
 }
 
 /// 数据库命令
@@ -142,6 +143,9 @@ struct DBCommandDTO: Content {
     let orderBy: String?
     let ascending: Bool?
     let query: String? // SQL 查询语句
+    let keyword: String? // 搜索关键词
+    let maxResultsPerTable: Int? // 每表最大结果数
+    let targetRowId: String? // 目标行 ID（用于跳转定位）
 
     init(
         requestId: String,
@@ -152,7 +156,10 @@ struct DBCommandDTO: Content {
         pageSize: Int? = nil,
         orderBy: String? = nil,
         ascending: Bool? = nil,
-        query: String? = nil
+        query: String? = nil,
+        keyword: String? = nil,
+        maxResultsPerTable: Int? = nil,
+        targetRowId: String? = nil
     ) {
         self.requestId = requestId
         self.kind = kind
@@ -163,6 +170,9 @@ struct DBCommandDTO: Content {
         self.orderBy = orderBy
         self.ascending = ascending
         self.query = query
+        self.keyword = keyword
+        self.maxResultsPerTable = maxResultsPerTable
+        self.targetRowId = targetRowId
     }
 }
 
@@ -231,4 +241,34 @@ struct DBQueryResponseDTO: Content {
     let rows: [DBRowDTO]
     let rowCount: Int
     let executionTimeMs: Double
+}
+
+// MARK: - 跨表搜索响应 DTO
+
+/// 单表搜索结果
+struct DBTableSearchResultDTO: Content {
+    /// 表名
+    let tableName: String
+    /// 匹配的总行数
+    let matchCount: Int
+    /// 匹配的列名列表
+    let matchedColumns: [String]
+    /// 预览行数据
+    let previewRows: [DBRowDTO]
+    /// 表的列信息
+    let columns: [DBColumnInfoDTO]
+}
+
+/// 数据库搜索响应
+struct DBSearchResponseDTO: Content {
+    /// 数据库 ID
+    let dbId: String
+    /// 搜索关键词
+    let keyword: String
+    /// 各表的搜索结果
+    let tableResults: [DBTableSearchResultDTO]
+    /// 匹配的总行数
+    let totalMatches: Int
+    /// 搜索耗时（毫秒）
+    let searchDurationMs: Double
 }

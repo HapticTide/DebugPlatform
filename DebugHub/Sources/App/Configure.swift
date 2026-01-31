@@ -63,11 +63,12 @@ func configure(_ app: Application) throws {
     app.lifecycle.use(DeviceRegistry.shared)
 
     // 设置新设备连接回调
-    DeviceRegistry.shared.onDeviceConnected = { deviceId, deviceName, sessionId, pluginStates in
+    DeviceRegistry.shared.onDeviceConnected = { deviceId, deviceName, sessionId, appSessionId, pluginStates in
         RealtimeStreamHandler.shared.broadcastDeviceConnected(
             deviceId: deviceId,
             deviceName: deviceName,
             sessionId: sessionId,
+            appSessionId: appSessionId,
             pluginStates: pluginStates
         )
     }
@@ -78,11 +79,12 @@ func configure(_ app: Application) throws {
     }
 
     // 设置设备重连回调（快速重连时触发）
-    DeviceRegistry.shared.onDeviceReconnected = { deviceId, deviceName, sessionId in
+    DeviceRegistry.shared.onDeviceReconnected = { deviceId, deviceName, sessionId, appSessionId in
         RealtimeStreamHandler.shared.broadcastDeviceReconnected(
             deviceId: deviceId,
             deviceName: deviceName,
-            sessionId: sessionId
+            sessionId: sessionId,
+            appSessionId: appSessionId
         )
     }
 
@@ -219,7 +221,8 @@ func routes(_ app: Application) throws {
     }
 
     // Debug Bridge WebSocket 端点
-    app.webSocket("debug-bridge", maxFrameSize: WebSocketMaxFrameSize(integerLiteral: 50 * 1024 * 1024)) { req, ws in
+    // 设置最大帧大小为 200MB，以支持大日志文件传输
+    app.webSocket("debug-bridge", maxFrameSize: WebSocketMaxFrameSize(integerLiteral: 200 * 1024 * 1024)) { req, ws in
         // 设置 ping 间隔保持连接活跃（每 10 秒发送 ping）
         ws.pingInterval = .seconds(10)
         print("[DebugBridge] WebSocket configured with ping interval")

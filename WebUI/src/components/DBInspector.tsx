@@ -14,11 +14,45 @@ import { BlobCell, isBase64Blob } from './BlobCell'
 import { SQLEditor } from './SQLEditor'
 import { ListLoadingOverlay } from './ListLoadingOverlay'
 import { TextPopover } from './TextPopover'
-import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, UnlockIcon, ArrowUpIcon, ArrowDownIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon, FolderIcon, CheckIcon, SQLIcon, ChevronDownIcon, ChevronRightIcon } from './icons'
+import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, UnlockIcon, ArrowUpIcon, ArrowDownIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon, FolderIcon, CheckIcon, SQLIcon, ChevronDownIcon, ChevronRightIcon, ClockIcon, TrashIcon } from './icons'
 import { useToastStore } from '@/stores/toastStore'
 import type { DatabaseLocation, DBInfo, DBQueryError } from '@/types'
 interface DBInspectorProps {
     deviceId: string
+}
+
+// 高亮文本中的关键词
+function highlightKeyword(text: string, keyword: string): React.ReactNode {
+    if (!keyword || !text) return text
+    const trimmedKeyword = keyword.trim().toLowerCase()
+    if (!trimmedKeyword) return text
+
+    const parts: React.ReactNode[] = []
+    const lowerText = text.toLowerCase()
+    let lastIndex = 0
+    let index = lowerText.indexOf(trimmedKeyword)
+
+    while (index !== -1) {
+        // 添加未匹配部分
+        if (index > lastIndex) {
+            parts.push(text.substring(lastIndex, index))
+        }
+        // 添加高亮部分
+        parts.push(
+            <mark key={index} className="bg-yellow-400/40 text-inherit px-0.5 rounded">
+                {text.substring(index, index + trimmedKeyword.length)}
+            </mark>
+        )
+        lastIndex = index + trimmedKeyword.length
+        index = lowerText.indexOf(trimmedKeyword, lastIndex)
+    }
+
+    // 添加剩余部分
+    if (lastIndex < text.length) {
+        parts.push(text.substring(lastIndex))
+    }
+
+    return parts.length > 0 ? parts : text
 }
 
 // 格式化文件大小
@@ -176,6 +210,14 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         // 数据库排序状态
         dbSortOrder,
         dbSortAscending,
+        // 跨表搜索状态
+        globalSearchKeyword,
+        globalSearchResult,
+        globalSearchLoading,
+        globalSearchError,
+        searchHistory,
+        highlightRowId,
+        pendingTargetRowId,
         // Actions
         loadDatabases,
         loadTables,
@@ -194,9 +236,21 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         setDbSortOrder,
         toggleDbSortDirection,
         getSortedDatabases,
+        // 跨表搜索 Actions
+        setGlobalSearchKeyword,
+        executeGlobalSearch,
+        clearGlobalSearch,
+        navigateToSearchResult,
+        jumpToSearchResultRow,
+        clearHighlightRow,
+        removeFromSearchHistory,
+        clearSearchHistory,
         // 重置 Action
         reset,
     } = useDBStore()
+
+    // 搜索历史下拉菜单状态
+    const [showSearchHistory, setShowSearchHistory] = useState(false)
 
     // Protobuf 配置
     const { descriptorMeta, getColumnConfig } = useProtobufStore()
@@ -226,6 +280,32 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         setExpandedFilterColumn(null)
         setExpandedBlobCell(null)
     }, [selectedTable])
+
+    // 自动滚动到高亮行并在一段时间后清除高亮
+    useEffect(() => {
+        if (!highlightRowId || !tableData?.rows) return
+
+        let clearTimer: ReturnType<typeof setTimeout> | null = null
+
+        // 等待 DOM 更新后滚动
+        const timer = setTimeout(() => {
+            const highlightedRow = document.querySelector(`tr[data-rowid="${highlightRowId}"]`)
+            if (highlightedRow) {
+                highlightedRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                // 仅当定位成功时才清除高亮
+                clearTimer = setTimeout(() => {
+                    clearHighlightRow()
+                }, 3000)
+            }
+        }, 100)
+
+        return () => {
+            clearTimeout(timer)
+            if (clearTimer) {
+                clearTimeout(clearTimer)
+            }
+        }
+    }, [highlightRowId, tableData?.rows, clearHighlightRow])
 
     // 面板区域高度调整状态
     const [panelHeight, setPanelHeight] = useState(300) // 默认 300px
@@ -374,11 +454,11 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
 
     // 选中表后加载数据和结构
     useEffect(() => {
-        if (selectedDb && selectedTable && !tableData) {
+        if (selectedDb && selectedTable && (!tableData && !pendingTargetRowId)) {
             loadSchema(deviceId, selectedDb, selectedTable)
             loadTableData(deviceId, selectedDb, selectedTable)
         }
-    }, [deviceId, selectedDb, selectedTable, tableData, loadSchema, loadTableData])
+    }, [deviceId, selectedDb, selectedTable, tableData, pendingTargetRowId, loadSchema, loadTableData])
 
     // 处理选择数据库
     const handleSelectDb = useCallback((dbId: string) => {
@@ -772,6 +852,216 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                             )}
                         </div>
                     </div>
+
+                    {/* 全局搜索框 */}
+                    {selectedDb && (
+                        <div className="mb-3">
+                            <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={globalSearchKeyword}
+                                        onChange={(e) => setGlobalSearchKeyword(e.target.value)}
+                                        onFocus={() => setShowSearchHistory(true)}
+                                        onBlur={() => {
+                                            // 延迟隐藏，以便点击历史项
+                                            setTimeout(() => setShowSearchHistory(false), 200)
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && globalSearchKeyword.trim()) {
+                                                executeGlobalSearch(deviceId)
+                                                setShowSearchHistory(false)
+                                            }
+                                        }}
+                                        placeholder="搜索所有表..."
+                                        className="w-full px-3 py-1.5 pl-8 text-xs bg-bg-light border border-border rounded focus:outline-none focus:border-primary transition-colors"
+                                    />
+                                    <SearchIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                                {globalSearchKeyword && (
+                                    <button
+                                        onClick={clearGlobalSearch}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary"
+                                        title="清除搜索"
+                                    >
+                                        <XIcon size={12} />
+                                    </button>
+                                )}
+
+                                {/* 搜索历史下拉菜单 */}
+                                {showSearchHistory && searchHistory.length > 0 && !globalSearchKeyword && (
+                                    <div className="absolute z-50 w-full mt-1 bg-bg-dark border border-border rounded-lg shadow-xl overflow-hidden">
+                                        <div className="flex items-center justify-between px-2 py-1.5 bg-bg-tertiary border-b border-border">
+                                            <span className="text-2xs text-text-muted flex items-center gap-1">
+                                                <ClockIcon size={10} />
+                                                搜索历史
+                                            </span>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.preventDefault()
+                                                    e.stopPropagation()
+                                                    clearSearchHistory()
+                                                }}
+                                                className="text-2xs text-text-muted hover:text-red-400 flex items-center gap-0.5"
+                                                title="清除所有历史"
+                                            >
+                                                <TrashIcon size={10} />
+                                                清除
+                                            </button>
+                                        </div>
+                                        <div className="max-h-40 overflow-y-auto bg-bg-dark">
+                                            {searchHistory.map((keyword, index) => (
+                                                <div
+                                                    key={index}
+                                                    className="flex items-center justify-between px-2 py-1.5 hover:bg-bg-lighter cursor-pointer group"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault()
+                                                        setGlobalSearchKeyword(keyword)
+                                                        setShowSearchHistory(false)
+                                                        // 自动执行搜索
+                                                        setTimeout(() => executeGlobalSearch(deviceId), 0)
+                                                    }}
+                                                >
+                                                    <span className="text-xs text-text-secondary truncate flex-1">
+                                                        {keyword}
+                                                    </span>
+                                                    <button
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault()
+                                                            e.stopPropagation()
+                                                            removeFromSearchHistory(keyword)
+                                                        }}
+                                                        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 ml-2"
+                                                        title="删除此记录"
+                                                    >
+                                                        <XIcon size={10} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            {globalSearchKeyword.trim() && (
+                                <button
+                                    onClick={() => executeGlobalSearch(deviceId)}
+                                    disabled={globalSearchLoading}
+                                    className="w-full mt-1.5 px-3 py-1.5 bg-primary text-bg-darkest rounded text-xs hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                                >
+                                    {globalSearchLoading ? (
+                                        <>
+                                            <div className="animate-spin w-3 h-3 border-2 border-bg-darkest border-t-transparent rounded-full" />
+                                            搜索中...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <SearchIcon size={12} />
+                                            搜索全部表
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 搜索结果展示 */}
+                    {globalSearchResult && (
+                        <div className="mb-3 p-2 bg-bg-light rounded-lg border border-border">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-medium text-primary">
+                                    找到 {globalSearchResult.totalMatches} 条匹配
+                                </span>
+                                <span className="text-2xs text-text-muted">
+                                    {globalSearchResult.searchDurationMs.toFixed(0)}ms
+                                </span>
+                            </div>
+                            {globalSearchResult.tableResults.length === 0 ? (
+                                <p className="text-xs text-text-muted text-center py-2">
+                                    未找到匹配结果
+                                </p>
+                            ) : (
+                                <div className="space-y-2 max-h-64 overflow-auto">
+                                    {globalSearchResult.tableResults.map((result) => (
+                                        <div key={result.tableName} className="border border-border rounded overflow-hidden">
+                                            <button
+                                                onClick={() => {
+                                                    // 导航到表并加载数据
+                                                    navigateToSearchResult(result.tableName)
+                                                }}
+                                                className={clsx(
+                                                    'w-full px-2 py-1.5 text-left text-xs transition-colors',
+                                                    selectedTable === result.tableName
+                                                        ? 'bg-accent-blue/20 text-accent-blue'
+                                                        : 'text-text-secondary hover:bg-bg-lighter bg-bg-tertiary'
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-mono truncate">{result.tableName}</span>
+                                                    <span className="text-2xs text-accent-blue bg-accent-blue/10 px-1.5 py-0.5 rounded">
+                                                        {result.matchCount}
+                                                    </span>
+                                                </div>
+                                                <div className="text-2xs text-text-muted mt-0.5 truncate">
+                                                    匹配列: {result.matchedColumns.join(', ')}
+                                                </div>
+                                            </button>
+                                            {/* 预览行展示 */}
+                                            {result.previewRows && result.previewRows.length > 0 && (
+                                                <div className="bg-bg-secondary/50 border-t border-border max-h-24 overflow-auto">
+                                                    {result.previewRows.slice(0, 3).map((row, rowIdx) => {
+                                                        const rowId = row.values['_rowid'] ?? null
+                                                        return (
+                                                            <div
+                                                                key={rowIdx}
+                                                                onClick={() => {
+                                                                    // 点击预览行跳转到该表并高亮该行
+                                                                    if (selectedDb && rowId) {
+                                                                        jumpToSearchResultRow(deviceId, selectedDb, result.tableName, rowId)
+                                                                    } else {
+                                                                        navigateToSearchResult(result.tableName)
+                                                                    }
+                                                                }}
+                                                                className="px-2 py-1 text-2xs text-text-muted border-b border-border last:border-b-0 truncate font-mono hover:bg-bg-lighter cursor-pointer flex items-center gap-2"
+                                                            >
+                                                                {/* 显示行号 */}
+                                                                {rowId && (
+                                                                    <span className="text-accent-blue/70 min-w-[2.5rem] text-right" title="Row ID">
+                                                                        #{rowId}
+                                                                    </span>
+                                                                )}
+                                                                <span className="flex-1 truncate">
+                                                                    {result.matchedColumns.slice(0, 2).map((colName) => (
+                                                                        <span key={colName} className="mr-3">
+                                                                            <span className="text-text-secondary">{colName}:</span>{' '}
+                                                                            <span className="text-text-primary">
+                                                                                {highlightKeyword(String(row.values[colName] ?? 'NULL'), globalSearchKeyword)}
+                                                                            </span>
+                                                                        </span>
+                                                                    ))}
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <button
+                                onClick={clearGlobalSearch}
+                                className="w-full mt-2 px-2 py-1 text-2xs text-text-muted hover:text-text-secondary hover:bg-bg-lighter rounded transition-colors"
+                            >
+                                关闭搜索结果
+                            </button>
+                        </div>
+                    )}
+
+                    {/* 搜索错误 */}
+                    {globalSearchError && (
+                        <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400">
+                            {globalSearchError}
+                        </div>
+                    )}
+
                     {tablesLoading ? (
                         <div className="flex items-center justify-center py-8">
                             <div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full" />
@@ -1238,14 +1528,19 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                     <tbody className="font-mono">
                                         {filteredRows.map((row, idx) => {
                                             const isExpandedRow = expandedBlobCell?.rowIndex === idx
+                                            const rowId = row.values['_rowid']
+                                            const isHighlightedRow = highlightRowId !== null && rowId === highlightRowId
                                             return (
                                                 <tr
                                                     key={idx}
+                                                    data-rowid={rowId}
                                                     className={clsx(
                                                         "border-b border-border transition-colors",
-                                                        isExpandedRow
-                                                            ? "bg-purple-500/10"
-                                                            : "hover:bg-bg-light/30"
+                                                        isHighlightedRow
+                                                            ? "bg-accent-blue/20 ring-1 ring-accent-blue/50 ring-inset"
+                                                            : isExpandedRow
+                                                                ? "bg-purple-500/10"
+                                                                : "hover:bg-bg-light/30"
                                                     )}
                                                 >
                                                     {tableData.columns.map((col, colIndex) => {
@@ -1287,7 +1582,9 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                                                         trigger="dblclick"
                                                                     >
                                                                         <span className="truncate block cursor-pointer" title="双击查看完整内容">
-                                                                            {cellValue}
+                                                                            {globalSearchKeyword
+                                                                                ? highlightKeyword(String(cellValue), globalSearchKeyword)
+                                                                                : cellValue}
                                                                         </span>
                                                                     </TextPopover>
                                                                 )}
@@ -1388,19 +1685,21 @@ function DatabaseItem({
                 className={clsx(
                     'w-full px-3 py-2 rounded-lg text-left text-xs transition-all',
                     isSelected
-                        ? 'bg-primary text-white shadow-sm shadow-primary/30'
+                        ? 'bg-primary text-bg-darkest shadow-sm shadow-primary/30'
                         : 'text-text-secondary hover:bg-bg-light'
                 )}
             >
                 <div className="flex items-center gap-2">
-                    <span>{getDbKindIcon(db.descriptor.kind)}</span>
+                    <span className={clsx(isSelected ? 'text-bg-darkest' : 'text-text-secondary')}>
+                        {getDbKindIcon(db.descriptor.kind)}
+                    </span>
                     <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">
                             {db.descriptor.name}
                         </div>
                         <div className={clsx(
                             'text-2xs',
-                            isSelected ? 'text-white/70' : 'text-text-muted'
+                            isSelected ? 'text-bg-darkest/70' : 'text-text-muted'
                         )}>
                             {db.tableCount} 表 • {formatBytes(db.fileSizeBytes)}
                         </div>
@@ -1439,7 +1738,7 @@ function DatabaseItem({
                             className={clsx(
                                 'p-1 rounded transition-colors cursor-pointer',
                                 isSelected
-                                    ? 'hover:bg-white/20 text-white/70 hover:text-white'
+                                    ? 'hover:bg-white/20 text-bg-darkest/70 hover:text-bg-darkest'
                                     : 'hover:bg-bg-lighter text-text-muted hover:text-text-secondary'
                             )}
                             title="查看路径"
