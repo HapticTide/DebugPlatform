@@ -1,14 +1,32 @@
 // 前端插件注册表
 // 管理所有已注册的前端插件
 
-import { FrontendPlugin, PluginContext, PluginEvent, PluginRegistration, PluginTabConfig } from './types'
+import {
+    BuiltinPluginId,
+    FrontendPlugin,
+    PluginContext,
+    PluginEvent,
+    PluginRegistration,
+    PluginTabConfig,
+} from './types'
 
 // 插件启用状态持久化 Key
 const PLUGIN_ENABLED_STATE_KEY = 'debugplatform_plugin_enabled_state'
 
-// WebUI 上所有插件默认启用
-// 只有用户明确禁用某个插件，该状态才会被保存到 localStorage
-const DEFAULT_PLUGIN_ENABLED = true
+// 默认禁用的插件列表
+// 这些插件需要用户在插件管理器中手动启用
+const DEFAULT_DISABLED_PLUGINS: string[] = [
+    BuiltinPluginId.WEBSOCKET,
+    BuiltinPluginId.PERFORMANCE,
+    BuiltinPluginId.MOCK,
+    BuiltinPluginId.BREAKPOINT,
+    BuiltinPluginId.CHAOS,
+]
+
+// 获取插件的默认启用状态
+function getDefaultPluginEnabled(pluginId: string): boolean {
+    return !DEFAULT_DISABLED_PLUGINS.includes(pluginId)
+}
 
 class PluginRegistryImpl {
     private plugins: Map<string, PluginRegistration> = new Map()
@@ -206,8 +224,8 @@ class PluginRegistryImpl {
         if (this.enabledState.has(pluginId)) {
             return this.enabledState.get(pluginId)!
         }
-        // 否则默认启用所有插件
-        return DEFAULT_PLUGIN_ENABLED
+        // 否则使用插件特定的默认状态
+        return getDefaultPluginEnabled(pluginId)
     }
 
     // 注册插件
@@ -220,12 +238,12 @@ class PluginRegistryImpl {
             return
         }
 
-        // 应用持久化的启用状态，或使用默认启用
+        // 应用持久化的启用状态，或使用插件特定的默认状态
         if (this.enabledState.has(plugin.metadata.pluginId)) {
             plugin.isEnabled = this.enabledState.get(plugin.metadata.pluginId)!
         } else {
-            // 没有持久化状态时，默认启用所有插件
-            plugin.isEnabled = DEFAULT_PLUGIN_ENABLED
+            // 没有持久化状态时，使用插件特定的默认启用状态
+            plugin.isEnabled = getDefaultPluginEnabled(plugin.metadata.pluginId)
         }
 
         const registration: PluginRegistration = {

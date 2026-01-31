@@ -6,7 +6,7 @@ import { useHTTPStore } from '@/stores/httpStore'
 import { useWSStore } from '@/stores/wsStore'
 import { useRuleStore } from '@/stores/ruleStore'
 import { getPlatformIcon } from '@/utils/deviceIcons'
-import { HttpIcon, WebSocketIcon, LogIcon, SearchIcon, IPhoneIcon, ClearIcon, DebugHubLogo, BookIcon, CheckIcon, PackageIcon, ColorfulTrafficLightIcon, HighlightIcon, TagIcon, ChevronRightIcon } from '@/components/icons'
+import { HttpIcon, WebSocketIcon, LogIcon, SearchIcon, IPhoneIcon, ClearIcon, DebugHubLogo, BookIcon, CheckIcon, PackageIcon, ColorfulTrafficLightIcon, HighlightIcon, TagIcon, ChevronRightIcon, ChevronLeftIcon } from '@/components/icons'
 import { ServerStatsPanel } from './ServerStatsPanel'
 import { ThemeToggle } from './ThemeToggle'
 import clsx from 'clsx'
@@ -15,6 +15,12 @@ export function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
   const { isServerOnline } = useConnectionStore()
+
+  // 侧边栏收起状态
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebar-collapsed')
+    return saved === 'true'
+  })
 
   // 侧边栏宽度（可调整）
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -25,15 +31,27 @@ export function Sidebar() {
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLElement>(null)
 
+  // 收起时的宽度
+  const COLLAPSED_WIDTH = 48
   // 最小和最大宽度
   const MIN_WIDTH = 240
   const MAX_WIDTH = 480
 
+  // 切换收起状态
+  const toggleCollapse = useCallback(() => {
+    setIsCollapsed(prev => {
+      const newValue = !prev
+      localStorage.setItem('sidebar-collapsed', String(newValue))
+      return newValue
+    })
+  }, [])
+
   // 处理拖拽调整宽度
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (isCollapsed) return // 收起时不允许调整宽度
     e.preventDefault()
     setIsResizing(true)
-  }, [])
+  }, [isCollapsed])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -459,423 +477,490 @@ export function Sidebar() {
   return (
     <aside
       ref={sidebarRef}
-      className="bg-bg-dark border-r border-border flex flex-col h-full relative flex-shrink-0"
-      style={{ width: sidebarWidth }}
+      className={clsx(
+        "bg-bg-dark border-r border-border flex flex-col h-full relative flex-shrink-0 transition-all duration-300",
+        isCollapsed && "overflow-hidden"
+      )}
+      style={{ width: isCollapsed ? COLLAPSED_WIDTH : sidebarWidth }}
     >
-      {/* 拖拽调整宽度的手柄 */}
-      <div
+      {/* 收起/展开按钮 */}
+      <button
+        onClick={toggleCollapse}
         className={clsx(
-          "absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-10 transition-colors group/handle",
-          "hover:bg-primary/50",
-          isResizing && "bg-primary"
+          "absolute top-1/2 -translate-y-1/2 z-20 w-5 h-10 rounded-r-md",
+          "bg-bg-medium border border-l-0 border-border",
+          "flex items-center justify-center",
+          "text-text-muted hover:text-primary hover:bg-bg-light transition-colors",
+          isCollapsed ? "right-0" : "-right-5"
         )}
-        onMouseDown={handleMouseDown}
-        title="拖拽调整侧边栏宽度"
+        title={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
       >
-        {/* 拖拽指示器 - 居中显示的竖线图标 */}
-        <div className={clsx(
-          "absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2",
-          "flex flex-col gap-0.5 opacity-0 group-hover/handle:opacity-100 transition-opacity",
-          isResizing && "opacity-100"
-        )}>
-          <div className="w-0.5 h-3 bg-primary/80 rounded-full" />
-          <div className="w-0.5 h-3 bg-primary/80 rounded-full" />
-          <div className="w-0.5 h-3 bg-primary/80 rounded-full" />
+        {isCollapsed ? <ChevronRightIcon size={14} /> : <ChevronLeftIcon size={14} />}
+      </button>
+
+      {/* 拖拽调整宽度的手柄 - 收起时隐藏 */}
+      {!isCollapsed && (
+        <div
+          className={clsx(
+            "absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-10 transition-colors group/handle",
+            "hover:bg-primary/50",
+            isResizing && "bg-primary"
+          )}
+          onMouseDown={handleMouseDown}
+          title="拖拽调整侧边栏宽度"
+        >
+          {/* 拖拽指示器 - 居中显示的竖线图标 */}
+          <div className={clsx(
+            "absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2",
+            "flex flex-col gap-0.5 opacity-0 group-hover/handle:opacity-100 transition-opacity",
+            isResizing && "opacity-100"
+          )}>
+            <div className="w-0.5 h-3 bg-primary/80 rounded-full" />
+            <div className="w-0.5 h-3 bg-primary/80 rounded-full" />
+            <div className="w-0.5 h-3 bg-primary/80 rounded-full" />
+          </div>
         </div>
-      </div>
+      )}
+
       {/* Header - 可点击跳转首页 */}
-      <Link to="/" className="p-5 border-b border-border flex items-center gap-3 hover:bg-bg-light/50 transition-colors">
-        <DebugHubLogo size={40} />
-        <div>
-          <h1 className="font-semibold text-text-primary text-lg">Debug Platform</h1>
-          <p className="text-2xs text-text-muted">调试平台</p>
-        </div>
+      <Link
+        to="/"
+        className={clsx(
+          "border-b border-border flex items-center gap-3 hover:bg-bg-light/50 transition-colors",
+          isCollapsed ? "p-2 justify-center" : "p-5"
+        )}
+      >
+        <DebugHubLogo size={isCollapsed ? 32 : 40} />
+        {!isCollapsed && (
+          <div>
+            <h1 className="font-semibold text-text-primary text-lg">Debug Platform</h1>
+            <p className="text-2xs text-text-muted">调试平台</p>
+          </div>
+        )}
       </Link>
 
-      <div className="flex-1 overflow-y-auto">
-        {/* Quick Links - API、健康、流量规则 */}
-        <div className="px-4 py-2 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Link
-              to="/api-docs"
-              className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-primary hover:bg-bg-light rounded transition-colors"
-              title="API 文档"
-            >
-              <BookIcon size={12} />
-              <span>API</span>
-            </Link>
-            <Link
-              to="/health"
-              className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-green-400 hover:bg-bg-light rounded transition-colors"
-              title="健康检查"
-            >
-              <CheckIcon size={12} />
-              <span>健康</span>
-            </Link>
-          </div>
+      {/* 收起状态下显示简化的图标导航 */}
+      {isCollapsed ? (
+        <div className="flex-1 flex flex-col items-center py-4 gap-2 overflow-hidden">
+          <Link
+            to="/api-docs"
+            className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-primary hover:bg-bg-light rounded transition-colors"
+            title="API 文档"
+          >
+            <BookIcon size={16} />
+          </Link>
+          <Link
+            to="/health"
+            className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-green-400 hover:bg-bg-light rounded transition-colors"
+            title="健康检查"
+          >
+            <CheckIcon size={16} />
+          </Link>
           <Link
             to="/rules"
             className={clsx(
-              "flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors",
+              "w-8 h-8 flex items-center justify-center rounded transition-colors",
               location.pathname === '/rules'
                 ? "text-primary bg-primary/10"
-                : "text-text-muted hover:text-amber-400 hover:bg-bg-light"
+                : "text-text-muted hover:text-primary hover:bg-bg-light"
             )}
-            title="全局流量规则"
+            title="流量规则"
           >
-            <ColorfulTrafficLightIcon size={12} />
-            <span>流量规则</span>
-            {rules.length > 0 && (
-              <span className="ml-1 text-2xs px-1 py-0.5 rounded bg-bg-medium text-text-muted">
-                {rules.length}
-              </span>
-            )}
+            <ColorfulTrafficLightIcon size={16} />
           </Link>
         </div>
-
-        {/* Device List Section - 仅显示当前选中设备 */}
-        {currentDeviceId && (
-          <div className="px-3 pt-4 pb-3">
-            <div className="px-2 mb-3 text-xs font-semibold text-text-secondary uppercase tracking-wider flex justify-between items-center">
-              <button
-                onClick={() => navigate('/')}
-                className="flex items-center gap-2 hover:text-primary transition-colors"
-                title="查看设备列表"
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          {/* Quick Links - API、健康、流量规则 */}
+          <div className="px-4 py-2 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Link
+                to="/api-docs"
+                className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-primary hover:bg-bg-light rounded transition-colors"
+                title="API 文档"
               >
-                <IPhoneIcon size={14} />
-                当前设备
-              </button>
-              <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-2xs font-bold">{devices.length}</span>
-            </div>
-
-            <div className="space-y-1">
-              {displayedDevices.map(device => {
-                const isSelected = currentDeviceId === device.deviceId
-                const isOffline = !device.isOnline
-                // 侧边栏展示名称：有别名则展示别名，否则展示原始设备名
-                const displayName = device.deviceAlias || device.deviceName
-                return (
-                  <div
-                    key={device.deviceId}
-                    onClick={() => handleDeviceClick(device.deviceId)}
-                    className={clsx(
-                      "group relative flex items-start gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors",
-                      isSelected
-                        ? "bg-primary/15"
-                        : isOffline
-                          ? "text-text-muted hover:bg-bg-light/50"
-                          : "text-text-secondary hover:bg-bg-light hover:text-text-primary"
-                    )}
-                  >
-                    {/* 选中指示条 - 无圆角，宽度 3px */}
-                    {isSelected && (
-                      <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary" />
-                    )}
-                    {/* 设备图标和模拟器标记 */}
-                    <div className="flex flex-col items-center flex-shrink-0 gap-0.5">
-                      <div className="relative">
-                        <div className={clsx(
-                          "w-8 h-8 rounded-lg flex items-center justify-center border",
-                          isOffline
-                            ? "bg-bg-medium/50 border-border"
-                            : "bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/10"
-                        )}>
-                          {getPlatformIcon(device.platform, 18, undefined, device.isSimulator)}
-                        </div>
-                        {device.isOnline ? (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 border border-green-400/50 rounded-full status-dot-online" />
-                        ) : (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-gray-500 border border-bg-dark rounded-full" />
-                        )}
-                      </div>
-                      {/* 模拟器标记 - 图标下方 */}
-                      {device.isSimulator && (
-                        <span className="text-2xs px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400 whitespace-nowrap">
-                          模拟器
-                        </span>
-                      )}
-                    </div>
-                    <div className={clsx("min-w-0 flex-1", isOffline && "opacity-60")}>
-                      {/* 设备名：有别名展示别名，否则展示设备名 */}
-                      <div className={clsx(
-                        "font-medium truncate text-xs",
-                        isSelected ? "text-primary" : "text-text-primary"
-                      )}>
-                        {displayName}
-                      </div>
-                      <div className={clsx(
-                        "text-2xs truncate",
-                        isSelected ? "text-accent-blue/70" : "text-text-muted"
-                      )} title={device.deviceModel}>
-                        {device.deviceModel} · {device.platform} <span className="opacity-60">{device.systemVersion}</span>
-                      </div>
-                      {/* App 信息 - 与设备信息用分割线隔开 */}
-                      <div className={clsx(
-                        "text-2xs truncate mt-1 pt-1 border-t border-border flex items-center gap-1",
-                        isSelected ? "text-accent-blue/70" : "text-text-muted"
-                      )}>
-                        {/* App 图标 */}
-                        <div className="w-3.5 h-3.5 rounded overflow-hidden bg-bg-light flex items-center justify-center flex-shrink-0">
-                          {device.appIcon ? (
-                            <img
-                              src={`data:image/png;base64,${device.appIcon}`}
-                              alt={device.appName}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <PackageIcon size={8} className="text-text-muted" />
-                          )}
-                        </div>
-                        <span className="truncate">{device.appName}</span>
-                        <span className="opacity-60 flex-shrink-0">{device.appVersion}</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Separator - 与侧边栏同宽，紧贴设备列表 */}
-        {currentDeviceId && shouldShowDomains && (
-          <div className="h-px bg-border" />
-        )}
-
-        {/* Domain/Host List Section (Only for HTTP/WebSocket plugins) */}
-        {currentDeviceId && shouldShowDomains && (
-          <div className="px-3 py-3">
-            <div className="px-2 mb-3 text-xs font-semibold text-text-secondary uppercase tracking-wider flex justify-between items-center">
-              <span className="flex items-center gap-2">
-                {currentPlugin === 'websocket' ? <WebSocketIcon size={14} /> : <HttpIcon size={14} />}
-                {currentPlugin === 'websocket' ? 'WS Hosts' : 'Domains'}
-              </span>
-              <span className="bg-accent-blue/10 text-accent-blue px-2 py-0.5 rounded-full text-2xs font-bold">{domainStats.length}</span>
-            </div>
-
-            {/* Domain Search */}
-            <div className="px-1 mb-3">
-              <div className="relative">
-                <SearchIcon size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                <input
-                  type="text"
-                  value={domainSearch}
-                  onChange={(e) => setDomainSearch(e.target.value)}
-                  placeholder={currentPlugin === 'websocket' ? '搜索主机...' : '搜索域名...'}
-                  className="w-full pl-8 pr-3 py-2 text-xs bg-bg-medium border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-0.5 max-h-[400px] overflow-y-auto pr-1">
-              {/* "All Domains" Option */}
-              <div
-                onClick={handleAllDomainsClick}
-                className={clsx(
-                  "flex items-center justify-between px-3 py-2 rounded cursor-pointer text-xs transition-colors group",
-                  isAllDomainsSelected()
-                    ? "bg-accent-blue text-white font-medium"
-                    : "text-text-secondary hover:bg-bg-light"
-                )}
+                <BookIcon size={12} />
+                <span>API</span>
+              </Link>
+              <Link
+                to="/health"
+                className="flex items-center gap-1 px-2 py-1 text-xs text-text-muted hover:text-green-400 hover:bg-bg-light rounded transition-colors"
+                title="健康检查"
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <LogIcon size={14} />
-                  <span className="font-medium">
-                    {currentPlugin === 'websocket' ? '全部主机' : '全部域名'}
-                  </span>
-                </div>
-                <span className={clsx(
-                  "font-mono text-2xs px-1.5 py-0.5 rounded",
-                  isAllDomainsSelected()
-                    ? "text-white font-bold bg-white/20"
-                    : "opacity-60 bg-bg-medium"
-                )}>
-                  {domainStats.reduce((sum, { count }) => sum + count, 0)}
-                </span>
-              </div>
-
-              {/* Divider */}
-              {domainStats.length > 0 && (
-                <div className="border-t border-border-subtle my-1" />
+                <CheckIcon size={12} />
+                <span>健康</span>
+              </Link>
+            </div>
+            <Link
+              to="/rules"
+              className={clsx(
+                "flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors",
+                location.pathname === '/rules'
+                  ? "text-primary bg-primary/10"
+                  : "text-text-muted hover:text-amber-400 hover:bg-bg-light"
               )}
+              title="全局流量规则"
+            >
+              <ColorfulTrafficLightIcon size={12} />
+              <span>流量规则</span>
+              {rules.length > 0 && (
+                <span className="ml-1 text-2xs px-1 py-0.5 rounded bg-bg-medium text-text-muted">
+                  {rules.length}
+                </span>
+              )}
+            </Link>
+          </div>
 
-              {filteredDomainTree.map(({ domain, count, pathTree }) => {
-                const rule = getDomainRule(domain)
-                const isHighlightRule = rule?.action === 'highlight'
-                const isMarkRule = rule?.action === 'mark'
-                const isHideRule = rule?.action === 'hide'
-                const isSelected = isDomainSelected(domain)
-                const isHighlighted = highlightedDomains.has(domain)
-                const domainKey = domain
-                const isExpanded = isNodeExpanded(domainKey)
+          {/* Device List Section - 仅显示当前选中设备 */}
+          {currentDeviceId && (
+            <div className="px-3 pt-4 pb-3">
+              <div className="px-2 mb-3 text-xs font-semibold text-text-secondary uppercase tracking-wider flex justify-between items-center">
+                <button
+                  onClick={() => navigate('/')}
+                  className="flex items-center gap-2 hover:text-primary transition-colors"
+                  title="查看设备列表"
+                >
+                  <IPhoneIcon size={14} />
+                  当前设备
+                </button>
+                <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-2xs font-bold">{devices.length}</span>
+              </div>
 
-                // 递归渲染路径树
-                // 固定缩进值
-                const INDENT_SIZE = 16 // 每级固定缩进 16px
-
-                const renderPathTree = (nodes: PathNode[], depth: number = 0) => {
-                  return nodes.map(node => {
-                    const nodeKey = `${domain}:${node.fullPath}`
-                    const nodeExpanded = isNodeExpanded(nodeKey)
-                    const hasChildren = node.children.length > 0
-                    const isPathSel = isPathSelected(domain, node.fullPath)
-
-                    return (
-                      <div key={node.fullPath}>
-                        <div
-                          onClick={(e) => handlePathClick(domain, node.fullPath, e)}
-                          className={clsx(
-                            "flex items-center justify-between py-1.5 cursor-pointer text-xs transition-colors group",
-                            isPathSel
-                              ? "bg-accent-blue/20 text-accent-blue font-medium"
-                              : "text-text-muted hover:bg-bg-light hover:text-text-secondary"
-                          )}
-                          style={{ paddingLeft: `${INDENT_SIZE + 4}px`, paddingRight: '12px' }}
-                        >
-                          <div className="flex items-center gap-1 min-w-0">
-                            {/* 展开/收起按钮 */}
-                            {hasChildren ? (
-                              <button
-                                onClick={(e) => toggleNodeExpand(nodeKey, e)}
-                                className={clsx(
-                                  "w-4 h-4 flex items-center justify-center flex-shrink-0 transition-transform hover:bg-bg-medium rounded",
-                                  nodeExpanded && "rotate-90"
-                                )}
-                              >
-                                <ChevronRightIcon
-                                  size={12}
-                                  className={nodeExpanded ? "text-primary" : "text-text-muted"}
-                                />
-                              </button>
-                            ) : (
-                              <span className="w-4 h-4 flex-shrink-0" />
-                            )}
-                            <span className="truncate font-mono text-2xs">/{node.segment}</span>
-                          </div>
-                          <span className={clsx(
-                            "font-mono text-2xs px-1 py-0.5 rounded ml-2 flex-shrink-0",
-                            isPathSel
-                              ? "bg-accent-blue/30"
-                              : "opacity-60 bg-bg-medium"
-                          )}>{node.count}</span>
-                        </div>
-                        {/* 递归渲染子节点 - 固定缩进 */}
-                        {nodeExpanded && hasChildren && (
-                          <div className="border-l border-border-subtle" style={{ marginLeft: `${INDENT_SIZE}px` }}>
-                            {renderPathTree(node.children, depth + 1)}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
-                }
-
-                return (
-                  <div key={domain}>
-                    {/* 域名行 */}
+              <div className="space-y-1">
+                {displayedDevices.map(device => {
+                  const isSelected = currentDeviceId === device.deviceId
+                  const isOffline = !device.isOnline
+                  // 侧边栏展示名称：有别名则展示别名，否则展示原始设备名
+                  const displayName = device.deviceAlias || device.deviceName
+                  return (
                     <div
-                      onClick={() => handleDomainClick(domain)}
+                      key={device.deviceId}
+                      onClick={() => handleDeviceClick(device.deviceId)}
                       className={clsx(
-                        "flex items-center justify-between px-3 py-2 rounded cursor-pointer text-xs transition-colors group",
+                        "group relative flex items-start gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors",
                         isSelected
-                          ? "bg-accent-blue text-white font-medium"
-                          : "text-text-secondary hover:bg-bg-light",
-                        isHighlighted && "animate-domain-highlight"
+                          ? "bg-primary/15"
+                          : isOffline
+                            ? "text-text-muted hover:bg-bg-light/50"
+                            : "text-text-secondary hover:bg-bg-light hover:text-text-primary"
                       )}
                     >
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {/* 展开/收起按钮 - 始终显示 */}
-                        <button
-                          onClick={(e) => toggleNodeExpand(domainKey, e)}
-                          className={clsx(
-                            "w-5 h-5 flex items-center justify-center flex-shrink-0 transition-transform hover:bg-bg-medium rounded",
-                            isExpanded && "rotate-90"
+                      {/* 选中指示条 - 无圆角，宽度 3px */}
+                      {isSelected && (
+                        <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary" />
+                      )}
+                      {/* 设备图标和模拟器标记 */}
+                      <div className="flex flex-col items-center flex-shrink-0 gap-0.5">
+                        <div className="relative">
+                          <div className={clsx(
+                            "w-8 h-8 rounded-lg flex items-center justify-center border",
+                            isOffline
+                              ? "bg-bg-medium/50 border-border"
+                              : "bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/10"
+                          )}>
+                            {getPlatformIcon(device.platform, 18, undefined, device.isSimulator)}
+                          </div>
+                          {device.isOnline ? (
+                            <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 border border-green-400/50 rounded-full status-dot-online" />
+                          ) : (
+                            <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-gray-500 border border-bg-dark rounded-full" />
                           )}
-                          title={isExpanded ? "收起路径列表" : "展开路径列表"}
-                        >
-                          <ChevronRightIcon
-                            size={14}
-                            className={clsx(
-                              isSelected ? "text-white" : isExpanded ? "text-primary" : "text-text-primary"
-                            )}
-                          />
-                        </button>
-                        <span className={clsx(
-                          "truncate font-mono",
-                          isHideRule && "opacity-50 line-through"
-                        )}>
-                          {domain}
-                        </span>
-                        {/* 流量规则图标 - 域名后面 */}
-                        {(isHighlightRule || isMarkRule || isHideRule) && (
-                          <span className="flex-shrink-0">
-                            {isHighlightRule && <HighlightIcon size={12} filled className="text-yellow-500" />}
-                            {isMarkRule && <TagIcon size={12} className="text-blue-400" />}
-                            {isHideRule && <ClearIcon size={12} className="text-red-400" />}
+                        </div>
+                        {/* 模拟器标记 - 图标下方 */}
+                        {device.isSimulator && (
+                          <span className="text-2xs px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400 whitespace-nowrap">
+                            模拟器
                           </span>
                         )}
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className={clsx(
-                          "font-mono text-2xs px-1.5 py-0.5 rounded",
-                          isHighlighted
-                            ? "text-primary font-bold bg-primary/10"
-                            : isSelected
-                              ? "text-white bg-white/20"
-                              : "opacity-60 bg-bg-medium"
-                        )}>{count}</span>
-
-                        {/* Quick Action on Hover - 设置流量规则 */}
-                        <button
-                          onClick={(e) => cycleDomainRule(e, domain)}
-                          className={clsx(
-                            "opacity-0 group-hover:opacity-100 p-1.5 hover:bg-bg-medium rounded transition-colors",
-                            isSelected && "hover:bg-white/20"
-                          )}
-                          title="设置流量规则 (无 → 高亮 → 标记 → 隐藏)"
-                        >
-                          <ColorfulTrafficLightIcon size={14} />
-                        </button>
+                      <div className={clsx("min-w-0 flex-1", isOffline && "opacity-60")}>
+                        {/* 设备名：有别名展示别名，否则展示设备名 */}
+                        <div className={clsx(
+                          "font-medium truncate text-xs",
+                          isSelected ? "text-primary" : "text-text-primary"
+                        )}>
+                          {displayName}
+                        </div>
+                        <div className={clsx(
+                          "text-2xs truncate",
+                          isSelected ? "text-accent-blue/70" : "text-text-muted"
+                        )} title={device.deviceModel}>
+                          {device.deviceModel} · {device.platform} <span className="opacity-60">{device.systemVersion}</span>
+                        </div>
+                        {/* App 信息 - 与设备信息用分割线隔开 */}
+                        <div className={clsx(
+                          "text-2xs truncate mt-1 pt-1 border-t border-border flex items-center gap-1",
+                          isSelected ? "text-accent-blue/70" : "text-text-muted"
+                        )}>
+                          {/* App 图标 */}
+                          <div className="w-3.5 h-3.5 rounded overflow-hidden bg-bg-light flex items-center justify-center flex-shrink-0">
+                            {device.appIcon ? (
+                              <img
+                                src={`data:image/png;base64,${device.appIcon}`}
+                                alt={device.appName}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <PackageIcon size={8} className="text-text-muted" />
+                            )}
+                          </div>
+                          <span className="truncate">{device.appName}</span>
+                          <span className="opacity-60 flex-shrink-0">{device.appVersion}</span>
+                        </div>
                       </div>
                     </div>
-
-                    {/* Path 树 - 展开时显示 */}
-                    {isExpanded && pathTree.length > 0 && (
-                      <div className="ml-7 border-l border-border-subtle">
-                        {renderPathTree(pathTree)}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-
-              {filteredDomainStats.length === 0 && domainSearch && (
-                <div className="px-4 py-4 text-center text-xs text-text-muted bg-bg-light/20 rounded border border-dashed border-border">
-                  <SearchIcon size={24} className="block mb-1 opacity-50 mx-auto" />
-                  {isWebSocketPlugin ? '未找到匹配的主机' : '未找到匹配的域名'}
-                </div>
-              )}
-
-              {domainStats.length === 0 && !domainSearch && (
-                <div className="px-4 py-4 text-center text-xs text-text-muted bg-bg-light/20 rounded border border-dashed border-border">
-                  {isWebSocketPlugin ? <WebSocketIcon size={24} className="block mb-1 opacity-50 mx-auto" /> : <HttpIcon size={24} className="block mb-1 opacity-50 mx-auto" />}
-                  {isWebSocketPlugin ? '暂无 WebSocket 主机' : '暂无域名记录'}
-                </div>
-              )}
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Server Stats Panel */}
-      <ServerStatsPanel />
+          {/* Separator - 与侧边栏同宽，紧贴设备列表 */}
+          {currentDeviceId && shouldShowDomains && (
+            <div className="h-px bg-border" />
+          )}
+
+          {/* Domain/Host List Section (Only for HTTP/WebSocket plugins) */}
+          {currentDeviceId && shouldShowDomains && (
+            <div className="px-3 py-3">
+              <div className="px-2 mb-3 text-xs font-semibold text-text-secondary uppercase tracking-wider flex justify-between items-center">
+                <span className="flex items-center gap-2">
+                  {currentPlugin === 'websocket' ? <WebSocketIcon size={14} /> : <HttpIcon size={14} />}
+                  {currentPlugin === 'websocket' ? 'WS Hosts' : 'Domains'}
+                </span>
+                <span className="bg-accent-blue/10 text-accent-blue px-2 py-0.5 rounded-full text-2xs font-bold">{domainStats.length}</span>
+              </div>
+
+              {/* Domain Search */}
+              <div className="px-1 mb-3">
+                <div className="relative">
+                  <SearchIcon size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <input
+                    type="text"
+                    value={domainSearch}
+                    onChange={(e) => setDomainSearch(e.target.value)}
+                    placeholder={currentPlugin === 'websocket' ? '搜索主机...' : '搜索域名...'}
+                    className="w-full pl-8 pr-3 py-2 text-xs bg-bg-medium border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-0.5 max-h-[400px] overflow-y-auto pr-1">
+                {/* "All Domains" Option */}
+                <div
+                  onClick={handleAllDomainsClick}
+                  className={clsx(
+                    "flex items-center justify-between px-3 py-2 rounded cursor-pointer text-xs transition-colors group",
+                    isAllDomainsSelected()
+                      ? "bg-accent-blue text-white font-medium"
+                      : "text-text-secondary hover:bg-bg-light"
+                  )}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <LogIcon size={14} />
+                    <span className="font-medium">
+                      {currentPlugin === 'websocket' ? '全部主机' : '全部域名'}
+                    </span>
+                  </div>
+                  <span className={clsx(
+                    "font-mono text-2xs px-1.5 py-0.5 rounded",
+                    isAllDomainsSelected()
+                      ? "text-white font-bold bg-white/20"
+                      : "opacity-60 bg-bg-medium"
+                  )}>
+                    {domainStats.reduce((sum, { count }) => sum + count, 0)}
+                  </span>
+                </div>
+
+                {/* Divider */}
+                {domainStats.length > 0 && (
+                  <div className="border-t border-border-subtle my-1" />
+                )}
+
+                {filteredDomainTree.map(({ domain, count, pathTree }) => {
+                  const rule = getDomainRule(domain)
+                  const isHighlightRule = rule?.action === 'highlight'
+                  const isMarkRule = rule?.action === 'mark'
+                  const isHideRule = rule?.action === 'hide'
+                  const isSelected = isDomainSelected(domain)
+                  const isHighlighted = highlightedDomains.has(domain)
+                  const domainKey = domain
+                  const isExpanded = isNodeExpanded(domainKey)
+
+                  // 递归渲染路径树
+                  // 固定缩进值
+                  const INDENT_SIZE = 16 // 每级固定缩进 16px
+
+                  const renderPathTree = (nodes: PathNode[], depth: number = 0) => {
+                    return nodes.map(node => {
+                      const nodeKey = `${domain}:${node.fullPath}`
+                      const nodeExpanded = isNodeExpanded(nodeKey)
+                      const hasChildren = node.children.length > 0
+                      const isPathSel = isPathSelected(domain, node.fullPath)
+
+                      return (
+                        <div key={node.fullPath}>
+                          <div
+                            onClick={(e) => handlePathClick(domain, node.fullPath, e)}
+                            className={clsx(
+                              "flex items-center justify-between py-1.5 cursor-pointer text-xs transition-colors group",
+                              isPathSel
+                                ? "bg-accent-blue/20 text-accent-blue font-medium"
+                                : "text-text-muted hover:bg-bg-light hover:text-text-secondary"
+                            )}
+                            style={{ paddingLeft: `${INDENT_SIZE + 4}px`, paddingRight: '12px' }}
+                          >
+                            <div className="flex items-center gap-1 min-w-0">
+                              {/* 展开/收起按钮 */}
+                              {hasChildren ? (
+                                <button
+                                  onClick={(e) => toggleNodeExpand(nodeKey, e)}
+                                  className={clsx(
+                                    "w-4 h-4 flex items-center justify-center flex-shrink-0 transition-transform hover:bg-bg-medium rounded",
+                                    nodeExpanded && "rotate-90"
+                                  )}
+                                >
+                                  <ChevronRightIcon
+                                    size={12}
+                                    className={nodeExpanded ? "text-primary" : "text-text-muted"}
+                                  />
+                                </button>
+                              ) : (
+                                <span className="w-4 h-4 flex-shrink-0" />
+                              )}
+                              <span className="truncate font-mono text-2xs">/{node.segment}</span>
+                            </div>
+                            <span className={clsx(
+                              "font-mono text-2xs px-1 py-0.5 rounded ml-2 flex-shrink-0",
+                              isPathSel
+                                ? "bg-accent-blue/30"
+                                : "opacity-60 bg-bg-medium"
+                            )}>{node.count}</span>
+                          </div>
+                          {/* 递归渲染子节点 - 固定缩进 */}
+                          {nodeExpanded && hasChildren && (
+                            <div className="border-l border-border-subtle" style={{ marginLeft: `${INDENT_SIZE}px` }}>
+                              {renderPathTree(node.children, depth + 1)}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  }
+
+                  return (
+                    <div key={domain}>
+                      {/* 域名行 */}
+                      <div
+                        onClick={() => handleDomainClick(domain)}
+                        className={clsx(
+                          "flex items-center justify-between px-3 py-2 rounded cursor-pointer text-xs transition-colors group",
+                          isSelected
+                            ? "bg-accent-blue text-white font-medium"
+                            : "text-text-secondary hover:bg-bg-light",
+                          isHighlighted && "animate-domain-highlight"
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {/* 展开/收起按钮 - 始终显示 */}
+                          <button
+                            onClick={(e) => toggleNodeExpand(domainKey, e)}
+                            className={clsx(
+                              "w-5 h-5 flex items-center justify-center flex-shrink-0 transition-transform hover:bg-bg-medium rounded",
+                              isExpanded && "rotate-90"
+                            )}
+                            title={isExpanded ? "收起路径列表" : "展开路径列表"}
+                          >
+                            <ChevronRightIcon
+                              size={14}
+                              className={clsx(
+                                isSelected ? "text-white" : isExpanded ? "text-primary" : "text-text-primary"
+                              )}
+                            />
+                          </button>
+                          <span className={clsx(
+                            "truncate font-mono",
+                            isHideRule && "opacity-50 line-through"
+                          )}>
+                            {domain}
+                          </span>
+                          {/* 流量规则图标 - 域名后面 */}
+                          {(isHighlightRule || isMarkRule || isHideRule) && (
+                            <span className="flex-shrink-0">
+                              {isHighlightRule && <HighlightIcon size={12} filled className="text-yellow-500" />}
+                              {isMarkRule && <TagIcon size={12} className="text-blue-400" />}
+                              {isHideRule && <ClearIcon size={12} className="text-red-400" />}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={clsx(
+                            "font-mono text-2xs px-1.5 py-0.5 rounded",
+                            isHighlighted
+                              ? "text-primary font-bold bg-primary/10"
+                              : isSelected
+                                ? "text-white bg-white/20"
+                                : "opacity-60 bg-bg-medium"
+                          )}>{count}</span>
+
+                          {/* Quick Action on Hover - 设置流量规则 */}
+                          <button
+                            onClick={(e) => cycleDomainRule(e, domain)}
+                            className={clsx(
+                              "opacity-0 group-hover:opacity-100 p-1.5 hover:bg-bg-medium rounded transition-colors",
+                              isSelected && "hover:bg-white/20"
+                            )}
+                            title="设置流量规则 (无 → 高亮 → 标记 → 隐藏)"
+                          >
+                            <ColorfulTrafficLightIcon size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Path 树 - 展开时显示 */}
+                      {isExpanded && pathTree.length > 0 && (
+                        <div className="ml-7 border-l border-border-subtle">
+                          {renderPathTree(pathTree)}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {filteredDomainStats.length === 0 && domainSearch && (
+                  <div className="px-4 py-4 text-center text-xs text-text-muted bg-bg-light/20 rounded border border-dashed border-border">
+                    <SearchIcon size={24} className="block mb-1 opacity-50 mx-auto" />
+                    {isWebSocketPlugin ? '未找到匹配的主机' : '未找到匹配的域名'}
+                  </div>
+                )}
+
+                {domainStats.length === 0 && !domainSearch && (
+                  <div className="px-4 py-4 text-center text-xs text-text-muted bg-bg-light/20 rounded border border-dashed border-border">
+                    {isWebSocketPlugin ? <WebSocketIcon size={24} className="block mb-1 opacity-50 mx-auto" /> : <HttpIcon size={24} className="block mb-1 opacity-50 mx-auto" />}
+                    {isWebSocketPlugin ? '暂无 WebSocket 主机' : '暂无域名记录'}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Server Stats Panel - 收起时隐藏 */}
+      {!isCollapsed && <ServerStatsPanel />}
 
       {/* Footer Status - 主题切换、在线状态、版本 */}
-      <div className="px-4 py-2 bg-bg-darker border-t border-border text-xs text-text-muted flex justify-between items-center">
-        <div className="flex items-center gap-3">
+      <div className={clsx(
+        "bg-bg-darker border-t border-border text-xs text-text-muted flex items-center",
+        isCollapsed ? "flex-col gap-2 py-3 px-2" : "justify-between px-4 py-2"
+      )}>
+        <div className={clsx(
+          "flex items-center",
+          isCollapsed ? "flex-col gap-2" : "gap-3"
+        )}>
           <ThemeToggle />
-          <div className="h-4 w-px bg-border" />
+          {!isCollapsed && <div className="h-4 w-px bg-border" />}
           <div className="flex items-center gap-1.5">
             <span className={clsx(
               "w-2 h-2 rounded-full border",
@@ -883,10 +968,10 @@ export function Sidebar() {
                 ? "bg-green-500 border-green-400/50 status-dot-online"
                 : "bg-red-500 border-red-400/50"
             )} />
-            <span className="font-medium">{isServerOnline ? "在线" : "离线"}</span>
+            {!isCollapsed && <span className="font-medium">{isServerOnline ? "在线" : "离线"}</span>}
           </div>
         </div>
-        <span className="text-text-muted/50">1.0.0</span>
+        {!isCollapsed && <span className="text-text-muted/50">1.0.0</span>}
       </div>
     </aside>
   )

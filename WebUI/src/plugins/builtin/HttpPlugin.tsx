@@ -28,6 +28,7 @@ import { FilterPopover } from '@/components/FilterPopover'
 import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
 import { MockRuleEditor } from '@/components/MockRuleEditor'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { DynamicSearchInput } from '@/components/DynamicSearchInput'
 import { getExportHTTPUrl, getExportHARUrl, deleteAllHTTPEvents } from '@/services/api'
 import { Checkbox } from '@/components/Checkbox'
 import { Toggle } from '@/components/Toggle'
@@ -262,6 +263,11 @@ function HttpPluginView({ context, isActive }: PluginRenderProps) {
     // 注意：实时连接由 DevicePluginView 统一管理，不需要在这里重复监听
     useEffect(() => {
         if (!deviceId || !isActive) return
+
+        // 确保 sessionStartTimestamp 已设置（用于"仅本次启动"过滤）
+        if (!httpStore.sessionStartTimestamp) {
+            httpStore.setSessionStartTimestamp(new Date().toISOString())
+        }
 
         // 加载 HTTP 事件
         httpStore.fetchEvents(deviceId)
@@ -526,13 +532,12 @@ function HTTPRequestsContent({
                     <div className="h-5 w-px bg-border flex-shrink-0" />
 
                     {/* 过滤区 */}
-                    <input
-                        type="text"
+                    <DynamicSearchInput
                         value={httpStore.filters.urlContains}
-                        onChange={(e) => httpStore.setFilter('urlContains', e.target.value)}
+                        onChange={(value) => httpStore.setFilter('urlContains', value)}
                         placeholder="搜索 URL..."
-                        className="input text-xs py-1.5 px-2.5 w-40 flex-shrink-0"
-                        data-search-input
+                        minWidth={160}
+                        maxWidthMultiplier={3}
                     />
 
                     <FilterPopover
@@ -580,17 +585,15 @@ function HTTPRequestsContent({
                     {/* 弹性空间 */}
                     <div className="flex-1 min-w-4" />
 
-                    {/* 右侧：清空 - 自动滚动 - 更多 - 连接状态 - 请求总条数 */}
-                    {/* 清空按钮：只在有数据时显示 */}
-                    {httpStore.events.length > 0 && (
+                    {/* 右侧：清屏 - 自动滚动 - 更多 - 连接状态 - 请求总条数 */}
+                    {/* 清屏按钮：清除当前显示的数据，不需二次确认 */}
+                    {httpStore.filteredItems.length > 0 && (
                         <button
-                            onClick={() => setShowClearAllConfirm(true)}
-                            className="btn btn-ghost text-red-400 hover:bg-red-500/10 text-xs px-2 py-1.5 flex-shrink-0"
-                            title="清空所有请求（从数据库删除）"
-                            disabled={isClearingAll}
+                            onClick={() => httpStore.clearScreen()}
+                            className="btn btn-secondary text-xs px-2 py-1.5 flex-shrink-0"
+                            title="清屏（清除当前显示的数据，刷新不恢复）"
                         >
-                            <TrashIcon size={14} className="mr-1" />
-                            清空
+                            清屏
                         </button>
                     )}
 
@@ -653,16 +656,40 @@ function HTTPRequestsContent({
                                         显示已隐藏请求
                                     </label>
 
+                                    {/* 仅显示本次启动 */}
+                                    <label className="flex items-center gap-2 px-3 py-2 text-xs text-text-secondary cursor-pointer hover:bg-bg-light border-b border-border">
+                                        <Checkbox
+                                            checked={httpStore.showCurrentSessionOnly}
+                                            onChange={(checked) => httpStore.setShowCurrentSessionOnly(checked)}
+                                        />
+                                        仅显示本次启动
+                                    </label>
+
                                     {/* 导出全部 */}
                                     <a
                                         href={getExportHTTPUrl(deviceId)}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:bg-bg-light hover:text-text-primary"
+                                        className="flex items-center gap-2 px-3 py-2 text-xs text-text-secondary hover:bg-bg-light hover:text-text-primary border-b border-border"
                                         onClick={() => setShowMoreMenu(false)}
                                     >
                                         导出全部 HAR
                                     </a>
+
+                                    {/* 清空全部（从数据库删除） */}
+                                    {httpStore.events.length > 0 && (
+                                        <button
+                                            onClick={() => {
+                                                setShowMoreMenu(false)
+                                                setShowClearAllConfirm(true)
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10"
+                                            disabled={isClearingAll}
+                                        >
+                                            <TrashIcon size={14} />
+                                            清空全部（从数据库删除）
+                                        </button>
+                                    )}
                                 </div>
                             </>
                         )}

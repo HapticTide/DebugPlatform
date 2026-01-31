@@ -19,8 +19,10 @@ import { VirtualLogList, type LogScrollControls } from '@/components/VirtualLogL
 import { LogFilters } from '@/components/LogFilters'
 import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
 import { Toggle } from '@/components/Toggle'
+import { Checkbox } from '@/components/Checkbox'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LogDetailModal } from '@/components/LogDetailModal'
+import { DynamicSearchInput } from '@/components/DynamicSearchInput'
 import { deleteAllLogs } from '@/services/api'
 import { LogEvent } from '@/types'
 import clsx from 'clsx'
@@ -110,6 +112,10 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
         batchDelete,
         loadMore,
         hasMore,
+        // 清屏相关
+        showCurrentSessionOnly,
+        setShowCurrentSessionOnly,
+        clearScreen,
     } = useLogStore()
 
     const { isConnected } = useConnectionStore()
@@ -119,6 +125,7 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
     const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [showFilters, setShowFilters] = useState(false)
+    const [showMoreMenu, setShowMoreMenu] = useState(false)
     const [scrollControls, setScrollControls] = useState<LogScrollControls | null>(null)
     const [isClearingAll, setIsClearingAll] = useState(false)
     // 日志详情弹窗状态
@@ -127,6 +134,11 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
     // 初始加载
     useEffect(() => {
         if (isActive && deviceId) {
+            // 确保 sessionStartTimestamp 已设置（用于"仅本次启动"过滤）
+            const logStore = useLogStore.getState()
+            if (!logStore.sessionStartTimestamp) {
+                logStore.setSessionStartTimestamp(new Date().toISOString())
+            }
             fetchEvents(deviceId)
             fetchFilterOptions(deviceId)
         }
@@ -207,12 +219,12 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
                     </button>
 
                     {/* 搜索输入框 */}
-                    <input
-                        type="text"
+                    <DynamicSearchInput
                         value={filters.searchQuery || ''}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(value) => setSearchQuery(value)}
                         placeholder="搜索日志..."
-                        className="input text-xs py-1.5 px-2.5 w-40 flex-shrink-0"
+                        minWidth={160}
+                        maxWidthMultiplier={3}
                     />
 
                     {/* 过滤器按钮 */}
@@ -258,20 +270,18 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
                 </div>
 
                 <div className="flex items-center gap-2 text-xs text-text-secondary">
-                    {/* 清除全部日志按钮 */}
+                    {/* 清屏按钮 */}
                     {filteredEvents.length > 0 && (
                         <button
-                            onClick={() => setShowClearAllConfirm(true)}
-                            className="btn btn-ghost text-red-400 hover:bg-red-500/10 text-xs px-2 py-1.5 flex-shrink-0 flex items-center"
-                            title="清除全部日志（从数据库删除）"
-                            disabled={isClearingAll}
+                            onClick={() => clearScreen()}
+                            className="btn btn-secondary text-xs px-2 py-1.5 flex-shrink-0"
+                            title="清屏（清除当前显示的数据，刷新不恢复）"
                         >
-                            <TrashIcon size={14} className="mr-1" />
-                            清空
+                            清屏
                         </button>
                     )}
 
-                    {filteredEvents.length > 0 && <div className="h-5 w-px bg-border flex-shrink-0" />}
+                    <div className="h-5 w-px bg-border flex-shrink-0" />
 
                     {/* 自动滚动 */}
                     <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -280,6 +290,52 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
                             checked={autoScroll}
                             onChange={(checked) => setAutoScroll(checked)}
                         />
+                    </div>
+
+                    <div className="h-5 w-px bg-border flex-shrink-0" />
+
+                    {/* 更多菜单 */}
+                    <div className="relative flex-shrink-0">
+                        <button
+                            onClick={() => setShowMoreMenu(!showMoreMenu)}
+                            className="btn btn-secondary text-xs px-2 py-1.5"
+                            title="更多选项"
+                        >
+                            更多 ▾
+                        </button>
+                        {showMoreMenu && (
+                            <>
+                                <div
+                                    className="fixed inset-0 z-[100]"
+                                    onClick={() => setShowMoreMenu(false)}
+                                />
+                                <div className="absolute right-0 top-full mt-1 w-48 bg-bg-dark border border-border rounded-lg shadow-lg z-[101] py-1">
+                                    {/* 仅显示本次启动 */}
+                                    <label className="flex items-center gap-2 px-3 py-2 text-xs text-text-secondary cursor-pointer hover:bg-bg-light border-b border-border">
+                                        <Checkbox
+                                            checked={showCurrentSessionOnly}
+                                            onChange={(checked) => setShowCurrentSessionOnly(checked)}
+                                        />
+                                        仅显示本次启动
+                                    </label>
+
+                                    {/* 清空全部（从数据库删除） */}
+                                    {filteredEvents.length > 0 && (
+                                        <button
+                                            onClick={() => {
+                                                setShowMoreMenu(false)
+                                                setShowClearAllConfirm(true)
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10"
+                                            disabled={isClearingAll}
+                                        >
+                                            <TrashIcon size={14} />
+                                            清空全部（从数据库删除）
+                                        </button>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     <div className="h-5 w-px bg-border flex-shrink-0" />

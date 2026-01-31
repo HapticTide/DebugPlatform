@@ -22,11 +22,28 @@ interface Filters {
   searchQuery: string  // 高级搜索查询
 }
 
+// 清屏和会话过滤选项
+interface FilterOptions {
+  clearedBeforeTimestamp?: string | null
+  showCurrentSessionOnly?: boolean
+  sessionStartTimestamp?: string | null
+}
+
 // 基础过滤逻辑（不含高级搜索）
-function basicFilterEvents(events: LogEvent[], filters: Filters): LogEvent[] {
+function basicFilterEvents(events: LogEvent[], filters: Filters, options?: FilterOptions): LogEvent[] {
   const minPriority = LEVEL_PRIORITY[filters.minLevel]
 
   return events.filter((event) => {
+    // 清屏过滤：只显示清屏时间之后的日志
+    if (options?.clearedBeforeTimestamp && event.timestamp) {
+      if (event.timestamp < options.clearedBeforeTimestamp) return false
+    }
+
+    // 本次启动过滤：只显示会话开始时间之后的日志
+    if (options?.showCurrentSessionOnly && options?.sessionStartTimestamp && event.timestamp) {
+      if (event.timestamp < options.sessionStartTimestamp) return false
+    }
+
     // Level 过滤: 只显示大于等于最低级别的日志
     const eventPriority = LEVEL_PRIORITY[event.level] ?? 0
     if (eventPriority < minPriority) return false
@@ -52,9 +69,9 @@ function basicFilterEvents(events: LogEvent[], filters: Filters): LogEvent[] {
 }
 
 // 综合过滤（包含高级搜索）
-function filterEvents(events: LogEvent[], filters: Filters): LogEvent[] {
+function filterEvents(events: LogEvent[], filters: Filters, options?: FilterOptions): LogEvent[] {
   // 先应用基础过滤
-  let filtered = basicFilterEvents(events, filters)
+  let filtered = basicFilterEvents(events, filters, options)
 
   // 如果有高级搜索查询，应用高级搜索
   if (filters.searchQuery) {
@@ -80,6 +97,11 @@ interface LogState {
   // 批量选择
   selectedIds: Set<string>
   isSelectMode: boolean
+
+  // 清屏相关
+  showCurrentSessionOnly: boolean // 是否只显示本次启动的日志
+  clearedBeforeTimestamp: string | null // 清屏时间戳
+  sessionStartTimestamp: string | null // 会话开始时间
 
   // Filter options
   subsystems: string[]
@@ -109,6 +131,11 @@ interface LogState {
   clearSelectedIds: () => void
   batchDelete: (deviceId: string) => Promise<void>
 
+  // 清屏相关
+  clearScreen: () => void
+  setShowCurrentSessionOnly: (value: boolean) => void
+  setSessionStartTimestamp: (timestamp: string) => void
+
   // 分页
   loadMore: (deviceId: string) => Promise<void>
   hasMore: () => boolean
@@ -126,6 +153,11 @@ export const useLogStore = create<LogState>((set, get) => ({
   selectedIds: new Set(),
   isSelectMode: false,
 
+  // 清屏相关
+  showCurrentSessionOnly: true, // 默认只显示本次启动的日志
+  clearedBeforeTimestamp: null,
+  sessionStartTimestamp: null,
+
   subsystems: [],
   categories: [],
 
@@ -139,14 +171,18 @@ export const useLogStore = create<LogState>((set, get) => ({
   },
 
   fetchEvents: async (deviceId: string) => {
-    const { pageSize } = get()
+    const { pageSize, showCurrentSessionOnly, clearedBeforeTimestamp, sessionStartTimestamp } = get()
     set({ isLoading: true })
 
     try {
       // 从服务器获取所有日志（不带过滤），客户端过滤
       const response = await api.getLogEvents(deviceId, { pageSize })
       const { filters } = get()
-      const filteredEvents = filterEvents(response.items, filters)
+      const filteredEvents = filterEvents(response.items, filters, {
+        clearedBeforeTimestamp,
+        showCurrentSessionOnly,
+        sessionStartTimestamp,
+      })
       set({
         events: response.items,
         filteredEvents,
@@ -177,19 +213,35 @@ export const useLogStore = create<LogState>((set, get) => ({
       // 添加到原始事件列表
       const events = [event, ...state.events].slice(0, 5000)
       // 重新过滤
-      const filteredEvents = filterEvents(events, state.filters)
+      const filteredEvents = filterEvents(events, state.filters, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
       return { events, filteredEvents, total: state.total + 1 }
     })
   },
 
   clearEvents: () => {
-    set({ events: [], filteredEvents: [], total: 0 })
+    set({
+      events: [],
+      filteredEvents: [],
+      total: 0,
+      // 重置清屏状态
+      clearedBeforeTimestamp: null,
+      showCurrentSessionOnly: true,
+      sessionStartTimestamp: null,
+    })
   },
 
   setFilter: (key: string, value: unknown) => {
     set((state) => {
       const newFilters = { ...state.filters, [key]: value } as Filters
-      const filteredEvents = filterEvents(state.events, newFilters)
+      const filteredEvents = filterEvents(state.events, newFilters, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
       return { filters: newFilters, filteredEvents }
     })
   },
@@ -197,7 +249,11 @@ export const useLogStore = create<LogState>((set, get) => ({
   setMinLevel: (level: LogLevel) => {
     set((state) => {
       const newFilters = { ...state.filters, minLevel: level }
-      const filteredEvents = filterEvents(state.events, newFilters)
+      const filteredEvents = filterEvents(state.events, newFilters, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
       return { filters: newFilters, filteredEvents }
     })
   },
@@ -205,14 +261,22 @@ export const useLogStore = create<LogState>((set, get) => ({
   setSearchQuery: (query: string) => {
     set((state) => {
       const newFilters = { ...state.filters, searchQuery: query }
-      const filteredEvents = filterEvents(state.events, newFilters)
+      const filteredEvents = filterEvents(state.events, newFilters, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
       return { filters: newFilters, filteredEvents }
     })
   },
 
   applyFilters: () => {
     set((state) => ({
-      filteredEvents: filterEvents(state.events, state.filters),
+      filteredEvents: filterEvents(state.events, state.filters, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      }),
     }))
   },
 
@@ -261,7 +325,7 @@ export const useLogStore = create<LogState>((set, get) => ({
   },
 
   batchDelete: async (deviceId: string) => {
-    const { selectedIds, events, filters } = get()
+    const { selectedIds, events, filters, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
     if (selectedIds.size === 0) return
 
     try {
@@ -269,7 +333,11 @@ export const useLogStore = create<LogState>((set, get) => ({
       const newEvents = events.filter((e) => !selectedIds.has(e.id))
       set({
         events: newEvents,
-        filteredEvents: filterEvents(newEvents, filters),
+        filteredEvents: filterEvents(newEvents, filters, {
+          clearedBeforeTimestamp,
+          showCurrentSessionOnly,
+          sessionStartTimestamp,
+        }),
         selectedIds: new Set(),
         total: get().total - selectedIds.size,
       })
@@ -279,8 +347,43 @@ export const useLogStore = create<LogState>((set, get) => ({
     }
   },
 
+  // 清屏：设置清屏时间戳
+  clearScreen: () => {
+    const timestamp = new Date().toISOString()
+    set({
+      clearedBeforeTimestamp: timestamp,
+      filteredEvents: [],
+      selectedId: null,
+      selectedIds: new Set(),
+    })
+  },
+
+  // 切换是否只显示本次启动的日志
+  setShowCurrentSessionOnly: (value: boolean) => {
+    set((state) => {
+      const filteredEvents = filterEvents(state.events, state.filters, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: value,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
+      return { showCurrentSessionOnly: value, filteredEvents }
+    })
+  },
+
+  // 设置会话开始时间
+  setSessionStartTimestamp: (timestamp: string) => {
+    set((state) => {
+      const filteredEvents = filterEvents(state.events, state.filters, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: timestamp,
+      })
+      return { sessionStartTimestamp: timestamp, filteredEvents }
+    })
+  },
+
   loadMore: async (deviceId: string) => {
-    const { pageSize, page, total, events, filters, isLoading } = get()
+    const { pageSize, page, total, events, filters, isLoading, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
 
     // 如果正在加载或已经加载完所有数据，不再加载
     if (isLoading || events.length >= total) return
@@ -292,7 +395,11 @@ export const useLogStore = create<LogState>((set, get) => ({
       const response = await api.getLogEvents(deviceId, { page: nextPage, pageSize })
       const newEvents = response.items
       const allEvents = [...events, ...newEvents]
-      const filteredEvents = filterEvents(allEvents, filters)
+      const filteredEvents = filterEvents(allEvents, filters, {
+        clearedBeforeTimestamp,
+        showCurrentSessionOnly,
+        sessionStartTimestamp,
+      })
 
       set({
         events: allEvents,

@@ -228,6 +228,11 @@ export function DevicePluginView() {
         // 标记进入设备详情页
         setInDeviceDetail(true)
 
+        // 设置会话开始时间（进入设备页面的时间）
+        const sessionStartTime = new Date().toISOString()
+        httpStore.setSessionStartTimestamp(sessionStartTime)
+        logStore.setSessionStartTimestamp(sessionStartTime)
+
         selectDevice(deviceId)
         loadDeviceActivities(deviceId)
 

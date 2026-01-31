@@ -1951,6 +1951,30 @@ export const ChevronRightIcon: React.FC<IconProps> = ({
     </svg>
 )
 
+/** 向左箭头图标 */
+export const ChevronLeftIcon: React.FC<IconProps> = ({
+    size = defaultProps.size,
+    className,
+    strokeWidth = defaultProps.strokeWidth
+}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+    >
+        <path
+            d="M15 18l-6-6 6-6"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </svg>
+)
+
 /** 骰子/随机图标 */
 export const DiceIcon: React.FC<IconProps> = ({
     size = defaultProps.size,

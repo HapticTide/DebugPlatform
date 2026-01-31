@@ -43,6 +43,11 @@ interface HTTPState {
   selectedIds: Set<string>
   isSelectMode: boolean
 
+  // 清屏相关
+  showCurrentSessionOnly: boolean // 是否只显示本次启动的请求
+  clearedBeforeTimestamp: string | null // 清屏时间戳，清屏后只显示此时间之后的请求
+  sessionStartTimestamp: string | null // 本次连接的开始时间
+
   // Filters
   filters: {
     method: string
@@ -83,10 +88,27 @@ interface HTTPState {
   clearSelectedIds: () => void
   batchDelete: (deviceId: string) => Promise<void>
   batchFavorite: (deviceId: string, isFavorite: boolean) => Promise<number | void>
+
+  // 清屏相关
+  clearScreen: () => void // 清屏：清除当前显示的数据，刷新不恢复
+  setShowCurrentSessionOnly: (value: boolean) => void // 切换是否只显示本次启动的请求
+  setSessionStartTimestamp: (timestamp: string) => void // 设置会话开始时间
+}
+
+// 清屏和会话过滤选项
+interface FilterOptions {
+  clearedBeforeTimestamp?: string | null
+  showCurrentSessionOnly?: boolean
+  sessionStartTimestamp?: string | null
 }
 
 // 过滤逻辑 - 现在只处理 HTTP 事件，不再包含会话分隔符
-function filterItems(items: ListItem[], filters: HTTPState['filters'], deviceId?: string): ListItem[] {
+function filterItems(
+  items: ListItem[],
+  filters: HTTPState['filters'],
+  deviceId?: string,
+  options?: FilterOptions
+): ListItem[] {
   // 获取 URL 级别收藏检查函数
   const isUrlFavorite = useFavoriteUrlStore.getState().isFavorite
 
@@ -97,6 +119,16 @@ function filterItems(items: ListItem[], filters: HTTPState['filters'], deviceId?
     }
 
     const event = item as HTTPEventSummary
+
+    // 清屏过滤：只显示清屏时间之后的请求
+    if (options?.clearedBeforeTimestamp && event.startTime) {
+      if (event.startTime < options.clearedBeforeTimestamp) return false
+    }
+
+    // 本次启动过滤：只显示会话开始时间之后的请求
+    if (options?.showCurrentSessionOnly && options?.sessionStartTimestamp && event.startTime) {
+      if (event.startTime < options.sessionStartTimestamp) return false
+    }
 
     // 方法过滤
     if (filters.method && event.method !== filters.method) return false
@@ -145,6 +177,21 @@ function filterItems(items: ListItem[], filters: HTTPState['filters'], deviceId?
   })
 }
 
+// 辅助函数：获取当前的清屏过滤选项
+const getFilterOptions = (get: () => HTTPState): FilterOptions => {
+  const { clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
+  return { clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp }
+}
+
+// 辅助函数：重新应用过滤
+const reapplyFilters = (state: HTTPState) => {
+  return filterItems(state.listItems, state.filters, state.currentDeviceId ?? undefined, {
+    clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+    showCurrentSessionOnly: state.showCurrentSessionOnly,
+    sessionStartTimestamp: state.sessionStartTimestamp,
+  })
+}
+
 export const useHTTPStore = create<HTTPState>((set, get) => ({
   events: [],
   listItems: [],
@@ -162,6 +209,11 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   currentDeviceId: null,
   groupMode: 'none' as GroupMode,
 
+  // 清屏相关
+  showCurrentSessionOnly: true, // 默认只显示本次启动的请求
+  clearedBeforeTimestamp: null,
+  sessionStartTimestamp: null,
+
   filters: {
     method: '',
     statusRange: '',
@@ -173,7 +225,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   },
 
   fetchEvents: async (deviceId: string) => {
-    const { pageSize, filters, selectedEventId } = get()
+    const { pageSize, filters, selectedEventId, showCurrentSessionOnly, clearedBeforeTimestamp, sessionStartTimestamp } = get()
     set({ isLoading: true, currentDeviceId: deviceId })
     try {
       const response = await api.getHTTPEvents(deviceId, {
@@ -185,7 +237,11 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
 
       const events = response.items
 
-      const filteredItems = filterItems(events, filters, deviceId)
+      const filteredItems = filterItems(events, filters, deviceId, {
+        clearedBeforeTimestamp,
+        showCurrentSessionOnly,
+        sessionStartTimestamp,
+      })
 
       // 检查 selectedEventId 是否还在新列表中，如果不在则清除选中
       const selectedStillExists = selectedEventId
@@ -237,7 +293,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
 
       const newEvents = response.items
       const allEvents = [...events, ...newEvents]
-      const filteredItems = filterItems(allEvents, filters, deviceId)
+      const filteredItems = filterItems(allEvents, filters, deviceId, getFilterOptions(get))
 
       set({
         events: allEvents,
@@ -284,7 +340,11 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
     set((state) => {
       const events = [event, ...state.events].slice(0, 1000)
       const listItems = [event as ListItem, ...state.listItems].slice(0, 1000)
-      const filteredItems = filterItems(listItems, state.filters, state.currentDeviceId ?? undefined)
+      const filteredItems = filterItems(listItems, state.filters, state.currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
       return { events, listItems, filteredItems, total: state.total + 1 }
     })
   },
@@ -299,6 +359,10 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
       selectedEvent: null,
       selectedIds: new Set(),
       currentSessionId: null,
+      // 重置清屏状态（重新进入设备页面时调用）
+      clearedBeforeTimestamp: null,
+      showCurrentSessionOnly: true,
+      sessionStartTimestamp: null,
     })
   },
 
@@ -310,7 +374,11 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   setFilter: (key: string, value: string | boolean | string[]) => {
     set((state) => {
       const newFilters = { ...state.filters, [key]: value }
-      const filteredItems = filterItems(state.listItems, newFilters, state.currentDeviceId ?? undefined)
+      const filteredItems = filterItems(state.listItems, newFilters, state.currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
       return { filters: newFilters, filteredItems }
     })
   },
@@ -322,7 +390,11 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         ? currentDomains.filter((d) => d !== domain)
         : [...currentDomains, domain]
       const newFilters = { ...state.filters, domains: newDomains }
-      const filteredItems = filterItems(state.listItems, newFilters, state.currentDeviceId ?? undefined)
+      const filteredItems = filterItems(state.listItems, newFilters, state.currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
       return { filters: newFilters, filteredItems }
     })
   },
@@ -330,14 +402,18 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   clearDomains: () => {
     set((state) => {
       const newFilters = { ...state.filters, domains: [] }
-      const filteredItems = filterItems(state.listItems, newFilters, state.currentDeviceId ?? undefined)
+      const filteredItems = filterItems(state.listItems, newFilters, state.currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
       return { filters: newFilters, filteredItems }
     })
   },
 
   applyFilters: () => {
     set((state) => ({
-      filteredItems: filterItems(state.listItems, state.filters, state.currentDeviceId ?? undefined),
+      filteredItems: reapplyFilters(state),
     }))
   },
 
@@ -355,7 +431,11 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
       const listItems = state.listItems.map((item) =>
         !isSessionDivider(item) && item.id === eventId ? { ...item, isFavorite } : item
       )
-      const filteredItems = filterItems(listItems, state.filters, state.currentDeviceId ?? undefined)
+      const filteredItems = filterItems(listItems, state.filters, state.currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
       return {
         events,
         listItems,
@@ -404,7 +484,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   },
 
   batchDelete: async (deviceId: string) => {
-    const { selectedIds, events, listItems, filters, currentDeviceId } = get()
+    const { selectedIds, events, listItems, filters, currentDeviceId, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
     if (selectedIds.size === 0) return
 
     try {
@@ -414,7 +494,11 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         if (isSessionDivider(item)) return true
         return !selectedIds.has(item.id)
       })
-      const filteredItems = filterItems(newListItems, filters, currentDeviceId ?? undefined)
+      const filteredItems = filterItems(newListItems, filters, currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp,
+        showCurrentSessionOnly,
+        sessionStartTimestamp,
+      })
       set({
         events: newEvents,
         listItems: newListItems,
@@ -428,7 +512,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   },
 
   batchFavorite: async (deviceId: string, isFavorite: boolean) => {
-    const { selectedIds, events, listItems, filters, currentDeviceId } = get()
+    const { selectedIds, events, listItems, filters, currentDeviceId, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
     if (selectedIds.size === 0) return
 
     try {
@@ -446,7 +530,11 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
       }
 
       // 重新过滤
-      const filteredItems = filterItems(listItems, filters, currentDeviceId ?? undefined)
+      const filteredItems = filterItems(listItems, filters, currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp,
+        showCurrentSessionOnly,
+        sessionStartTimestamp,
+      })
       set({ filteredItems })
 
       // 返回成功数量供调用方使用
@@ -456,4 +544,41 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
       throw error
     }
   },
-}))
+
+  // 清屏：设置清屏时间戳，清屏后只显示此时间之后的请求
+  clearScreen: () => {
+    const timestamp = new Date().toISOString()
+    set({
+      clearedBeforeTimestamp: timestamp,
+      filteredItems: [], // 清屏后立即清空显示
+      selectedEventId: null,
+      selectedEvent: null,
+      selectedIds: new Set(),
+    })
+  },
+
+  // 切换是否只显示本次启动的请求
+  setShowCurrentSessionOnly: (value: boolean) => {
+    set((state) => {
+      const filteredItems = filterItems(state.listItems, state.filters, state.currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: value,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+      })
+      return { showCurrentSessionOnly: value, filteredItems }
+    })
+  },
+
+  // 设置会话开始时间
+  setSessionStartTimestamp: (timestamp: string) => {
+    set((state) => {
+      const filteredItems = filterItems(state.listItems, state.filters, state.currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: timestamp,
+      })
+      return { sessionStartTimestamp: timestamp, filteredItems }
+    })
+  },
+}
+))

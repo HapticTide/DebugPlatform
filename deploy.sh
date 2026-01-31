@@ -55,6 +55,7 @@ DEFAULT_HOST="0.0.0.0"
 DATABASE_MODE="postgres"
 BUILD_MODE="release"
 BUILD_WEBUI=false
+SKIP_WEBUI_CHECK=false
 DATA_DIR=""
 VERBOSE=false
 
@@ -609,6 +610,53 @@ setup_database() {
 # 构建函数
 # ============================================================================
 
+# 检测 WebUI 是否需要重新构建
+# 比较 WebUI/src 和 DebugHub/Public 的修改时间
+check_webui_needs_rebuild() {
+    local public_dir="$DEBUGHUB_DIR/Public"
+    local src_dir="$WEBUI_DIR/src"
+    
+    # 如果 Public 目录不存在或为空，需要构建
+    if [[ ! -d "$public_dir" ]] || [[ -z "$(ls -A "$public_dir" 2>/dev/null)" ]]; then
+        log_debug "Public 目录为空，需要构建 WebUI"
+        return 0
+    fi
+    
+    # 如果 index.html 不存在，需要构建
+    if [[ ! -f "$public_dir/index.html" ]]; then
+        log_debug "Public/index.html 不存在，需要构建 WebUI"
+        return 0
+    fi
+    
+    # 如果 src 目录不存在，无法构建
+    if [[ ! -d "$src_dir" ]]; then
+        log_debug "WebUI/src 目录不存在，跳过构建"
+        return 1
+    fi
+    
+    # 获取 Public/index.html 的修改时间
+    local public_mtime
+    public_mtime=$(stat -f %m "$public_dir/index.html" 2>/dev/null || echo "0")
+    
+    # 检查 WebUI/src 目录下是否有更新的文件
+    local newest_src_file
+    newest_src_file=$(find "$src_dir" -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.css" \) -newer "$public_dir/index.html" 2>/dev/null | head -1)
+    
+    if [[ -n "$newest_src_file" ]]; then
+        log_info "检测到 WebUI 源代码变更: $(basename "$newest_src_file")"
+        return 0
+    fi
+    
+    # 检查 package.json 是否更新
+    if [[ -f "$WEBUI_DIR/package.json" ]] && [[ "$WEBUI_DIR/package.json" -nt "$public_dir/index.html" ]]; then
+        log_info "检测到 package.json 变更"
+        return 0
+    fi
+    
+    log_debug "WebUI 无变更，跳过构建"
+    return 1
+}
+
 build_webui() {
     log_info "构建 WebUI..."
     
@@ -880,9 +928,14 @@ ${BOLD}选项:${NC}
     ${CYAN}--release${NC}           使用 Release 模式编译 (默认)
     ${CYAN}--build-only${NC}        仅编译不运行
     ${CYAN}--skip-db-setup${NC}     跳过数据库配置
-    ${CYAN}--with-webui${NC}        同时构建 WebUI 前端 (需要 Node.js)
+    ${CYAN}--with-webui${NC}        强制构建 WebUI 前端 (需要 Node.js)
+    ${CYAN}--no-webui${NC}          跳过 WebUI 自动检测和构建
     ${CYAN}--verbose, -v${NC}       显示详细输出
     ${CYAN}--help, -h${NC}          显示此帮助信息
+
+${BOLD}WebUI 自动构建:${NC}
+    脚本会自动检测 WebUI 源代码变更。如果检测到 src/ 目录下的文件比
+    Public/ 目录更新，将自动重新构建 WebUI。使用 --no-webui 可禁用此行为。
 
 ${BOLD}服务管理:${NC}
     ${CYAN}--stop${NC}              停止服务
@@ -891,12 +944,13 @@ ${BOLD}服务管理:${NC}
     ${CYAN}--logs${NC}              查看实时日志
 
 ${BOLD}示例:${NC}
-    ./deploy.sh                                     # 使用默认配置 (PostgreSQL)
+    ./deploy.sh                                     # 使用默认配置 (PostgreSQL + 自动检测 WebUI)
     ./deploy.sh --port 3000                         # 使用端口 3000
     ./deploy.sh --sqlite                            # 使用 SQLite (零配置)
     ./deploy.sh --sqlite --data-dir /var/lib/data   # SQLite + 指定数据目录
     ./deploy.sh --build-only                        # 仅编译
-    ./deploy.sh --with-webui                        # 同时构建 WebUI
+    ./deploy.sh --with-webui                        # 强制构建 WebUI
+    ./deploy.sh --no-webui                          # 跳过 WebUI 构建
     ./deploy.sh --verbose                           # 显示详细日志
     ./deploy.sh --stop                              # 停止服务
     ./deploy.sh --restart                           # 重启服务
@@ -1155,6 +1209,10 @@ main() {
                 BUILD_WEBUI=true
                 shift
                 ;;
+            --no-webui)
+                SKIP_WEBUI_CHECK=true
+                shift
+                ;;
             --stop)
                 stop_server
                 exit 0
@@ -1237,8 +1295,18 @@ main() {
         fi
     fi
     
-    # 3. 构建 WebUI (可选)
+    # 3. 构建 WebUI
+    # 如果显式指定了 --with-webui，或者检测到源代码有变更，则构建
+    # 使用 --no-webui 可以跳过自动检测
+    local should_build_webui=false
     if [[ "$BUILD_WEBUI" == true ]]; then
+        should_build_webui=true
+    elif [[ "$SKIP_WEBUI_CHECK" == false ]] && check_webui_needs_rebuild; then
+        should_build_webui=true
+        log_info "自动检测到 WebUI 变更，将自动重新构建"
+    fi
+    
+    if [[ "$should_build_webui" == true ]]; then
         ((current_step++))
         log_step $current_step $total_steps "构建 WebUI"
         build_webui || exit 1
