@@ -971,7 +971,7 @@ export function Sidebar() {
             {!isCollapsed && <span className="font-medium">{isServerOnline ? "在线" : "离线"}</span>}
           </div>
         </div>
-        {!isCollapsed && <span className="text-text-muted/50">1.0.0</span>}
+        {!isCollapsed && <span className="text-text-muted/50">1.2.3</span>}
       </div>
     </aside>
   )
