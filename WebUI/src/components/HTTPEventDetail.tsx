@@ -105,6 +105,24 @@ export function HTTPEventDetail({
   const httpEvents = useHTTPStore((state) => state.events)
   const { chainMap, eventMap } = useRedirectChain(httpEvents)
   const chainMeta = event ? chainMap.get(event.id) : undefined
+  const currentSummary = event ? eventMap.get(event.id) : undefined
+  const derivedPrevId = event?.redirectFromId ?? chainMeta?.prevId
+  const derivedNextId = useMemo(() => {
+    if (!event) return undefined
+    const candidates = httpEvents.filter((item) => item.redirectFromId === event.id)
+    if (candidates.length === 0) return chainMeta?.nextId
+    const currentSeq = currentSummary?.seqNum
+    if (typeof currentSeq === 'number') {
+      const sorted = candidates
+        .filter((item) => typeof item.seqNum === 'number' && item.seqNum > currentSeq)
+        .sort((a, b) => a.seqNum - b.seqNum)
+      return sorted[0]?.id ?? candidates[0]?.id
+    }
+    return candidates
+      .slice()
+      .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))[0]
+      ?.id
+  }, [event, httpEvents, chainMeta?.nextId, currentSummary?.seqNum])
 
   const finalEventSummary = useMemo(() => {
     if (!event) return null
@@ -132,22 +150,22 @@ export function HTTPEventDetail({
     return hasValue ? total : null
   }, [event, chainMeta, eventMap])
 
-  const hasDiff = Boolean(chainMeta?.prevId || chainMeta?.nextId)
-  const compareId = diffTarget === 'prev' ? chainMeta?.prevId : chainMeta?.nextId
+  const hasDiff = Boolean(derivedPrevId || derivedNextId)
+  const compareId = diffTarget === 'prev' ? derivedPrevId : derivedNextId
   const compareSummary = useMemo(
     () => (compareId ? eventMap.get(compareId) ?? null : null),
     [compareId, eventMap]
   )
 
   useEffect(() => {
-    if (!chainMeta) return
-    if (diffTarget === 'prev' && !chainMeta.prevId && chainMeta.nextId) {
+    if (!event) return
+    if (diffTarget === 'prev' && !derivedPrevId && derivedNextId) {
       setDiffTarget('next')
     }
-    if (diffTarget === 'next' && !chainMeta.nextId && chainMeta.prevId) {
+    if (diffTarget === 'next' && !derivedNextId && derivedPrevId) {
       setDiffTarget('prev')
     }
-  }, [chainMeta, diffTarget])
+  }, [event, diffTarget, derivedPrevId, derivedNextId])
 
   useEffect(() => {
     if (activeTab === 'diff' && !hasDiff) {
@@ -379,6 +397,7 @@ export function HTTPEventDetail({
   })()
   const queryCount = queryEntries.length
   const chainLabel = chainMeta && chainMeta.total > 1 ? `${chainMeta.index}/${chainMeta.total}` : null
+  const compareSnapshot = compareDetail ?? compareSummary
   const finalStatusCode = finalEventSummary?.statusCode ?? event.statusCode
   const resolveRedirectUrl = (location: string | null, baseUrl: string): string | null => {
     if (!location) return null
@@ -915,52 +934,24 @@ export function HTTPEventDetail({
               <>
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className="text-text-muted">对比对象</span>
-                  {chainMeta?.prevId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (diffTarget === 'prev') {
-                          setCompareDetail(null)
-                          setCompareError(null)
-                        }
-                        setDiffTarget('prev')
-                      }}
-                      className={clsx(
-                        'px-2 py-1 rounded border text-xs',
-                        diffTarget === 'prev'
-                          ? 'bg-primary text-white border-primary'
-                          : 'bg-bg-light text-text-muted border-border hover:bg-bg-lighter'
-                      )}
-                    >
-                      上一跳
-                    </button>
-                  )}
-                  {chainMeta?.nextId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (diffTarget === 'next') {
-                          setCompareDetail(null)
-                          setCompareError(null)
-                        }
-                        setDiffTarget('next')
-                      }}
-                      className={clsx(
-                        'px-2 py-1 rounded border text-xs',
-                        diffTarget === 'next'
-                          ? 'bg-primary text-white border-primary'
-                          : 'bg-bg-light text-text-muted border-border hover:bg-bg-lighter'
-                      )}
-                    >
-                      下一跳
-                    </button>
-                  )}
                   {compareLoading && <span className="text-text-muted">加载中...</span>}
                   {compareError && <span className="text-red-400">{compareError}</span>}
                 </div>
+                {compareSnapshot && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-2xs text-text-muted">
+                    <span className="shrink-0">当前</span>
+                    <span className="font-mono text-text-primary truncate max-w-[280px]" title={event.url}>
+                      {event.url}
+                    </span>
+                    <span className="shrink-0 text-text-muted">对比</span>
+                    <span className="font-mono text-text-primary truncate max-w-[280px]" title={compareSnapshot.url}>
+                      {compareSnapshot.url}
+                    </span>
+                  </div>
+                )}
 
                 <Section title="基本信息对比">
-                  <BasicDiffTable current={event} compare={compareSummary} />
+                  <BasicDiffTable current={event} compare={compareDetail ?? compareSummary} />
                 </Section>
 
                 <Section title="Headers 对比">
@@ -1049,7 +1040,7 @@ function BasicDiffTable({
   compare,
 }: {
   current: HTTPEventDetailType
-  compare: HTTPEventSummary | null
+  compare: HTTPEventSummary | HTTPEventDetailType | null
 }) {
   const rows = [
     {
