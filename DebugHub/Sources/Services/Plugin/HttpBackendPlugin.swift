@@ -147,9 +147,9 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
             mockRuleId: event.mockRuleId,
             traceId: event.request.traceId,
             timingJSON: timingJSON,
-            isReplay: event.isReplay ?? false,
             redirectFromId: event.redirectFromId,
-            redirectToUrl: event.redirectToUrl
+            redirectToUrl: event.redirectToUrl,
+            isReplay: event.isReplay ?? false
         )
 
         try await model.save(on: db)
@@ -232,7 +232,7 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
 
         let items = events.map { event in
             let redirectToUrl = resolveRedirectToUrl(event)
-            PluginHTTPEventSummaryDTO(
+            return PluginHTTPEventSummaryDTO(
                 id: event.id ?? "",
                 method: event.method,
                 url: event.url,

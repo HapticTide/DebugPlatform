@@ -127,9 +127,9 @@ final class EventIngestor: @unchecked Sendable {
             mockRuleId: event.mockRuleId,
             traceId: event.request.traceId,
             timingJSON: timingJSON,
-            isReplay: event.isReplay ?? false,
             redirectFromId: event.redirectFromId,
             redirectToUrl: event.redirectToUrl,
+            isReplay: event.isReplay ?? false,
             seqNum: seqNum
         )
 

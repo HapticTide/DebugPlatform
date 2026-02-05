@@ -597,6 +597,7 @@ import type {
   DBTablePageResult,
   DBQueryResponse,
   DBSearchResponse,
+  DBTableRowsResponse,
 } from '@/types'
 
 export async function listDatabases(deviceId: string): Promise<DBListDatabasesResponse> {
@@ -666,6 +667,25 @@ export async function searchDatabase(
   params: SearchDatabaseParams
 ): Promise<DBSearchResponse> {
   return fetchJSON(`${API_BASE}/devices/${deviceId}/databases/${dbId}/search`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params),
+  })
+}
+
+export interface FetchSearchRowsParams {
+  tableName: string
+  rowIds: string[]
+}
+
+export async function fetchSearchRows(
+  deviceId: string,
+  dbId: string,
+  params: FetchSearchRowsParams
+): Promise<DBTableRowsResponse> {
+  return fetchJSON(`${API_BASE}/devices/${deviceId}/databases/${dbId}/search/rows`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

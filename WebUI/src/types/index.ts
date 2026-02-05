@@ -492,6 +492,8 @@ export interface DBTableSearchResult {
   matchedColumns: string[]
   /// 预览行数据
   previewRows: DBRow[]
+  /// 所有匹配行的 rowid（升序）
+  matchRowIds: string[]
   /// 表的列信息
   columns: DBColumnInfo[]
 }
@@ -507,6 +509,13 @@ export interface DBSearchResponse {
   totalMatches: number
   /// 搜索耗时（毫秒）
   searchDurationMs: number
+}
+
+export interface DBTableRowsResponse {
+  dbId: string
+  table: string
+  columns: DBColumnInfo[]
+  rows: DBRow[]
 }
 
 // ============================================================================

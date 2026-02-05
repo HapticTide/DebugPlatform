@@ -130,6 +130,7 @@ enum DBCommandKindDTO: String, Content {
     case fetchTablePage
     case executeQuery
     case searchDatabase
+    case fetchRowsByRowIds
 }
 
 /// 数据库命令
@@ -146,6 +147,7 @@ struct DBCommandDTO: Content {
     let keyword: String? // 搜索关键词
     let maxResultsPerTable: Int? // 每表最大结果数
     let targetRowId: String? // 目标行 ID（用于跳转定位）
+    let rowIds: [String]? // 批量 rowid
 
     init(
         requestId: String,
@@ -159,7 +161,8 @@ struct DBCommandDTO: Content {
         query: String? = nil,
         keyword: String? = nil,
         maxResultsPerTable: Int? = nil,
-        targetRowId: String? = nil
+        targetRowId: String? = nil,
+        rowIds: [String]? = nil
     ) {
         self.requestId = requestId
         self.kind = kind
@@ -173,6 +176,7 @@ struct DBCommandDTO: Content {
         self.keyword = keyword
         self.maxResultsPerTable = maxResultsPerTable
         self.targetRowId = targetRowId
+        self.rowIds = rowIds
     }
 }
 
@@ -255,6 +259,8 @@ struct DBTableSearchResultDTO: Content {
     let matchedColumns: [String]
     /// 预览行数据
     let previewRows: [DBRowDTO]
+    /// 所有匹配行的 rowid（升序）
+    let matchRowIds: [String]
     /// 表的列信息
     let columns: [DBColumnInfoDTO]
 }
@@ -271,4 +277,12 @@ struct DBSearchResponseDTO: Content {
     let totalMatches: Int
     /// 搜索耗时（毫秒）
     let searchDurationMs: Double
+}
+
+/// 按 rowid 批量取行响应
+struct DBTableRowsResponseDTO: Content {
+    let dbId: String
+    let table: String
+    let columns: [DBColumnInfoDTO]
+    let rows: [DBRowDTO]
 }

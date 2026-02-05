@@ -14,9 +14,11 @@ import { BlobCell, isBase64Blob } from './BlobCell'
 import { SQLEditor } from './SQLEditor'
 import { ListLoadingOverlay } from './ListLoadingOverlay'
 import { TextPopover } from './TextPopover'
-import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, UnlockIcon, ArrowUpIcon, ArrowDownIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon, FolderIcon, CheckIcon, SQLIcon, ChevronDownIcon, ChevronRightIcon, ClockIcon, TrashIcon } from './icons'
+import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, UnlockIcon, ArrowUpIcon, ArrowDownIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon, FolderIcon, CheckIcon, SQLIcon, ChevronDownIcon, ChevronRightIcon, ChevronLeftIcon, ClockIcon, TrashIcon } from './icons'
 import { useToastStore } from '@/stores/toastStore'
-import type { DatabaseLocation, DBInfo, DBQueryError } from '@/types'
+import type { DatabaseLocation, DBInfo, DBQueryError, DBRow } from '@/types'
+import { fetchSearchRows } from '@/services/api'
+import { getDbSearchWarningThresholds } from '@/utils/dbSearchConfig'
 interface DBInspectorProps {
     deviceId: string
 }
@@ -54,6 +56,8 @@ function highlightKeyword(text: string, keyword: string): React.ReactNode {
 
     return parts.length > 0 ? parts : text
 }
+
+const SEARCH_MATCH_PAGE_SIZE = 50
 
 // 格式化文件大小
 function formatBytes(bytes: number | null | undefined): string {
@@ -218,6 +222,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         searchHistory,
         highlightRowId,
         pendingTargetRowId,
+        isJumpingToMatch,
         // Actions
         loadDatabases,
         loadTables,
@@ -251,6 +256,16 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
 
     // 搜索历史下拉菜单状态
     const [showSearchHistory, setShowSearchHistory] = useState(false)
+    const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false)
+    const searchInputRef = useRef<HTMLInputElement | null>(null)
+
+    // 搜索结果分页与导航状态
+    const [currentMatchTable, setCurrentMatchTable] = useState<string | null>(null)
+    const [currentMatchRowIndex, setCurrentMatchRowIndex] = useState(0)
+    const [matchPageByTable, setMatchPageByTable] = useState<Record<string, number>>({})
+    const [matchRowsByTable, setMatchRowsByTable] = useState<Record<string, DBRow[]>>({})
+    const [matchRowsLoadingByTable, setMatchRowsLoadingByTable] = useState<Record<string, boolean>>({})
+    const [matchRowsErrorByTable, setMatchRowsErrorByTable] = useState<Record<string, string | null>>({})
 
     // Protobuf 配置
     const { descriptorMeta, getColumnConfig } = useProtobufStore()
@@ -261,11 +276,169 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         setShowProtobufConfig(false)
     }, [selectedTable])
 
+    // 搜索结果变化时重置导航与分页缓存
+    useEffect(() => {
+        setCurrentMatchTable(null)
+        setCurrentMatchRowIndex(0)
+        setMatchPageByTable({})
+        setMatchRowsByTable({})
+        setMatchRowsLoadingByTable({})
+        setMatchRowsErrorByTable({})
+    }, [globalSearchResult?.keyword, globalSearchResult?.dbId])
+
+    useEffect(() => {
+        if (!isSearchPanelOpen) return
+        const timer = setTimeout(() => {
+            searchInputRef.current?.focus()
+        }, 0)
+        return () => clearTimeout(timer)
+    }, [isSearchPanelOpen])
+
+    const searchTableResults = useMemo(() => {
+        const rawResults = globalSearchResult?.tableResults ?? []
+        return rawResults.map(result => ({
+            ...result,
+            matchRowIds: result.matchRowIds ?? [],
+        }))
+    }, [globalSearchResult])
+
+    const searchWarning = useMemo(() => {
+        if (!globalSearchResult) return null
+        const thresholds = getDbSearchWarningThresholds()
+        const totalOver = thresholds.totalMatches > 0 && globalSearchResult.totalMatches >= thresholds.totalMatches
+        const tableOver = globalSearchResult.tableResults.filter(result =>
+            thresholds.perTableMatches > 0 && result.matchCount >= thresholds.perTableMatches
+        )
+
+        if (!totalOver && tableOver.length === 0) return null
+
+        return {
+            thresholds,
+            totalOver,
+            tableOver,
+        }
+    }, [globalSearchResult])
+
+    const getSearchResultByTable = useCallback((tableName: string) => {
+        return searchTableResults.find(result => result.tableName === tableName) || null
+    }, [searchTableResults])
+
+    const loadMatchRows = useCallback(async (tableName: string, pageToLoad: number) => {
+        if (!globalSearchResult || !selectedDb) return
+        const result = getSearchResultByTable(tableName)
+        if (!result) return
+
+        const rowIds = result.matchRowIds || []
+        const start = (pageToLoad - 1) * SEARCH_MATCH_PAGE_SIZE
+        const slice = rowIds.slice(start, start + SEARCH_MATCH_PAGE_SIZE)
+
+        setMatchRowsLoadingByTable(prev => ({ ...prev, [tableName]: true }))
+        setMatchRowsErrorByTable(prev => ({ ...prev, [tableName]: null }))
+
+        if (slice.length === 0) {
+            setMatchRowsByTable(prev => ({ ...prev, [tableName]: [] }))
+            setMatchRowsLoadingByTable(prev => ({ ...prev, [tableName]: false }))
+            return
+        }
+
+        try {
+            const response = await fetchSearchRows(deviceId, selectedDb, { tableName, rowIds: slice })
+            setMatchRowsByTable(prev => ({ ...prev, [tableName]: response.rows }))
+            setMatchRowsLoadingByTable(prev => ({ ...prev, [tableName]: false }))
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : '加载匹配结果失败'
+            setMatchRowsErrorByTable(prev => ({ ...prev, [tableName]: errorMsg }))
+            setMatchRowsLoadingByTable(prev => ({ ...prev, [tableName]: false }))
+        }
+    }, [deviceId, getSearchResultByTable, globalSearchResult, selectedDb])
+
+    const ensureMatchPageForRow = useCallback((tableName: string, rowIndex: number) => {
+        const pageToLoad = Math.floor(rowIndex / SEARCH_MATCH_PAGE_SIZE) + 1
+        setMatchPageByTable(prev => {
+            if (prev[tableName] === pageToLoad) return prev
+            return { ...prev, [tableName]: pageToLoad }
+        })
+        loadMatchRows(tableName, pageToLoad)
+    }, [loadMatchRows])
+
+    const searchNavState = useMemo(() => {
+        if (!currentMatchTable) {
+            return {
+                currentTableIndex: -1,
+                totalTables: searchTableResults.length,
+                totalMatchesInTable: 0,
+                hasPrevMatch: searchTableResults.length > 0,
+                hasNextMatch: searchTableResults.length > 0,
+                hasPrevTable: searchTableResults.length > 0,
+                hasNextTable: searchTableResults.length > 0,
+            }
+        }
+
+        const tableIndex = searchTableResults.findIndex(result => result.tableName === currentMatchTable)
+        const totalTables = searchTableResults.length
+        const currentTableResult = tableIndex >= 0 ? searchTableResults[tableIndex] : null
+        const totalMatchesInTable = currentTableResult?.matchRowIds.length ?? 0
+
+        let hasPrevMatch = currentMatchRowIndex > 0
+        if (!hasPrevMatch) {
+            for (let i = tableIndex - 1; i >= 0; i -= 1) {
+                if (searchTableResults[i].matchRowIds.length > 0) {
+                    hasPrevMatch = true
+                    break
+                }
+            }
+        }
+
+        let hasNextMatch = currentMatchRowIndex + 1 < totalMatchesInTable
+        if (!hasNextMatch) {
+            for (let i = tableIndex + 1; i < searchTableResults.length; i += 1) {
+                if (searchTableResults[i].matchRowIds.length > 0) {
+                    hasNextMatch = true
+                    break
+                }
+            }
+        }
+
+        let hasPrevTable = false
+        for (let i = tableIndex - 1; i >= 0; i -= 1) {
+            if (searchTableResults[i].matchRowIds.length > 0) {
+                hasPrevTable = true
+                break
+            }
+        }
+
+        let hasNextTable = false
+        for (let i = tableIndex + 1; i < searchTableResults.length; i += 1) {
+            if (searchTableResults[i].matchRowIds.length > 0) {
+                hasNextTable = true
+                break
+            }
+        }
+
+        return {
+            currentTableIndex: tableIndex,
+            totalTables,
+            totalMatchesInTable,
+            hasPrevMatch,
+            hasNextMatch,
+            hasPrevTable,
+            hasNextTable,
+        }
+    }, [currentMatchRowIndex, currentMatchTable, searchTableResults])
+
     // 当前表的描述符数量
     const currentTableDescriptorCount = useMemo(() => {
         if (!selectedDb || !selectedTable) return 0
         return descriptorMeta.filter(d => d.dbId === selectedDb && d.tableName === selectedTable).length
     }, [descriptorMeta, selectedDb, selectedTable])
+
+    const showSearchNav = Boolean(
+        globalSearchResult &&
+        currentMatchTable &&
+        selectedTable === currentMatchTable &&
+        searchNavState.currentTableIndex >= 0
+    )
+    const showSearchPanel = isSearchPanelOpen
 
     // 列筛选状态：columnName -> filterValue
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
@@ -476,6 +649,140 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
             loadTableData(deviceId, selectedDb, table)
         }
     }, [selectTable, selectedDb, deviceId, loadSchema, loadTableData])
+
+    const jumpToMatch = useCallback((tableName: string, rowIndex: number, rowId: string) => {
+        setCurrentMatchTable(tableName)
+        setCurrentMatchRowIndex(rowIndex)
+        ensureMatchPageForRow(tableName, rowIndex)
+        if (selectedDb) {
+            jumpToSearchResultRow(deviceId, selectedDb, tableName, rowId)
+        } else {
+            navigateToSearchResult(tableName, rowId)
+        }
+    }, [deviceId, ensureMatchPageForRow, jumpToSearchResultRow, navigateToSearchResult, selectedDb])
+
+    const handleSelectSearchTable = useCallback((tableName: string) => {
+        const result = getSearchResultByTable(tableName)
+        if (!result || result.matchRowIds.length === 0) {
+            navigateToSearchResult(tableName)
+            return
+        }
+        const firstRowId = result.matchRowIds[0]
+        jumpToMatch(tableName, 0, firstRowId)
+    }, [getSearchResultByTable, jumpToMatch, navigateToSearchResult])
+
+    const handleSelectSearchRow = useCallback((tableName: string, rowIndex: number, rowId: string) => {
+        jumpToMatch(tableName, rowIndex, rowId)
+    }, [jumpToMatch])
+
+    const handleMatchPageChange = useCallback((tableName: string, nextPage: number) => {
+        setMatchPageByTable(prev => ({ ...prev, [tableName]: nextPage }))
+        loadMatchRows(tableName, nextPage)
+    }, [loadMatchRows])
+
+    const handleNextMatch = useCallback(() => {
+        if (!globalSearchResult || searchTableResults.length === 0) return
+        let tableIndex = currentMatchTable
+            ? searchTableResults.findIndex(result => result.tableName === currentMatchTable)
+            : 0
+
+        if (tableIndex < 0) tableIndex = 0
+        let rowIndex = currentMatchTable ? currentMatchRowIndex : -1
+
+        while (tableIndex < searchTableResults.length) {
+            const rowIds = searchTableResults[tableIndex].matchRowIds
+            if (rowIds.length === 0) {
+                tableIndex += 1
+                rowIndex = -1
+                continue
+            }
+
+            if (rowIndex + 1 < rowIds.length) {
+                rowIndex += 1
+                jumpToMatch(searchTableResults[tableIndex].tableName, rowIndex, rowIds[rowIndex])
+                return
+            }
+
+            tableIndex += 1
+            rowIndex = -1
+        }
+    }, [currentMatchRowIndex, currentMatchTable, globalSearchResult, jumpToMatch, searchTableResults])
+
+    const handlePrevMatch = useCallback(() => {
+        if (!globalSearchResult || searchTableResults.length === 0) return
+
+        if (!currentMatchTable) {
+            // 未定位时，跳到最后一条匹配
+            for (let idx = searchTableResults.length - 1; idx >= 0; idx -= 1) {
+                const rowIds = searchTableResults[idx].matchRowIds
+                if (rowIds.length > 0) {
+                    const lastIndex = rowIds.length - 1
+                    jumpToMatch(searchTableResults[idx].tableName, lastIndex, rowIds[lastIndex])
+                    return
+                }
+            }
+            return
+        }
+
+        let tableIndex = searchTableResults.findIndex(result => result.tableName === currentMatchTable)
+        if (tableIndex < 0) tableIndex = searchTableResults.length - 1
+
+        while (tableIndex >= 0) {
+            const rowIds = searchTableResults[tableIndex].matchRowIds
+            if (rowIds.length === 0) {
+                tableIndex -= 1
+                continue
+            }
+
+            if (tableIndex === searchTableResults.findIndex(result => result.tableName === currentMatchTable)) {
+                if (currentMatchRowIndex - 1 >= 0) {
+                    const prevIndex = currentMatchRowIndex - 1
+                    jumpToMatch(searchTableResults[tableIndex].tableName, prevIndex, rowIds[prevIndex])
+                    return
+                }
+                tableIndex -= 1
+                continue
+            }
+
+            const lastIndex = rowIds.length - 1
+            jumpToMatch(searchTableResults[tableIndex].tableName, lastIndex, rowIds[lastIndex])
+            return
+        }
+    }, [currentMatchRowIndex, currentMatchTable, globalSearchResult, jumpToMatch, searchTableResults])
+
+    const handleNextTable = useCallback(() => {
+        if (!globalSearchResult || searchTableResults.length === 0) return
+        let tableIndex = currentMatchTable
+            ? searchTableResults.findIndex(result => result.tableName === currentMatchTable)
+            : -1
+        tableIndex += 1
+
+        while (tableIndex < searchTableResults.length) {
+            const rowIds = searchTableResults[tableIndex].matchRowIds
+            if (rowIds.length > 0) {
+                jumpToMatch(searchTableResults[tableIndex].tableName, 0, rowIds[0])
+                return
+            }
+            tableIndex += 1
+        }
+    }, [currentMatchTable, globalSearchResult, jumpToMatch, searchTableResults])
+
+    const handlePrevTable = useCallback(() => {
+        if (!globalSearchResult || searchTableResults.length === 0) return
+        let tableIndex = currentMatchTable
+            ? searchTableResults.findIndex(result => result.tableName === currentMatchTable)
+            : searchTableResults.length
+        tableIndex -= 1
+
+        while (tableIndex >= 0) {
+            const rowIds = searchTableResults[tableIndex].matchRowIds
+            if (rowIds.length > 0) {
+                jumpToMatch(searchTableResults[tableIndex].tableName, 0, rowIds[0])
+                return
+            }
+            tableIndex -= 1
+        }
+    }, [currentMatchTable, globalSearchResult, jumpToMatch, searchTableResults])
 
     // 处理排序
     const handleSort = useCallback((column: string) => {
@@ -853,214 +1160,27 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                         </div>
                     </div>
 
-                    {/* 全局搜索框 */}
-                    {selectedDb && (
-                        <div className="mb-3">
-                            <div className="relative">
-                                    <input
-                                        type="text"
-                                        value={globalSearchKeyword}
-                                        onChange={(e) => setGlobalSearchKeyword(e.target.value)}
-                                        onFocus={() => setShowSearchHistory(true)}
-                                        onBlur={() => {
-                                            // 延迟隐藏，以便点击历史项
-                                            setTimeout(() => setShowSearchHistory(false), 200)
-                                        }}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && globalSearchKeyword.trim()) {
-                                                executeGlobalSearch(deviceId)
-                                                setShowSearchHistory(false)
-                                            }
-                                        }}
-                                        placeholder="搜索所有表..."
-                                        className="w-full px-3 py-1.5 pl-8 text-xs bg-bg-light border border-border rounded focus:outline-none focus:border-primary transition-colors"
-                                    />
-                                    <SearchIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-                                {globalSearchKeyword && (
-                                    <button
-                                        onClick={clearGlobalSearch}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary"
-                                        title="清除搜索"
-                                    >
-                                        <XIcon size={12} />
-                                    </button>
-                                )}
-
-                                {/* 搜索历史下拉菜单 */}
-                                {showSearchHistory && searchHistory.length > 0 && !globalSearchKeyword && (
-                                    <div className="absolute z-50 w-full mt-1 bg-bg-dark border border-border rounded-lg shadow-xl overflow-hidden">
-                                        <div className="flex items-center justify-between px-2 py-1.5 bg-bg-tertiary border-b border-border">
-                                            <span className="text-2xs text-text-muted flex items-center gap-1">
-                                                <ClockIcon size={10} />
-                                                搜索历史
-                                            </span>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.preventDefault()
-                                                    e.stopPropagation()
-                                                    clearSearchHistory()
-                                                }}
-                                                className="text-2xs text-text-muted hover:text-red-400 flex items-center gap-0.5"
-                                                title="清除所有历史"
-                                            >
-                                                <TrashIcon size={10} />
-                                                清除
-                                            </button>
-                                        </div>
-                                        <div className="max-h-40 overflow-y-auto bg-bg-dark">
-                                            {searchHistory.map((keyword, index) => (
-                                                <div
-                                                    key={index}
-                                                    className="flex items-center justify-between px-2 py-1.5 hover:bg-bg-lighter cursor-pointer group"
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault()
-                                                        setGlobalSearchKeyword(keyword)
-                                                        setShowSearchHistory(false)
-                                                        // 自动执行搜索
-                                                        setTimeout(() => executeGlobalSearch(deviceId), 0)
-                                                    }}
-                                                >
-                                                    <span className="text-xs text-text-secondary truncate flex-1">
-                                                        {keyword}
-                                                    </span>
-                                                    <button
-                                                        onMouseDown={(e) => {
-                                                            e.preventDefault()
-                                                            e.stopPropagation()
-                                                            removeFromSearchHistory(keyword)
-                                                        }}
-                                                        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 ml-2"
-                                                        title="删除此记录"
-                                                    >
-                                                        <XIcon size={10} />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            {globalSearchKeyword.trim() && (
-                                <button
-                                    onClick={() => executeGlobalSearch(deviceId)}
-                                    disabled={globalSearchLoading}
-                                    className="w-full mt-1.5 px-3 py-1.5 bg-primary text-bg-darkest rounded text-xs hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                                >
-                                    {globalSearchLoading ? (
-                                        <>
-                                            <div className="animate-spin w-3 h-3 border-2 border-bg-darkest border-t-transparent rounded-full" />
-                                            搜索中...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <SearchIcon size={12} />
-                                            搜索全部表
-                                        </>
-                                    )}
-                                </button>
+                    <div className="mb-3">
+                        <button
+                            onClick={() => setIsSearchPanelOpen(true)}
+                            disabled={!selectedDb}
+                            className={clsx(
+                                'w-full px-3 py-2 rounded text-xs flex items-center justify-center gap-1 transition-colors',
+                                selectedDb
+                                    ? 'bg-primary text-bg-darkest hover:bg-primary/90'
+                                    : 'bg-bg-light text-text-muted cursor-not-allowed'
                             )}
-                        </div>
-                    )}
-
-                    {/* 搜索结果展示 */}
-                    {globalSearchResult && (
-                        <div className="mb-3 p-2 bg-bg-light rounded-lg border border-border">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-medium text-primary">
-                                    找到 {globalSearchResult.totalMatches} 条匹配
+                            title={selectedDb ? '打开跨表搜索' : '请先选择数据库'}
+                        >
+                            <SearchIcon size={12} />
+                            跨表搜索
+                            {globalSearchResult && (
+                                <span className="ml-1 px-1.5 py-0.5 rounded bg-bg-darkest/20 text-[10px]">
+                                    {globalSearchResult.totalMatches}
                                 </span>
-                                <span className="text-2xs text-text-muted">
-                                    {globalSearchResult.searchDurationMs.toFixed(0)}ms
-                                </span>
-                            </div>
-                            {globalSearchResult.tableResults.length === 0 ? (
-                                <p className="text-xs text-text-muted text-center py-2">
-                                    未找到匹配结果
-                                </p>
-                            ) : (
-                                <div className="space-y-2 max-h-64 overflow-auto">
-                                    {globalSearchResult.tableResults.map((result) => (
-                                        <div key={result.tableName} className="border border-border rounded overflow-hidden">
-                                            <button
-                                                onClick={() => {
-                                                    // 导航到表并加载数据
-                                                    navigateToSearchResult(result.tableName)
-                                                }}
-                                                className={clsx(
-                                                    'w-full px-2 py-1.5 text-left text-xs transition-colors',
-                                                    selectedTable === result.tableName
-                                                        ? 'bg-accent-blue/20 text-accent-blue'
-                                                        : 'text-text-secondary hover:bg-bg-lighter bg-bg-tertiary'
-                                                )}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-mono truncate">{result.tableName}</span>
-                                                    <span className="text-2xs text-accent-blue bg-accent-blue/10 px-1.5 py-0.5 rounded">
-                                                        {result.matchCount}
-                                                    </span>
-                                                </div>
-                                                <div className="text-2xs text-text-muted mt-0.5 truncate">
-                                                    匹配列: {result.matchedColumns.join(', ')}
-                                                </div>
-                                            </button>
-                                            {/* 预览行展示 */}
-                                            {result.previewRows && result.previewRows.length > 0 && (
-                                                <div className="bg-bg-secondary/50 border-t border-border max-h-24 overflow-auto">
-                                                    {result.previewRows.slice(0, 3).map((row, rowIdx) => {
-                                                        const rowId = row.values['_rowid'] ?? null
-                                                        return (
-                                                            <div
-                                                                key={rowIdx}
-                                                                onClick={() => {
-                                                                    // 点击预览行跳转到该表并高亮该行
-                                                                    if (selectedDb && rowId) {
-                                                                        jumpToSearchResultRow(deviceId, selectedDb, result.tableName, rowId)
-                                                                    } else {
-                                                                        navigateToSearchResult(result.tableName)
-                                                                    }
-                                                                }}
-                                                                className="px-2 py-1 text-2xs text-text-muted border-b border-border last:border-b-0 truncate font-mono hover:bg-bg-lighter cursor-pointer flex items-center gap-2"
-                                                            >
-                                                                {/* 显示行号 */}
-                                                                {rowId && (
-                                                                    <span className="text-accent-blue/70 min-w-[2.5rem] text-right" title="Row ID">
-                                                                        #{rowId}
-                                                                    </span>
-                                                                )}
-                                                                <span className="flex-1 truncate">
-                                                                    {result.matchedColumns.slice(0, 2).map((colName) => (
-                                                                        <span key={colName} className="mr-3">
-                                                                            <span className="text-text-secondary">{colName}:</span>{' '}
-                                                                            <span className="text-text-primary">
-                                                                                {highlightKeyword(String(row.values[colName] ?? 'NULL'), globalSearchKeyword)}
-                                                                            </span>
-                                                                        </span>
-                                                                    ))}
-                                                                </span>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
                             )}
-                            <button
-                                onClick={clearGlobalSearch}
-                                className="w-full mt-2 px-2 py-1 text-2xs text-text-muted hover:text-text-secondary hover:bg-bg-lighter rounded transition-colors"
-                            >
-                                关闭搜索结果
-                            </button>
-                        </div>
-                    )}
-
-                    {/* 搜索错误 */}
-                    {globalSearchError && (
-                        <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400">
-                            {globalSearchError}
-                        </div>
-                    )}
+                        </button>
+                    </div>
 
                     {tablesLoading ? (
                         <div className="flex items-center justify-center py-8">
@@ -1098,6 +1218,357 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                     )}
                 </div>
             </div>
+
+            {showSearchPanel && (
+                <div className="w-[360px] min-w-[320px] max-w-[420px] flex-shrink-0 border-r border-border bg-bg-dark/70 flex flex-col">
+                    <div className="px-3 py-2 border-b border-border bg-bg-dark/80 flex items-center justify-between">
+                        <span className="text-xs font-medium text-text-muted uppercase tracking-wider">
+                            跨表搜索
+                        </span>
+                        <button
+                            onClick={() => setIsSearchPanelOpen(false)}
+                            className="px-2 py-1 rounded text-2xs text-text-muted hover:text-text-secondary hover:bg-bg-light transition-colors"
+                        >
+                            关闭
+                        </button>
+                    </div>
+                    <div className="px-3 py-2 border-b border-border bg-bg-dark/60">
+                        <div className="relative">
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                value={globalSearchKeyword}
+                                onChange={(e) => setGlobalSearchKeyword(e.target.value)}
+                                onFocus={() => setShowSearchHistory(true)}
+                                onBlur={() => {
+                                    setTimeout(() => setShowSearchHistory(false), 200)
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && globalSearchKeyword.trim()) {
+                                        executeGlobalSearch(deviceId)
+                                        setShowSearchHistory(false)
+                                    }
+                                }}
+                                placeholder="搜索所有表..."
+                                className="w-full px-3 py-1.5 pl-8 text-xs bg-bg-light border border-border rounded focus:outline-none focus:border-primary transition-colors"
+                            />
+                            <SearchIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                            {globalSearchKeyword && (
+                                <button
+                                    onClick={clearGlobalSearch}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary"
+                                    title="清除搜索"
+                                >
+                                    <XIcon size={12} />
+                                </button>
+                            )}
+
+                            {showSearchHistory && searchHistory.length > 0 && !globalSearchKeyword && (
+                                <div className="absolute z-50 w-full mt-1 bg-bg-dark border border-border rounded-lg shadow-xl overflow-hidden">
+                                    <div className="flex items-center justify-between px-2 py-1.5 bg-bg-tertiary border-b border-border">
+                                        <span className="text-2xs text-text-muted flex items-center gap-1">
+                                            <ClockIcon size={10} />
+                                            搜索历史
+                                        </span>
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                clearSearchHistory()
+                                            }}
+                                            className="text-2xs text-text-muted hover:text-red-400 flex items-center gap-0.5"
+                                            title="清除所有历史"
+                                        >
+                                            <TrashIcon size={10} />
+                                            清除
+                                        </button>
+                                    </div>
+                                    <div className="max-h-40 overflow-y-auto bg-bg-dark">
+                                        {searchHistory.map((keyword, index) => (
+                                            <div
+                                                key={index}
+                                                className="flex items-center justify-between px-2 py-1.5 hover:bg-bg-lighter cursor-pointer group"
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault()
+                                                    setGlobalSearchKeyword(keyword)
+                                                    setShowSearchHistory(false)
+                                                    setTimeout(() => executeGlobalSearch(deviceId), 0)
+                                                }}
+                                            >
+                                                <span className="text-xs text-text-secondary truncate flex-1">
+                                                    {keyword}
+                                                </span>
+                                                <button
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault()
+                                                        e.stopPropagation()
+                                                        removeFromSearchHistory(keyword)
+                                                    }}
+                                                    className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 ml-2"
+                                                    title="删除此记录"
+                                                >
+                                                    <XIcon size={10} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        {globalSearchKeyword.trim() && (
+                            <button
+                                onClick={() => executeGlobalSearch(deviceId)}
+                                disabled={globalSearchLoading}
+                                className="w-full mt-2 px-3 py-1.5 bg-primary text-bg-darkest rounded text-xs hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                            >
+                                {globalSearchLoading ? (
+                                    <>
+                                        <div className="animate-spin w-3 h-3 border-2 border-bg-darkest border-t-transparent rounded-full" />
+                                        搜索中...
+                                    </>
+                                ) : (
+                                    <>
+                                        <SearchIcon size={12} />
+                                        搜索全部表
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex-1 overflow-hidden p-3">
+                        {globalSearchLoading && !globalSearchResult && (
+                            <div className="h-full flex items-center justify-center text-text-muted">
+                                <div className="flex items-center gap-2 text-xs">
+                                    <div className="animate-spin w-3 h-3 border-2 border-primary border-t-transparent rounded-full" />
+                                    搜索中...
+                                </div>
+                            </div>
+                        )}
+
+                        {globalSearchError && (
+                            <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400">
+                                {globalSearchError}
+                            </div>
+                        )}
+
+                        {globalSearchResult && (
+                            <div className="h-full flex flex-col bg-bg-light border border-border rounded-lg overflow-hidden">
+                                <div className="px-3 py-2 border-b border-border bg-bg-tertiary flex items-center justify-between">
+                                    <span className="text-xs font-medium text-primary">
+                                        找到 {globalSearchResult.totalMatches} 条匹配
+                                    </span>
+                                    <span className="text-2xs text-text-muted">
+                                        {globalSearchResult.searchDurationMs.toFixed(0)}ms
+                                    </span>
+                                </div>
+                                <div className="flex-1 overflow-auto p-2 space-y-2">
+                                    {searchWarning && (
+                                        <div className="px-2 py-1.5 rounded border border-yellow-500/40 bg-yellow-500/10 text-2xs text-yellow-300 flex items-start gap-2">
+                                            <WarningIcon size={12} className="mt-0.5" />
+                                            <div className="space-y-0.5">
+                                                <div className="text-yellow-200">
+                                                    结果过大，建议缩小关键词/缩小表范围
+                                                </div>
+                                                <div className="text-yellow-200/70">
+                                                    阈值：总匹配 ≥ {searchWarning.thresholds.totalMatches.toLocaleString()}，单表 ≥ {searchWarning.thresholds.perTableMatches.toLocaleString()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {searchTableResults.length === 0 ? (
+                                        <p className="text-xs text-text-muted text-center py-4">
+                                            未找到匹配结果
+                                        </p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {searchTableResults.map((result) => (
+                                                <div key={result.tableName} className="border border-border rounded overflow-hidden">
+                                                    {(() => {
+                                                        const isActiveSearchTable = currentMatchTable === result.tableName
+                                                        const matchRowIds = result.matchRowIds || []
+                                                        const matchCount = matchRowIds.length
+                                                        const isOversizedTable = Boolean(
+                                                            searchWarning && searchWarning.tableOver.some(item => item.tableName === result.tableName)
+                                                        )
+                                                        const currentMatchPage = matchPageByTable[result.tableName] || 1
+                                                        const totalMatchPages = Math.max(1, Math.ceil(matchCount / SEARCH_MATCH_PAGE_SIZE))
+                                                        const matchRows = matchRowsByTable[result.tableName] || []
+                                                        const matchLoading = matchRowsLoadingByTable[result.tableName]
+                                                        const matchError = matchRowsErrorByTable[result.tableName]
+                                                        const displayColumns = result.matchedColumns.length > 0
+                                                            ? result.matchedColumns.slice(0, 2)
+                                                            : result.columns.slice(0, 2).map(col => col.name)
+
+                                                        return (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        handleSelectSearchTable(result.tableName)
+                                                                    }}
+                                                                    className={clsx(
+                                                                        'w-full px-2 py-1.5 text-left text-xs transition-colors',
+                                                                        selectedTable === result.tableName
+                                                                            ? 'bg-accent-blue/20 text-accent-blue'
+                                                                            : 'text-text-secondary hover:bg-bg-lighter bg-bg-tertiary'
+                                                                    )}
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="font-mono truncate">{result.tableName}</span>
+                                                                        <div className="flex items-center gap-1">
+                                                                            {isOversizedTable && (
+                                                                                <span className="text-2xs text-yellow-300 bg-yellow-500/10 px-1 py-0.5 rounded border border-yellow-500/40">
+                                                                                    过大
+                                                                                </span>
+                                                                            )}
+                                                                            <span className="text-2xs text-accent-blue bg-accent-blue/10 px-1.5 py-0.5 rounded">
+                                                                                {result.matchCount}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-2xs text-text-muted mt-0.5 truncate">
+                                                                        匹配列: {result.matchedColumns.join(', ')}
+                                                                    </div>
+                                                                </button>
+                                                                {isActiveSearchTable ? (
+                                                                    <div className="bg-bg-secondary/50 border-t border-border">
+                                                                        <div className="flex items-center justify-between px-2 py-1 text-2xs text-text-muted border-b border-border">
+                                                                            <span>
+                                                                                {matchCount > 0
+                                                                                    ? `显示 ${Math.min((currentMatchPage - 1) * SEARCH_MATCH_PAGE_SIZE + 1, matchCount)}-${Math.min(currentMatchPage * SEARCH_MATCH_PAGE_SIZE, matchCount)} / ${matchCount}`
+                                                                                    : '暂无匹配'}
+                                                                            </span>
+                                                                            <div className="flex items-center gap-1">
+                                                                                <button
+                                                                                    onClick={() => handleMatchPageChange(result.tableName, Math.max(1, currentMatchPage - 1))}
+                                                                                    disabled={currentMatchPage <= 1 || matchLoading}
+                                                                                    className="px-1.5 py-0.5 rounded border border-border text-text-muted hover:text-text-secondary hover:bg-bg-lighter disabled:opacity-40"
+                                                                                >
+                                                                                    上一页
+                                                                                </button>
+                                                                                <span className="tabular-nums">
+                                                                                    {currentMatchPage}/{totalMatchPages}
+                                                                                </span>
+                                                                                <button
+                                                                                    onClick={() => handleMatchPageChange(result.tableName, Math.min(totalMatchPages, currentMatchPage + 1))}
+                                                                                    disabled={currentMatchPage >= totalMatchPages || matchLoading}
+                                                                                    className="px-1.5 py-0.5 rounded border border-border text-text-muted hover:text-text-secondary hover:bg-bg-lighter disabled:opacity-40"
+                                                                                >
+                                                                                    下一页
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                        {matchLoading ? (
+                                                                            <div className="py-3 flex items-center justify-center">
+                                                                                <div className="animate-spin w-3 h-3 border-2 border-primary border-t-transparent rounded-full" />
+                                                                            </div>
+                                                                        ) : matchError ? (
+                                                                            <div className="px-2 py-2 text-2xs text-red-400">
+                                                                                {matchError}
+                                                                            </div>
+                                                                        ) : matchRows.length === 0 ? (
+                                                                            <div className="px-2 py-2 text-2xs text-text-muted">暂无匹配</div>
+                                                                        ) : (
+                                                                            <div className="max-h-56 overflow-auto">
+                                                                                {matchRows.map((row, rowIdx) => {
+                                                                                    const rowId = row.values['_rowid'] ?? null
+                                                                                    const resolvedIndex = rowId ? matchRowIds.indexOf(String(rowId)) : -1
+                                                                                    const globalRowIndex = resolvedIndex >= 0
+                                                                                        ? resolvedIndex
+                                                                                        : (currentMatchPage - 1) * SEARCH_MATCH_PAGE_SIZE + rowIdx
+                                                                                    const isCurrent = currentMatchTable === result.tableName && globalRowIndex === currentMatchRowIndex
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={`${result.tableName}-${globalRowIndex}`}
+                                                                                            onClick={() => {
+                                                                                                if (rowId) {
+                                                                                                    handleSelectSearchRow(result.tableName, globalRowIndex, rowId)
+                                                                                                }
+                                                                                            }}
+                                                                                            className={clsx(
+                                                                                                'px-2 py-1 text-2xs border-b border-border last:border-b-0 truncate font-mono cursor-pointer flex items-center gap-2',
+                                                                                                isCurrent
+                                                                                                    ? 'bg-accent-blue/15 text-accent-blue'
+                                                                                                    : 'text-text-muted hover:bg-bg-lighter'
+                                                                                            )}
+                                                                                        >
+                                                                                            {rowId && (
+                                                                                                <span className="text-accent-blue/70 min-w-[2.5rem] text-right" title="Row ID">
+                                                                                                    #{rowId}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            <span className="flex-1 truncate">
+                                                                                                {displayColumns.map((colName) => (
+                                                                                                    <span key={colName} className="mr-3">
+                                                                                                        <span className="text-text-secondary">{colName}:</span>{' '}
+                                                                                                        <span className="text-text-primary">
+                                                                                                            {highlightKeyword(String(row.values[colName] ?? 'NULL'), globalSearchKeyword)}
+                                                                                                        </span>
+                                                                                                    </span>
+                                                                                                ))}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    )
+                                                                                })}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    result.previewRows && result.previewRows.length > 0 && (
+                                                                        <div className="bg-bg-secondary/50 border-t border-border max-h-32 overflow-auto">
+                                                                            {result.previewRows.slice(0, 3).map((row, rowIdx) => {
+                                                                                const rowId = row.values['_rowid'] ?? null
+                                                                                const resolvedIndex = rowId ? matchRowIds.indexOf(String(rowId)) : rowIdx
+                                                                                return (
+                                                                                    <div
+                                                                                        key={rowIdx}
+                                                                                        onClick={() => {
+                                                                                            if (rowId) {
+                                                                                                handleSelectSearchRow(result.tableName, resolvedIndex, rowId)
+                                                                                            } else {
+                                                                                                handleSelectSearchTable(result.tableName)
+                                                                                            }
+                                                                                        }}
+                                                                                        className="px-2 py-1 text-2xs text-text-muted border-b border-border last:border-b-0 truncate font-mono hover:bg-bg-lighter cursor-pointer flex items-center gap-2"
+                                                                                    >
+                                                                                        {rowId && (
+                                                                                            <span className="text-accent-blue/70 min-w-[2.5rem] text-right" title="Row ID">
+                                                                                                #{rowId}
+                                                                                            </span>
+                                                                                        )}
+                                                                                        <span className="flex-1 truncate">
+                                                                                            {result.matchedColumns.slice(0, 2).map((colName) => (
+                                                                                                <span key={colName} className="mr-3">
+                                                                                                    <span className="text-text-secondary">{colName}:</span>{' '}
+                                                                                                    <span className="text-text-primary">
+                                                                                                        {highlightKeyword(String(row.values[colName] ?? 'NULL'), globalSearchKeyword)}
+                                                                                                    </span>
+                                                                                                </span>
+                                                                                            ))}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )
+                                                                            })}
+                                                                            {matchCount > result.previewRows.length && (
+                                                                                <div className="px-2 py-1 text-2xs text-text-muted bg-bg-secondary/70">
+                                                                                    点击表名查看全部匹配
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )
+                                                                )}
+                                                            </>
+                                                        )
+                                                    })()}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* 右侧 - 表数据（带可选 SQL 查询面板） */}
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -1171,6 +1642,63 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                 </button>
                             </div>
                         </div>
+
+                        {showSearchNav && (
+                            <div className="px-4 py-2 border-b border-border bg-bg-dark/40 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 text-2xs text-text-muted">
+                                    <span className="px-2 py-0.5 rounded bg-accent-blue/10 text-accent-blue">
+                                        搜索: {globalSearchResult?.keyword}
+                                    </span>
+                                    <span className="tabular-nums">
+                                        表 {searchNavState.currentTableIndex + 1}/{searchNavState.totalTables}
+                                    </span>
+                                    <span className="tabular-nums">
+                                        匹配 {searchNavState.totalMatchesInTable > 0 ? currentMatchRowIndex + 1 : 0}/{searchNavState.totalMatchesInTable}
+                                    </span>
+                                    {isJumpingToMatch && (
+                                        <span className="flex items-center gap-1 text-accent-blue">
+                                            <div className="animate-spin w-3 h-3 border-2 border-accent-blue border-t-transparent rounded-full" />
+                                            定位中...
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 text-2xs">
+                                    <button
+                                        onClick={handlePrevMatch}
+                                        disabled={!searchNavState.hasPrevMatch || isJumpingToMatch}
+                                        className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-bg-lighter disabled:opacity-40 flex items-center gap-1"
+                                    >
+                                        <ChevronLeftIcon size={10} />
+                                        上一条
+                                    </button>
+                                    <button
+                                        onClick={handleNextMatch}
+                                        disabled={!searchNavState.hasNextMatch || isJumpingToMatch}
+                                        className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-bg-lighter disabled:opacity-40 flex items-center gap-1"
+                                    >
+                                        下一条
+                                        <ChevronRightIcon size={10} />
+                                    </button>
+                                    <div className="w-px h-4 bg-border" />
+                                    <button
+                                        onClick={handlePrevTable}
+                                        disabled={!searchNavState.hasPrevTable || isJumpingToMatch}
+                                        className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-bg-lighter disabled:opacity-40 flex items-center gap-1"
+                                    >
+                                        <ChevronLeftIcon size={10} />
+                                        上一表
+                                    </button>
+                                    <button
+                                        onClick={handleNextTable}
+                                        disabled={!searchNavState.hasNextTable || isJumpingToMatch}
+                                        className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-bg-lighter disabled:opacity-40 flex items-center gap-1"
+                                    >
+                                        下一表
+                                        <ChevronRightIcon size={10} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* 面板区域 - 可滚动并可调整高度 */}
                         {(showProtobufConfig || showSchema || queryMode) && (
@@ -1537,7 +2065,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                                     className={clsx(
                                                         "border-b border-border transition-colors",
                                                         isHighlightedRow
-                                                            ? "bg-accent-blue/20 ring-1 ring-accent-blue/50 ring-inset"
+                                                            ? "bg-primary/25 ring-2 ring-primary/80 ring-inset"
                                                             : isExpandedRow
                                                                 ? "bg-purple-500/10"
                                                                 : "hover:bg-bg-light/30"
@@ -1623,14 +2151,14 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => handlePageChange(Math.max(1, page - 1))}
-                                        disabled={page <= 1}
+                                        disabled={page <= 1 || isJumpingToMatch}
                                         className="px-3 py-1 bg-bg-light text-text-secondary rounded text-xs hover:bg-bg-lighter disabled:opacity-50 transition-colors"
                                     >
                                         上一页
                                     </button>
                                     <button
                                         onClick={() => handlePageChange(page + 1)}
-                                        disabled={page >= Math.ceil(tableData.totalRows / pageSize)}
+                                        disabled={page >= Math.ceil(tableData.totalRows / pageSize) || isJumpingToMatch}
                                         className="px-3 py-1 bg-bg-light text-text-secondary rounded text-xs hover:bg-bg-lighter disabled:opacity-50 transition-colors"
                                     >
                                         下一页
@@ -1709,7 +2237,7 @@ function DatabaseItem({
                         {db.encryptionStatus === 'unlocked' && (
                             <span
                                 className={clsx(
-                                    isSelected ? 'text-emerald-300' : 'text-emerald-500'
+                                    isSelected ? 'text-bg-darkest/70' : 'text-emerald-500'
                                 )}
                                 title={`已解锁 (${db.descriptor.encryptionType || 'SQLCipher'})`}
                             >

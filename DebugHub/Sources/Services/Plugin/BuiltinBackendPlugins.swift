@@ -433,6 +433,7 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         db.get(":dbId", "tables", ":table", "rows", use: fetchTablePage)
         db.post(":dbId", "query", use: executeQuery)
         db.post(":dbId", "search", use: searchDatabase)
+        db.post(":dbId", "search", "rows", use: fetchSearchRows)
     }
 
     public func handleEvent(_ event: PluginEventDTO, from deviceId: String) async {
@@ -717,6 +718,64 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601WithMilliseconds
         return try decoder.decode(DBSearchResponseDTO.self, from: payload)
+    }
+
+    func fetchSearchRows(req: Request) async throws -> DBTableRowsResponseDTO {
+        guard
+            let deviceId = req.parameters.get("deviceId"),
+            let dbId = req.parameters.get("dbId")
+        else {
+            throw Abort(.badRequest, reason: "Missing parameters")
+        }
+
+        struct SearchRowsInput: Content {
+            let tableName: String
+            let rowIds: [String]
+        }
+        let input = try req.content.decode(SearchRowsInput.self)
+
+        guard !input.tableName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw Abort(.badRequest, reason: "Table name cannot be empty")
+        }
+
+        guard DeviceRegistry.shared.getSession(deviceId: deviceId) != nil else {
+            throw Abort(.notFound, reason: "Device not connected")
+        }
+
+        let command = DBCommandDTO(
+            requestId: UUID().uuidString,
+            kind: .fetchRowsByRowIds,
+            dbId: dbId,
+            table: input.tableName,
+            page: nil,
+            pageSize: nil,
+            orderBy: nil,
+            ascending: nil,
+            query: nil,
+            keyword: nil,
+            maxResultsPerTable: nil,
+            targetRowId: nil,
+            rowIds: input.rowIds
+        )
+
+        let response = try await sendCommandAndWaitResponse(command: command, to: deviceId, timeout: 30)
+
+        guard response.success, let payload = response.payload else {
+            let errorMsg = response.error?.message ?? "Unknown error"
+            if errorMsg.contains("not found") {
+                throw Abort(.notFound, reason: errorMsg)
+            } else if errorMsg.contains("Access denied") || errorMsg.contains("sensitive") {
+                throw Abort(.forbidden, reason: errorMsg)
+            } else if errorMsg.contains("timeout") {
+                throw Abort(.gatewayTimeout, reason: errorMsg)
+            } else {
+                throw Abort(.internalServerError, reason: errorMsg)
+            }
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601WithMilliseconds
+        return try decoder.decode(DBTableRowsResponseDTO.self, from: payload)
     }
 
     /// 解析 SQL 错误并生成友好的错误信息和建议

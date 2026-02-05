@@ -7,6 +7,23 @@
 
 ---
 
+## [1.2.5] - 2026-02-05
+
+### 新增
+
+- **DB Inspector**: 跨表搜索返回每表全量匹配 rowid，支持跨表连续跳转
+- **DB Inspector**: 新增按 rowid 批量取行接口，用于匹配分页加载
+- **WebUI**: 搜索结果独立侧栏展示，提供更大操作空间
+- **WebUI**: 搜索结果支持“上一条/下一条”“上一表/下一表”快捷跳转
+- **WebUI**: 大结果告警阈值可配置（`VITE_DB_SEARCH_WARN_TOTAL` / `VITE_DB_SEARCH_WARN_TABLE` 或 localStorage）
+
+### 改进
+
+- **DB Inspector**: 搜索定位增加“定位中”状态，减少分页闪动
+- **Health**: /api/health 版本字段统一使用服务端版本配置
+
+---
+
 ## [1.2.4] - 2026-02-04
 
 ### 新增

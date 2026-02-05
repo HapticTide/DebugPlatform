@@ -58,6 +58,7 @@ interface DBState {
     searchHistory: string[]  // 搜索历史记录
     highlightRowId: string | null  // 高亮的行 rowid（搜索结果跳转时使用）
     pendingTargetRowId: string | null  // 待定位的行 rowid
+    isJumpingToMatch: boolean  // 搜索跳转中，避免不必要的分页闪动
 
     // Actions
     loadDatabases: (deviceId: string) => Promise<void>
@@ -134,6 +135,7 @@ const initialState = {
     searchHistory: [] as string[],
     highlightRowId: null,
     pendingTargetRowId: null,
+    isJumpingToMatch: false,
 }
 
 export const useDBStore = create<DBState>((set, get) => ({
@@ -221,6 +223,7 @@ export const useDBStore = create<DBState>((set, get) => ({
                 dataLoading: false,
                 tables: updatedTables,
                 pendingTargetRowId: targetRowId ? null : get().pendingTargetRowId,
+                isJumpingToMatch: targetRowId ? false : get().isJumpingToMatch,
             })
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Failed to load table data'
@@ -230,6 +233,7 @@ export const useDBStore = create<DBState>((set, get) => ({
                 dataLoading: false,
                 dataError: errorMsg,
                 pendingTargetRowId: targetRowId ? null : get().pendingTargetRowId,
+                isJumpingToMatch: targetRowId ? false : get().isJumpingToMatch,
             })
         }
     },
@@ -249,6 +253,7 @@ export const useDBStore = create<DBState>((set, get) => ({
                 globalSearchKeyword: '',
                 globalSearchResult: null,
                 globalSearchError: null,
+                isJumpingToMatch: false,
             })
         }
     },
@@ -268,6 +273,7 @@ export const useDBStore = create<DBState>((set, get) => ({
                 queryInput: '',
                 queryResult: null,
                 queryError: null,
+                isJumpingToMatch: false,
             })
         }
     },
@@ -487,6 +493,7 @@ export const useDBStore = create<DBState>((set, get) => ({
             globalSearchKeyword: '',
             globalSearchResult: null,
             globalSearchError: null,
+            isJumpingToMatch: false,
         })
     },
 
@@ -499,6 +506,7 @@ export const useDBStore = create<DBState>((set, get) => ({
                 selectedTable: tableName,
                 highlightRowId: rowId ?? null,
                 pendingTargetRowId: null,
+                isJumpingToMatch: false,
                 ...(isTableChanged
                     ? {
                         schema: [],
@@ -527,11 +535,11 @@ export const useDBStore = create<DBState>((set, get) => ({
             pendingTargetRowId: rowId,
             dataLoading: true,
             dataError: null,
+            isJumpingToMatch: true,
             ...(isTableChanged
                 ? {
                     schema: [],
                     tableData: null,
-                    page: 1,
                     orderBy: null,
                     showSchema: false,
                     queryMode: false,
@@ -539,7 +547,7 @@ export const useDBStore = create<DBState>((set, get) => ({
                     queryResult: null,
                     queryError: null,
                 }
-                : { tableData: null, page: 1 })
+                : { tableData: get().tableData })
         })
 
         await get().loadSchema(deviceId, dbId, tableName)

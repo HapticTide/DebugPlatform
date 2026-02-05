@@ -143,7 +143,7 @@ func routes(_ app: Application) throws {
         let uptimeSeconds = Int(Date().timeIntervalSince(serverStartTime))
         return HealthResponse(
             status: "healthy",
-            version: "1.0.0",
+            version: AppVersion.current,
             timestamp: Date(),
             uptimeSeconds: uptimeSeconds,
             startTime: serverStartTime
@@ -163,7 +163,7 @@ func routes(_ app: Application) throws {
         // API 请求返回 JSON
         let response = APIIndexResponse(
             name: "DebugHub API",
-            version: "1.0.0",
+            version: AppVersion.current,
             endpoints: [
                 "GET  /api/devices": "设备列表",
                 "GET  /api/devices/:deviceId": "设备详情",
