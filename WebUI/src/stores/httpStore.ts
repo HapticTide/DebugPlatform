@@ -3,6 +3,7 @@ import type { HTTPEventSummary, HTTPEventDetail } from '@/types'
 import * as api from '@/services/api'
 import { useRuleStore } from './ruleStore'
 import { useFavoriteUrlStore } from './favoriteUrlStore'
+import { isHTTPEventError } from '@/utils/httpEvent'
 
 // 分组模式
 export type GroupMode = 'none' | 'domain' | 'path'
@@ -135,9 +136,19 @@ function filterItems(
     if (filters.method && event.method !== filters.method) return false
 
     // 状态码范围过滤
-    if (filters.statusRange && event.statusCode) {
+    if (filters.statusRange) {
       const [min, max] = filters.statusRange.split('-').map(Number)
-      if (event.statusCode < min || event.statusCode > max) return false
+      const normalizedStatus = event.statusCode && event.statusCode > 0 ? event.statusCode : null
+      if (normalizedStatus !== null) {
+        if (normalizedStatus < min || normalizedStatus > max) return false
+      } else {
+        // 没有有效状态码时，仅在筛选错误范围时保留结构化错误
+        if (min >= 400 && isHTTPEventError(event.statusCode, event.error, event.errorDescription)) {
+          // keep
+        } else {
+          return false
+        }
+      }
     }
 
     // URL 搜索
@@ -226,7 +237,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   },
 
   fetchEvents: async (deviceId: string) => {
-    const { pageSize, filters, selectedEventId, showCurrentSessionOnly, clearedBeforeTimestamp, sessionStartTimestamp } = get()
+    const { pageSize, filters, selectedEventId } = get()
     set({ isLoading: true, currentDeviceId: deviceId })
     try {
       const response = await api.getHTTPEvents(deviceId, {
@@ -238,6 +249,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
 
       const events = response.items
 
+      const { showCurrentSessionOnly, clearedBeforeTimestamp, sessionStartTimestamp } = get()
       const filteredItems = filterItems(events, filters, deviceId, {
         clearedBeforeTimestamp,
         showCurrentSessionOnly,
@@ -325,7 +337,41 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
 
     try {
       const detail = await api.getHTTPEventDetail(deviceId, eventId)
-      set({ selectedEvent: detail })
+      set((state) => {
+        const updateSummary = (item: ListItem): ListItem => {
+          if (isSessionDivider(item)) return item
+          if (item.id !== detail.id) return item
+          return {
+            ...item,
+            redirectFromId: detail.redirectFromId ?? item.redirectFromId,
+            redirectToUrl: detail.redirectToUrl ?? item.redirectToUrl,
+          }
+        }
+
+        const events = state.events.map((event) =>
+          event.id === detail.id
+            ? {
+              ...event,
+              redirectFromId: detail.redirectFromId ?? event.redirectFromId,
+              redirectToUrl: detail.redirectToUrl ?? event.redirectToUrl,
+            }
+            : event
+        )
+
+        const listItems = state.listItems.map(updateSummary)
+        const filteredItems = filterItems(listItems, state.filters, state.currentDeviceId ?? undefined, {
+          clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+          showCurrentSessionOnly: state.showCurrentSessionOnly,
+          sessionStartTimestamp: state.sessionStartTimestamp,
+        })
+
+        return {
+          selectedEvent: detail,
+          events,
+          listItems,
+          filteredItems,
+        }
+      })
     } catch (error) {
       // 如果获取详情失败（如数据已被删除），清除选中状态
       console.error('Failed to fetch HTTP event detail:', error)

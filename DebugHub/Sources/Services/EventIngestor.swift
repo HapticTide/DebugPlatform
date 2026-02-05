@@ -100,6 +100,9 @@ final class EventIngestor: @unchecked Sendable {
         // 获取下一个序号
         let seqNum = await SequenceNumberManager.shared.nextSeqNum(for: deviceId, type: .http, db: db)
 
+        let errorInfo = event.response?.error
+        let errorDescription = event.response?.errorDescription ?? errorInfo?.message
+
         let model = try HTTPEventModel(
             id: event.request.id,
             deviceId: deviceId,
@@ -115,12 +118,18 @@ final class EventIngestor: @unchecked Sendable {
             startTime: event.request.startTime,
             endTime: event.response?.endTime,
             duration: event.response?.duration,
-            errorDescription: event.response?.errorDescription,
+            errorDescription: errorDescription,
+            errorDomain: errorInfo?.domain,
+            errorCode: errorInfo?.code,
+            errorCategory: errorInfo?.category,
+            isNetworkError: errorInfo?.isNetworkError,
             isMocked: event.isMocked,
             mockRuleId: event.mockRuleId,
             traceId: event.request.traceId,
             timingJSON: timingJSON,
             isReplay: event.isReplay ?? false,
+            redirectFromId: event.redirectFromId,
+            redirectToUrl: event.redirectToUrl,
             seqNum: seqNum
         )
 

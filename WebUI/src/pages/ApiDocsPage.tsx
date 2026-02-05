@@ -142,7 +142,7 @@ export function ApiDocsPage() {
           </h1>
           <p className="text-text-secondary text-lg mb-4">网络和日志一体化调试平台</p>
           <span className="inline-block px-4 py-1 bg-bg-light rounded text-sm text-primary border border-border">
-            1.2.3
+            1.2.4
           </span>
           <nav className="flex justify-center gap-4 mt-6">
             <Link to="/" className="flex items-center text-text-secondary hover:text-primary transition-colors px-4 py-2 rounded hover:bg-bg-light">

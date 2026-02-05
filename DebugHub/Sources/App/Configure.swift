@@ -47,6 +47,8 @@ func configure(_ app: Application) throws {
     app.migrations.add(CreateTrafficRule())
     app.migrations.add(CreateDevice())
     app.migrations.add(AddHTTPEventReplay())
+    app.migrations.add(AddHTTPEventRedirect())
+    app.migrations.add(AddHTTPEventErrorInfo())
     app.migrations.add(CreatePerformanceMetrics())
     app.migrations.add(CreateJankEvent())
     app.migrations.add(CreateAlert())

@@ -487,13 +487,15 @@ export function Sidebar() {
       <button
         onClick={toggleCollapse}
         className={clsx(
-          "absolute top-1/2 -translate-y-1/2 z-20 w-5 h-10 rounded-r-md",
-          "bg-bg-medium border border-l-0 border-border",
+          "absolute top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full",
+          "bg-bg-medium/90 border border-border shadow-md backdrop-blur",
           "flex items-center justify-center",
-          "text-text-muted hover:text-primary hover:bg-bg-light transition-colors",
-          isCollapsed ? "right-0" : "-right-5"
+          "text-text-muted hover:text-primary hover:bg-bg-light transition-all",
+          isCollapsed ? "right-1" : "-right-4",
+          isCollapsed ? "hover:translate-x-0.5" : "hover:-translate-x-0.5"
         )}
         title={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
+        aria-label={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
       >
         {isCollapsed ? <ChevronRightIcon size={14} /> : <ChevronLeftIcon size={14} />}
       </button>
@@ -971,7 +973,7 @@ export function Sidebar() {
             {!isCollapsed && <span className="font-medium">{isServerOnline ? "在线" : "离线"}</span>}
           </div>
         </div>
-        {!isCollapsed && <span className="text-text-muted/50">1.2.3</span>}
+        {!isCollapsed && <span className="text-text-muted/50">1.2.4</span>}
       </div>
     </aside>
   )

@@ -21,6 +21,14 @@ enum DebugEventDTO: Codable {
 // MARK: - HTTP Event DTO
 
 struct HTTPEventDTO: Content {
+    struct ErrorInfo: Codable {
+        let domain: String?
+        let code: Int?
+        let category: String?
+        let isNetworkError: Bool?
+        let message: String?
+    }
+
     struct Request: Codable {
         let id: String
         let method: String
@@ -39,6 +47,7 @@ struct HTTPEventDTO: Content {
         let endTime: Date
         let duration: TimeInterval
         let errorDescription: String?
+        let error: ErrorInfo?
     }
 
     /// 性能时间线 DTO
@@ -62,6 +71,8 @@ struct HTTPEventDTO: Content {
     let isMocked: Bool
     let mockRuleId: String?
     let isReplay: Bool?
+    let redirectFromId: String?
+    let redirectToUrl: String?
 }
 
 // MARK: - WebSocket Event DTO

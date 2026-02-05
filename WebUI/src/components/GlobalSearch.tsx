@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
+import type { HTTPErrorInfo } from "@/types";
+import { isHTTPEventError } from "@/utils/httpEvent";
 import {
     useGlobalSearchStore,
     type SearchResultItem,
@@ -463,13 +465,18 @@ function ResultTypeIcon({
     switch (type) {
         case "http": {
             const statusCode = extra?.statusCode as number | undefined;
-            const bgColor = statusCode
-                ? statusCode >= 400
-                    ? "bg-red-500/20"
-                    : statusCode >= 300
-                        ? "bg-yellow-500/20"
-                        : "bg-green-500/20"
-                : "bg-blue-500/20";
+            const error = extra?.error as HTTPErrorInfo | undefined;
+            const errorDescription = extra?.errorDescription as string | undefined;
+            const isError = isHTTPEventError(
+                statusCode ?? null,
+                error ?? null,
+                errorDescription ?? null
+            );
+            const bgColor = isError
+                ? "bg-red-500/20"
+                : statusCode && statusCode >= 300
+                    ? "bg-yellow-500/20"
+                    : "bg-green-500/20";
             return <span className={clsx(baseClass, bgColor)}>🌐</span>;
         }
         case "websocket": {

@@ -108,11 +108,20 @@ export function formatSmartTime(dateString: string): string {
 export function getDurationClass(ms: number | null): string {
   if (ms === null || ms === undefined) return 'text-text-muted'
   const msValue = ms * 1000
-  if (msValue < 100) return 'text-green-400'
-  if (msValue < 500) return 'text-green-300'
-  if (msValue < 1000) return 'text-yellow-400'
-  if (msValue < 3000) return 'text-orange-400'
+  if (msValue < 100) return 'text-emerald-400'
+  if (msValue < 500) return 'text-yellow-400'
   return 'text-red-400'
+}
+
+/**
+ * 获取持续时间条形图颜色
+ */
+export function getDurationBarClass(ms: number | null): string {
+  if (ms === null || ms === undefined) return 'bg-transparent'
+  const msValue = ms * 1000
+  if (msValue < 100) return 'bg-emerald-400/70'
+  if (msValue < 500) return 'bg-yellow-400/70'
+  return 'bg-red-400/80'
 }
 
 /**
@@ -148,6 +157,37 @@ export function formatDuration(startOrMs: Date | number | null, end?: Date): str
   const hours = Math.floor(diffMs / 3600000)
   const mins = Math.floor((diffMs % 3600000) / 60000)
   return `${hours}h ${mins}m`
+}
+
+/**
+ * 统一协议名称显示
+ * - h2 -> http/2.0
+ * - h3 -> http/3.0
+ * - http/2 -> http/2.0
+ */
+export function formatProtocolName(protocol?: string | null): string {
+  if (!protocol) return '-'
+  const normalized = protocol.trim().toLowerCase()
+  if (!normalized) return '-'
+  const map: Record<string, string> = {
+    h2: 'http/2.0',
+    h3: 'http/3.0',
+    'http/2': 'http/2.0',
+    'http/2.0': 'http/2.0',
+    'http/3': 'http/3.0',
+    'http/3.0': 'http/3.0',
+    'http/1.1': 'http/1.1',
+    'http/1.0': 'http/1.0',
+    'http/1': 'http/1.0',
+  }
+  if (map[normalized]) return map[normalized]
+  const match = normalized.match(/^http\/(\d)(?:\.(\d))?$/)
+  if (match) {
+    const major = match[1]
+    const minor = match[2] ?? '0'
+    return `http/${major}.${minor}`
+  }
+  return protocol
 }
 
 /**
@@ -193,6 +233,7 @@ export function extractDomain(url: string): string {
  */
 export function getStatusClass(statusCode: number | null): string {
   if (!statusCode) return 'bg-red-500/20 text-red-400 border border-red-500/30'
+  if (statusCode >= 100 && statusCode < 200) return 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
   if (statusCode >= 200 && statusCode < 300) return 'bg-green-500/15 text-green-400 border border-green-500/30'
   if (statusCode >= 300 && statusCode < 400) return 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
   if (statusCode >= 400 && statusCode < 500) return 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30'

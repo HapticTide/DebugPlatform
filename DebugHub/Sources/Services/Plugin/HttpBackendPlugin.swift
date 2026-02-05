@@ -120,6 +120,9 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
         }
         let bodyParamsJSON = (try? String(data: encoder.encode(bodyParams), encoding: .utf8)) ?? "{}"
 
+        let errorInfo = event.response?.error
+        let errorDescription = event.response?.errorDescription ?? errorInfo?.message
+
         let model = try HTTPEventModel(
             id: event.request.id,
             deviceId: deviceId,
@@ -135,12 +138,18 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
             startTime: event.request.startTime,
             endTime: event.response?.endTime,
             duration: event.response?.duration,
-            errorDescription: event.response?.errorDescription,
+            errorDescription: errorDescription,
+            errorDomain: errorInfo?.domain,
+            errorCode: errorInfo?.code,
+            errorCategory: errorInfo?.category,
+            isNetworkError: errorInfo?.isNetworkError,
             isMocked: event.isMocked,
             mockRuleId: event.mockRuleId,
             traceId: event.request.traceId,
             timingJSON: timingJSON,
-            isReplay: event.isReplay ?? false
+            isReplay: event.isReplay ?? false,
+            redirectFromId: event.redirectFromId,
+            redirectToUrl: event.redirectToUrl
         )
 
         try await model.save(on: db)
@@ -222,6 +231,7 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
             .all()
 
         let items = events.map { event in
+            let redirectToUrl = resolveRedirectToUrl(event)
             PluginHTTPEventSummaryDTO(
                 id: event.id ?? "",
                 method: event.method,
@@ -229,10 +239,19 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
                 statusCode: event.statusCode,
                 duration: event.duration,
                 startTime: event.startTime,
+                error: makeErrorInfo(
+                    domain: event.errorDomain,
+                    code: event.errorCode,
+                    category: event.errorCategory,
+                    isNetworkError: event.isNetworkError,
+                    message: event.errorDescription
+                ),
                 isMocked: event.isMocked,
                 isFavorite: event.isFavorite,
                 isReplay: event.isReplay,
-                seqNum: event.seqNum
+                seqNum: event.seqNum,
+                redirectFromId: event.redirectFromId,
+                redirectToUrl: redirectToUrl
             )
         }
 
@@ -407,10 +426,13 @@ struct PluginHTTPEventSummaryDTO: Content {
     let statusCode: Int?
     let duration: Double?
     let startTime: Date
+    let error: PluginHTTPErrorInfoDTO?
     let isMocked: Bool
     let isFavorite: Bool
     let isReplay: Bool
     let seqNum: Int64
+    let redirectFromId: String?
+    let redirectToUrl: String?
 }
 
 struct PluginHTTPEventDetailDTO: Content {
@@ -428,12 +450,15 @@ struct PluginHTTPEventDetailDTO: Content {
     let endTime: Date?
     let duration: Double?
     let errorDescription: String?
+    let error: PluginHTTPErrorInfoDTO?
     let isMocked: Bool
     let mockRuleId: String?
     let traceId: String?
     let timing: PluginTimingDTO?
     let isFavorite: Bool
     let isReplay: Bool
+    let redirectFromId: String?
+    let redirectToUrl: String?
 
     init(from model: HTTPEventModel) {
         id = model.id ?? ""
@@ -454,13 +479,92 @@ struct PluginHTTPEventDetailDTO: Content {
         endTime = model.endTime
         duration = model.duration
         errorDescription = model.errorDescription
+        error = makeErrorInfo(
+            domain: model.errorDomain,
+            code: model.errorCode,
+            category: model.errorCategory,
+            isNetworkError: model.isNetworkError,
+            message: model.errorDescription
+        )
         isMocked = model.isMocked
         mockRuleId = model.mockRuleId
         traceId = model.traceId
         timing = model.timingJSON.flatMap { try? JSONDecoder().decode(PluginTimingDTO.self, from: Data($0.utf8)) }
         isFavorite = model.isFavorite
         isReplay = model.isReplay
+        redirectFromId = model.redirectFromId
+        redirectToUrl = resolveRedirectToUrl(model)
     }
+}
+
+struct PluginHTTPErrorInfoDTO: Content {
+    let domain: String?
+    let code: Int?
+    let category: String?
+    let isNetworkError: Bool?
+    let message: String?
+}
+
+private func makeErrorInfo(
+    domain: String?,
+    code: Int?,
+    category: String?,
+    isNetworkError: Bool?,
+    message: String?
+) -> PluginHTTPErrorInfoDTO? {
+    if domain == nil && code == nil && category == nil && isNetworkError == nil && message == nil {
+        return nil
+    }
+    return PluginHTTPErrorInfoDTO(
+        domain: domain,
+        code: code,
+        category: category,
+        isNetworkError: isNetworkError,
+        message: message
+    )
+}
+
+private func resolveRedirectToUrl(_ model: HTTPEventModel) -> String? {
+    let normalizedExisting = model.redirectToUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let normalizedExisting, !normalizedExisting.isEmpty, normalizedExisting != model.url {
+        return normalizedExisting
+    }
+
+    guard let statusCode = model.statusCode, (300...399).contains(statusCode) else {
+        return normalizedExisting?.isEmpty == true ? nil : normalizedExisting
+    }
+
+    guard
+        let headers = decodeResponseHeaders(model.responseHeaders),
+        let location = headerValue(from: headers, name: "location")
+    else {
+        return normalizedExisting?.isEmpty == true ? nil : normalizedExisting
+    }
+
+    let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmedLocation.isEmpty {
+        return normalizedExisting?.isEmpty == true ? nil : normalizedExisting
+    }
+
+    if let baseUrl = URL(string: model.url),
+       let resolved = URL(string: trimmedLocation, relativeTo: baseUrl)?.absoluteURL {
+        return resolved.absoluteString
+    }
+
+    return trimmedLocation
+}
+
+private func decodeResponseHeaders(_ responseHeaders: String?) -> [String: String]? {
+    guard let responseHeaders else { return nil }
+    return try? JSONDecoder().decode([String: String].self, from: Data(responseHeaders.utf8))
+}
+
+private func headerValue(from headers: [String: String], name: String) -> String? {
+    let lowercasedName = name.lowercased()
+    if let exact = headers[name] {
+        return exact
+    }
+    return headers.first { $0.key.lowercased() == lowercasedName }?.value
 }
 
 struct PluginTimingDTO: Content {

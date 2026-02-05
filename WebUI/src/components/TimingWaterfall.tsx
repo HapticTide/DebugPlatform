@@ -1,5 +1,5 @@
 import type { HTTPTiming } from '@/types'
-import { formatBytes } from '@/utils/format'
+import { formatBytes, formatProtocolName } from '@/utils/format'
 
 interface TimingWaterfallProps {
   timing: HTTPTiming
@@ -107,7 +107,7 @@ export function TimingWaterfall({ timing, totalDuration }: TimingWaterfallProps)
         {timing.protocolName && (
           <div>
             <span className="text-text-muted">协议:</span>{' '}
-            <span className="font-mono text-primary">{timing.protocolName}</span>
+            <span className="font-mono text-primary">{formatProtocolName(timing.protocolName)}</span>
           </div>
         )}
         {timing.connectionReused !== null && (

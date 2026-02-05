@@ -98,6 +98,8 @@ function searchHTTPEvents(query: string, maxResults = 10): SearchResultItem[] {
             extra: {
                 statusCode: event.statusCode,
                 isMocked: event.isMocked,
+                error: event.error,
+                errorDescription: event.errorDescription,
             },
             raw: event,
         }));

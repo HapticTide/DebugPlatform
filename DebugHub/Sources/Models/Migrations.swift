@@ -315,6 +315,46 @@ struct AddHTTPEventReplay: AsyncMigration {
     }
 }
 
+// MARK: - Add HTTP Event Redirect Fields
+
+struct AddHTTPEventRedirect: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema("http_events")
+            .field("redirect_from_id", .string)
+            .field("redirect_to_url", .string)
+            .update()
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema("http_events")
+            .deleteField("redirect_from_id")
+            .deleteField("redirect_to_url")
+            .update()
+    }
+}
+
+// MARK: - Add HTTP Event Error Info Fields
+
+struct AddHTTPEventErrorInfo: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema("http_events")
+            .field("error_domain", .string)
+            .field("error_code", .int)
+            .field("error_category", .string)
+            .field("is_network_error", .bool)
+            .update()
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema("http_events")
+            .deleteField("error_domain")
+            .deleteField("error_code")
+            .deleteField("error_category")
+            .deleteField("is_network_error")
+            .update()
+    }
+}
+
 // MARK: - Add Sequence Number Migration
 
 /// 为 HTTP 事件、Log 事件、WebSocket 帧添加序号字段

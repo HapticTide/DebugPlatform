@@ -61,10 +61,21 @@ export interface HTTPEventSummary {
   isMocked: boolean
   mockRuleId: string | null
   errorDescription: string | null
+  error: HTTPErrorInfo | null
   traceId: string | null
   isFavorite: boolean
   isReplay: boolean
+  redirectFromId: string | null
+  redirectToUrl: string | null
   seqNum: number
+}
+
+export interface HTTPErrorInfo {
+  domain: string | null
+  code: number | null
+  category: 'network' | 'timeout' | 'cancelled' | 'dns' | 'tls' | 'http' | 'unknown' | null
+  isNetworkError: boolean | null
+  message: string | null
 }
 
 export interface HTTPTiming {
@@ -96,12 +107,15 @@ export interface HTTPEventDetail {
   endTime: string | null
   duration: number | null
   errorDescription: string | null
+  error: HTTPErrorInfo | null
   isMocked: boolean
   mockRuleId: string | null
   traceId: string | null
   timing: HTTPTiming | null
   isFavorite: boolean
   isReplay: boolean
+  redirectFromId: string | null
+  redirectToUrl: string | null
 }
 
 export interface HTTPEventListResponse {

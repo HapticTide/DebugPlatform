@@ -9,14 +9,17 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { HTTPEventSummary, TrafficRule } from '@/types'
 import { useRuleStore } from '@/stores/ruleStore'
+import { useRedirectChain } from '@/hooks/useRedirectChain'
 import {
     formatSmartTime,
     formatDuration,
     getDurationClass,
+    getDurationBarClass,
     getStatusClass,
     getMethodClass,
     extractDomain,
 } from '@/utils/format'
+import { isHTTPEventError } from '@/utils/httpEvent'
 import clsx from 'clsx'
 import {
     ChevronDownIcon,
@@ -26,7 +29,9 @@ import {
     MockIcon,
     GlobeIcon,
     HighlightIcon,
-    RefreshIcon
+    RefreshIcon,
+    LinkIcon,
+    ArrowRightIcon
 } from './icons'
 import { Checkbox } from './Checkbox'
 
@@ -169,7 +174,7 @@ function createEventGroups(
             avgDuration: durations.length > 0
                 ? durations.reduce((a, b) => a + b, 0) / durations.length
                 : 0,
-            errorCount: groupEvents.filter(e => !e.statusCode || e.statusCode >= 400).length,
+            errorCount: groupEvents.filter(e => isHTTPEventError(e.statusCode, e.error, e.errorDescription)).length,
             mockedCount: groupEvents.filter(e => e.isMocked).length,
         })
     }
@@ -215,6 +220,7 @@ export function GroupedHTTPEventList({
 }: Props) {
     const parentRef = useRef<HTMLDivElement>(null)
     const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+    const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
 
     // 追踪有新请求的分组，用于高亮效果
     const [highlightedGroups, setHighlightedGroups] = useState<Set<string>>(new Set())
@@ -249,6 +255,19 @@ export function GroupedHTTPEventList({
             return !rule || rule.action !== 'hide'
         })
     }, [events, applicableRules, showBlacklisted])
+
+    const maxDurationMs = useMemo(() => {
+        let max = 0
+        for (const event of filteredEvents) {
+            if (typeof event.duration === 'number') {
+                const value = event.duration * 1000
+                if (value > max) max = value
+            }
+        }
+        return max
+    }, [filteredEvents])
+
+    const { chainMap, redirectNextMap } = useRedirectChain(filteredEvents)
 
     // 计算分组
     const groups = useMemo(
@@ -309,6 +328,36 @@ export function GroupedHTTPEventList({
         },
         overscan: 10,
     })
+
+    const jumpToEvent = useCallback((eventId: string) => {
+        if (!eventId) return
+        const targetGroup = groups.find(group => group.events.some(event => event.id === eventId))
+        if (targetGroup && !targetGroup.expanded) {
+            setExpandedKeys(prev => {
+                const next = new Set(prev)
+                next.add(targetGroup.key)
+                return next
+            })
+        }
+        setPendingScrollId(eventId)
+        onSelect(eventId)
+    }, [groups, onSelect])
+
+    useEffect(() => {
+        if (!pendingScrollId) return
+        const existsInGroups = groups.some(group => group.events.some(event => event.id === pendingScrollId))
+        if (!existsInGroups) {
+            setPendingScrollId(null)
+            return
+        }
+        const index = virtualItems.findIndex(
+            item => item.type === 'event' && item.event.id === pendingScrollId
+        )
+        if (index >= 0) {
+            virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' })
+            setPendingScrollId(null)
+        }
+    }, [pendingScrollId, virtualItems, virtualizer, groups])
 
     // 切换分组展开
     const toggleGroup = useCallback((key: string) => {
@@ -389,9 +438,14 @@ export function GroupedHTTPEventList({
     }
 
     const renderEventRow = (event: HTTPEventSummary, style: React.CSSProperties, rowNumber: number) => {
-        const isError = !event.statusCode || event.statusCode >= 400
+        const isError = isHTTPEventError(event.statusCode, event.error, event.errorDescription)
         const isSelected = event.id === selectedId
         const isChecked = selectedIds.has(event.id)
+        const redirectNextId = redirectNextMap.get(event.id)
+        const chainMeta = chainMap.get(event.id)
+        const chainLabel = chainMeta && chainMeta.total > 1
+            ? `R${chainMeta.index}/${chainMeta.total}`
+            : null
 
         // 直接使用 event.isMocked 状态，不需要检查规则是否仍然存在
         const isMocked = event.isMocked
@@ -460,7 +514,7 @@ export function GroupedHTTPEventList({
                 <div className="px-3 py-3.5 w-[80px] flex-shrink-0">
                     <span
                         className={clsx(
-                            'inline-flex items-center justify-center px-2 py-1 rounded-lg text-xs font-mono font-bold min-w-[50px] shadow-sm',
+                            'inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold tracking-wider min-w-[52px]',
                             getMethodClass(event.method)
                         )}
                     >
@@ -472,7 +526,7 @@ export function GroupedHTTPEventList({
                 <div className="px-3 py-3.5 w-[70px] flex-shrink-0">
                     <span
                         className={clsx(
-                            'inline-flex items-center justify-center px-2 py-1 rounded-lg text-xs font-mono font-semibold min-w-[40px] shadow-sm',
+                            'inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold tracking-wider min-w-[44px]',
                             getStatusClass(event.statusCode)
                         )}
                     >
@@ -497,17 +551,70 @@ export function GroupedHTTPEventList({
                 </div>
 
                 {/* Duration */}
-                <div className="px-3 py-3.5 w-[80px] flex-shrink-0">
-                    <span className={clsx(
-                        'text-sm font-mono font-medium',
-                        getDurationClass(event.duration)
-                    )}>
+                <div className="relative px-3 py-3.5 w-[90px] flex-shrink-0">
+                    <span
+                        className={clsx(
+                            'text-xs font-mono font-semibold',
+                            getDurationClass(event.duration)
+                        )}
+                    >
                         {formatDuration(event.duration)}
                     </span>
+                    {(() => {
+                        if (typeof event.duration !== 'number' || maxDurationMs <= 0) return null
+                        const durationMs = event.duration * 1000
+                        const ratio = durationMs / maxDurationMs
+                        const showBar = durationMs >= 100 && ratio >= 0.03
+                        if (!showBar) return null
+                        return (
+                            <div className="absolute left-3 right-3 bottom-2 h-0.5 bg-bg-light/40 rounded-full overflow-hidden pointer-events-none">
+                                <div
+                                    className={clsx('h-full rounded-full', getDurationBarClass(event.duration))}
+                                    style={{ width: `${Math.min(ratio, 1) * 100}%` }}
+                                />
+                            </div>
+                        )
+                    })()}
                 </div>
 
                 {/* Tags */}
                 <div className="px-3 py-3.5 w-[60px] flex-shrink-0 flex items-center justify-center gap-1">
+                    {chainLabel && (
+                        <span className="text-2xs font-mono text-cyan-400" title={`重定向 ${chainMeta?.index}/${chainMeta?.total}`}>
+                            {chainLabel}
+                        </span>
+                    )}
+                    {event.redirectFromId && (
+                        <button
+                            className="text-cyan-400 hover:text-cyan-300 transition-colors"
+                            title="跳转到重定向来源"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                const redirectFromId = event.redirectFromId
+                                if (!redirectFromId) return
+                                jumpToEvent(redirectFromId)
+                            }}
+                        >
+                            <LinkIcon size={14} />
+                        </button>
+                    )}
+                    {!event.redirectFromId && redirectNextId && (
+                        <button
+                            className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                            title="跳转到重定向下一跳"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                jumpToEvent(redirectNextId)
+                            }}
+                        >
+                            <ArrowRightIcon size={14} />
+                        </button>
+                    )}
+                    {!event.redirectFromId && !redirectNextId && event.redirectToUrl && (
+                        <span className="text-cyan-400" title="已重定向">
+                            <LinkIcon size={14} />
+                        </span>
+                    )}
                     {event.isReplay && (
                         <span className="text-blue-400" title="重放请求"><RefreshIcon size={14} /></span>
                     )}

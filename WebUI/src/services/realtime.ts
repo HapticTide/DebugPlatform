@@ -140,9 +140,12 @@ export function parseHTTPEvent(payload: string): HTTPEventSummary {
     isMocked: data.isMocked,
     mockRuleId: data.mockRuleId ?? null,
     errorDescription: data.response?.errorDescription ?? null,
+    error: data.response?.error ?? null,
     traceId: data.request.traceId ?? null,
     isFavorite: data.isFavorite ?? false,
     isReplay: data.isReplay ?? false,
+    redirectFromId: data.redirectFromId ?? null,
+    redirectToUrl: data.redirectToUrl ?? null,
     seqNum: data.seqNum ?? 0,
   }
 }
@@ -178,4 +181,3 @@ export function parseWSEvent(payload: string): { type: string; data: unknown } {
   }
   return { type: 'unknown', data }
 }
-

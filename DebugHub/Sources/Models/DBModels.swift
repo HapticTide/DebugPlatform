@@ -59,6 +59,18 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
     @Field(key: "error_description")
     var errorDescription: String?
 
+    @Field(key: "error_domain")
+    var errorDomain: String?
+
+    @Field(key: "error_code")
+    var errorCode: Int?
+
+    @Field(key: "error_category")
+    var errorCategory: String?
+
+    @Field(key: "is_network_error")
+    var isNetworkError: Bool?
+
     @Field(key: "is_mocked")
     var isMocked: Bool
 
@@ -70,6 +82,12 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
 
     @Field(key: "timing_json")
     var timingJSON: String? // JSON encoded timing data
+
+    @Field(key: "redirect_from_id")
+    var redirectFromId: String?
+
+    @Field(key: "redirect_to_url")
+    var redirectToUrl: String?
 
     @Field(key: "is_favorite")
     var isFavorite: Bool
@@ -102,10 +120,16 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
         endTime: Date?,
         duration: Double?,
         errorDescription: String?,
+        errorDomain: String? = nil,
+        errorCode: Int? = nil,
+        errorCategory: String? = nil,
+        isNetworkError: Bool? = nil,
         isMocked: Bool,
         mockRuleId: String?,
         traceId: String?,
         timingJSON: String? = nil,
+        redirectFromId: String? = nil,
+        redirectToUrl: String? = nil,
         isFavorite: Bool = false,
         isReplay: Bool = false,
         seqNum: Int64 = 0
@@ -125,10 +149,16 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
         self.endTime = endTime
         self.duration = duration
         self.errorDescription = errorDescription
+        self.errorDomain = errorDomain
+        self.errorCode = errorCode
+        self.errorCategory = errorCategory
+        self.isNetworkError = isNetworkError
         self.isMocked = isMocked
         self.mockRuleId = mockRuleId
         self.traceId = traceId
         self.timingJSON = timingJSON
+        self.redirectFromId = redirectFromId
+        self.redirectToUrl = redirectToUrl
         self.isFavorite = isFavorite
         self.isReplay = isReplay
         self.seqNum = seqNum

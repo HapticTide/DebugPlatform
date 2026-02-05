@@ -13,17 +13,20 @@ import { useRuleStore } from '@/stores/ruleStore'
 import { useFavoriteUrlStore } from '@/stores/favoriteUrlStore'
 import { useResizableColumns, ColumnResizeHandle, ColumnDivider, type ColumnConfig } from '@/hooks/useResizableColumns'
 import { useNewItemHighlight } from '@/hooks/useNewItemHighlight'
+import { useRedirectChain } from '@/hooks/useRedirectChain'
 import {
     formatSmartTime,
     formatDuration,
     getDurationClass,
     getStatusClass,
     getMethodClass,
+    getDurationBarClass,
     truncateUrl,
     extractDomain,
 } from '@/utils/format'
+import { isHTTPEventError } from '@/utils/httpEvent'
 import clsx from 'clsx'
-import { MockIcon, StarIcon, HttpIcon, TagIcon, HighlightIcon, RefreshIcon } from './icons'
+import { MockIcon, StarIcon, HttpIcon, TagIcon, HighlightIcon, RefreshIcon, LinkIcon, ArrowRightIcon } from './icons'
 import { MockRulePopover } from './MockRulePopover'
 import { Checkbox } from './Checkbox'
 import { LoadMoreButton } from './LoadMoreButton'
@@ -177,6 +180,19 @@ export function VirtualHTTPEventTable({
         })
     }, [rawHttpEvents, applicableRules, showBlacklisted])
 
+    const { chainMap, redirectNextMap } = useRedirectChain(httpEvents)
+
+    const maxDurationMs = useMemo(() => {
+        let max = 0
+        for (const event of httpEvents) {
+            if (typeof event.duration === 'number') {
+                const value = event.duration * 1000
+                if (value > max) max = value
+            }
+        }
+        return max
+    }, [httpEvents])
+
     // 跟踪新增项高亮
     const { isNewItem } = useNewItemHighlight(httpEvents)
 
@@ -261,6 +277,18 @@ export function VirtualHTTPEventTable({
         lastFirstItemRef.current = firstId
     }, [httpEvents, autoScroll, virtualizer])
 
+    const scrollToEventId = useCallback((eventId: string) => {
+        const index = httpEvents.findIndex((event) => event.id === eventId)
+        if (index >= 0) {
+            virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' })
+        }
+    }, [httpEvents, virtualizer])
+
+    const selectAndScroll = useCallback((eventId: string) => {
+        onSelect(eventId)
+        scrollToEventId(eventId)
+    }, [onSelect, scrollToEventId])
+
     const handleRowClick = useCallback((event: HTTPEventSummary, e: React.MouseEvent) => {
         if (isSelectMode && onToggleSelect) {
             e.preventDefault()
@@ -276,9 +304,14 @@ export function VirtualHTTPEventTable({
     }, [isSelectMode, onToggleSelect, onSelect, selectedId])
 
     const renderEventRowContent = (event: HTTPEventSummary, _index: number) => {
-        const isError = !event.statusCode || event.statusCode >= 400
+        const isError = isHTTPEventError(event.statusCode, event.error, event.errorDescription)
         const isSelected = event.id === selectedId
         const isChecked = selectedIds.has(event.id)
+        const redirectNextId = redirectNextMap.get(event.id)
+        const chainMeta = chainMap.get(event.id)
+        const chainLabel = chainMeta && chainMeta.total > 1
+            ? `重定向 ${chainMeta.index}/${chainMeta.total}`
+            : null
         // 使用后端返回的序号，保证删除数据后原有序号不变
         const rowNumber = event.seqNum
 
@@ -362,7 +395,7 @@ export function VirtualHTTPEventTable({
                 <div style={getColumnStyle('method')} className="px-3 py-2.5">
                     <span
                         className={clsx(
-                            'inline-flex items-center justify-center px-2 py-1 rounded text-xs font-mono font-bold min-w-[50px] shadow-sm',
+                            'inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold tracking-wider min-w-[52px]',
                             getMethodClass(event.method)
                         )}
                     >
@@ -374,7 +407,7 @@ export function VirtualHTTPEventTable({
                 <div style={getColumnStyle('status')} className="px-3 py-2.5">
                     <span
                         className={clsx(
-                            'inline-flex items-center justify-center px-2 py-1 rounded text-xs font-mono font-semibold min-w-[40px] shadow-sm',
+                            'inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold tracking-wider min-w-[44px]',
                             getStatusClass(event.statusCode)
                         )}
                     >
@@ -391,27 +424,85 @@ export function VirtualHTTPEventTable({
                         )} title={event.url}>
                             {truncateUrl(event.url)}
                         </span>
-                        <span className={clsx(
-                            'text-2xs truncate font-mono',
-                            isSelected ? 'text-selected-text-muted' : 'text-text-muted'
-                        )}>
-                            {extractDomain(event.url)}
-                        </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className={clsx(
+                                'text-2xs truncate font-mono',
+                                isSelected ? 'text-selected-text-muted' : 'text-text-muted'
+                            )}>
+                                {extractDomain(event.url)}
+                            </span>
+                            {chainLabel && (
+                                <span
+                                    className="text-2xs font-mono text-cyan-400 shrink-0"
+                                    title={chainLabel}
+                                >
+                                    {chainLabel}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 {/* Duration */}
-                <div style={getColumnStyle('duration')} className="px-3 py-2.5">
-                    <span className={clsx(
-                        'text-xs font-mono font-medium',
-                        getDurationClass(event.duration)
-                    )}>
+                <div style={getColumnStyle('duration')} className="relative px-3 py-2.5">
+                    <span
+                        className={clsx(
+                            'text-xs font-mono font-semibold',
+                            getDurationClass(event.duration)
+                        )}
+                    >
                         {formatDuration(event.duration)}
                     </span>
+                    {(() => {
+                        if (typeof event.duration !== 'number' || maxDurationMs <= 0) return null
+                        const durationMs = event.duration * 1000
+                        const ratio = durationMs / maxDurationMs
+                        const showBar = durationMs >= 100 && ratio >= 0.03
+                        if (!showBar) return null
+                        return (
+                            <div className="absolute left-3 right-3 bottom-1 h-0.5 bg-bg-light/40 rounded-full overflow-hidden pointer-events-none">
+                                <div
+                                    className={clsx('h-full rounded-full', getDurationBarClass(event.duration))}
+                                    style={{ width: `${Math.min(ratio, 1) * 100}%` }}
+                                />
+                            </div>
+                        )
+                    })()}
                 </div>
 
                 {/* Tags */}
                 <div style={getColumnStyle('tags')} className="px-3 py-2.5 flex items-center justify-center gap-1.5">
+                    {event.redirectFromId && (
+                        <button
+                            className="inline-flex items-center justify-center w-5 h-5 text-cyan-400 hover:text-cyan-300 transition-colors"
+                            title="跳转到重定向来源"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                const redirectFromId = event.redirectFromId
+                                if (!redirectFromId) return
+                                selectAndScroll(redirectFromId)
+                            }}
+                        >
+                            <LinkIcon size={12} />
+                        </button>
+                    )}
+                    {!event.redirectFromId && redirectNextId && (
+                        <button
+                            className="inline-flex items-center justify-center w-5 h-5 text-emerald-400 hover:text-emerald-300 transition-colors"
+                            title="跳转到重定向下一跳"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                selectAndScroll(redirectNextId)
+                            }}
+                        >
+                            <ArrowRightIcon size={12} />
+                        </button>
+                    )}
+                    {!event.redirectFromId && !redirectNextId && event.redirectToUrl && (
+                        <span className="inline-flex items-center justify-center w-5 h-5 text-cyan-400" title="已重定向">
+                            <LinkIcon size={12} />
+                        </span>
+                    )}
                     {event.isReplay && (
                         <span className="inline-flex items-center justify-center w-5 h-5 text-blue-400" title="重放请求">
                             <RefreshIcon size={12} />
@@ -434,7 +525,7 @@ export function VirtualHTTPEventTable({
                             <StarIcon size={12} filled />
                         </span>
                     )}
-                    {!isMocked && !isFavorite && !event.isReplay && (
+                    {!isMocked && !isFavorite && !event.isReplay && !event.redirectFromId && !event.redirectToUrl && !redirectNextId && (
                         <span className="w-5 h-5" />
                     )}
                 </div>
