@@ -1666,7 +1666,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                     <button
                                         onClick={handlePrevMatch}
                                         disabled={!searchNavState.hasPrevMatch || isJumpingToMatch}
-                                        className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-bg-lighter disabled:opacity-40 flex items-center gap-1"
+                                        className="btn btn-primary !px-1.5 !py-0.5 !text-2xs !gap-1 disabled:opacity-50 rounded"
                                     >
                                         <ChevronLeftIcon size={10} />
                                         上一条
@@ -1674,7 +1674,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                     <button
                                         onClick={handleNextMatch}
                                         disabled={!searchNavState.hasNextMatch || isJumpingToMatch}
-                                        className="px-2 py-1 rounded border border-border text-text-secondary hover:bg-bg-lighter disabled:opacity-40 flex items-center gap-1"
+                                        className="btn btn-primary !px-1.5 !py-0.5 !text-2xs !gap-1 disabled:opacity-50 rounded"
                                     >
                                         下一条
                                         <ChevronRightIcon size={10} />

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Fragment } from 'react'
 import type { HTTPEventDetail as HTTPEventDetailType, HTTPEventSummary, MockRule } from '@/types'
 import {
   formatDuration,
@@ -6,7 +6,6 @@ import {
   getStatusClass,
   getMethodClass,
   getDurationClass,
-  getDurationBarClass,
   formatProtocolName,
 } from '@/utils/format'
 import { copyToClipboard } from '@/utils/clipboard'
@@ -106,17 +105,6 @@ export function HTTPEventDetail({
   const httpEvents = useHTTPStore((state) => state.events)
   const { chainMap, eventMap } = useRedirectChain(httpEvents)
   const chainMeta = event ? chainMap.get(event.id) : undefined
-
-  const maxDurationMs = useMemo(() => {
-    let max = 0
-    for (const item of httpEvents) {
-      if (typeof item.duration === 'number') {
-        const value = item.duration * 1000
-        if (value > max) max = value
-      }
-    }
-    return max
-  }, [httpEvents])
 
   const finalEventSummary = useMemo(() => {
     if (!event) return null
@@ -595,21 +583,6 @@ export function HTTPEventDetail({
             >
               {formatDuration(event.duration)}
             </span>
-            {(() => {
-              if (typeof event.duration !== 'number' || maxDurationMs <= 0) return null
-              const durationMs = event.duration * 1000
-              const ratio = durationMs / maxDurationMs
-              const showBar = durationMs >= 100 && ratio >= 0.03
-              if (!showBar) return null
-              return (
-                <div className="absolute left-2 right-2 bottom-0.5 h-0.5 bg-bg-light/40 rounded-full overflow-hidden pointer-events-none">
-                  <div
-                    className={clsx('h-full rounded-full', getDurationBarClass(event.duration))}
-                    style={{ width: `${Math.min(ratio, 1) * 100}%` }}
-                  />
-                </div>
-              )
-            })()}
           </div>
           {event.isReplay && (
             <span className="inline-flex items-center justify-center h-6 px-2 rounded-full text-[10px] font-mono font-medium tracking-wider leading-none bg-blue-500/15 text-blue-300 border border-blue-500/20 cursor-default select-none">
@@ -944,7 +917,14 @@ export function HTTPEventDetail({
                   <span className="text-text-muted">对比对象</span>
                   {chainMeta?.prevId && (
                     <button
-                      onClick={() => setDiffTarget('prev')}
+                      type="button"
+                      onClick={() => {
+                        if (diffTarget === 'prev') {
+                          setCompareDetail(null)
+                          setCompareError(null)
+                        }
+                        setDiffTarget('prev')
+                      }}
                       className={clsx(
                         'px-2 py-1 rounded border text-xs',
                         diffTarget === 'prev'
@@ -957,7 +937,14 @@ export function HTTPEventDetail({
                   )}
                   {chainMeta?.nextId && (
                     <button
-                      onClick={() => setDiffTarget('next')}
+                      type="button"
+                      onClick={() => {
+                        if (diffTarget === 'next') {
+                          setCompareDetail(null)
+                          setCompareError(null)
+                        }
+                        setDiffTarget('next')
+                      }}
                       className={clsx(
                         'px-2 py-1 rounded border text-xs',
                         diffTarget === 'next'
@@ -1101,19 +1088,33 @@ function BasicDiffTable({
     <div className="overflow-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-left text-text-muted border-b border-border">
+          <tr className="text-left text-text-muted">
             <th className="py-2 w-24">字段</th>
             <th className="py-2">当前</th>
             <th className="py-2">对比</th>
           </tr>
+          <tr aria-hidden>
+            <th colSpan={3} className="p-0">
+              <div className="h-px bg-border-subtle" />
+            </th>
+          </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.label} className={clsx('border-b border-border/50', row.diff && 'bg-yellow-500/10')}>
-              <td className="py-2 text-text-muted">{row.label}</td>
-              <td className={clsx('py-2 font-mono break-all', row.diff && 'text-red-400')}>{row.current}</td>
-              <td className={clsx('py-2 font-mono break-all', row.diff && 'text-green-400')}>{row.compare}</td>
-            </tr>
+          {rows.map((row, index) => (
+            <Fragment key={row.label}>
+              <tr className={clsx(row.diff && 'bg-yellow-500/10')}>
+                <td className="py-2 text-text-muted">{row.label}</td>
+                <td className={clsx('py-2 font-mono break-all', row.diff && 'text-red-400')}>{row.current}</td>
+                <td className={clsx('py-2 font-mono break-all', row.diff && 'text-green-400')}>{row.compare}</td>
+              </tr>
+              {index < rows.length - 1 && (
+                <tr aria-hidden>
+                  <td colSpan={3} className="p-0">
+                    <div className="h-px bg-border-subtle" />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -1193,29 +1194,43 @@ function HeadersDiffTable({ diffs }: { diffs: HeaderDiff[] }) {
     <div className="overflow-auto">
       <table className="w-full text-xs font-mono">
         <thead>
-          <tr className="text-left text-text-muted border-b border-border">
+          <tr className="text-left text-text-muted">
             <th className="py-2 w-28">状态</th>
             <th className="py-2 w-40">Header</th>
             <th className="py-2">当前</th>
             <th className="py-2">对比</th>
           </tr>
+          <tr aria-hidden>
+            <th colSpan={4} className="p-0">
+              <div className="h-px bg-border-subtle" />
+            </th>
+          </tr>
         </thead>
         <tbody>
-          {diffs.map((diff) => (
-            <tr key={diff.key} className="border-b border-border/50">
-              <td className="py-2">
-                <span className={clsx('px-2 py-1 rounded text-2xs', statusClass[diff.status])}>
-                  {statusLabel[diff.status]}
-                </span>
-              </td>
-              <td className="py-2 text-primary break-all">{diff.key}</td>
-              <td className={clsx('py-2 break-all', diff.status === 'removed' && 'text-red-400')}>
-                {diff.current ?? '-'}
-              </td>
-              <td className={clsx('py-2 break-all', diff.status === 'added' && 'text-green-400')}>
-                {diff.compare ?? '-'}
-              </td>
-            </tr>
+          {diffs.map((diff, index) => (
+            <Fragment key={diff.key}>
+              <tr>
+                <td className="py-2">
+                  <span className={clsx('px-2 py-1 rounded text-2xs', statusClass[diff.status])}>
+                    {statusLabel[diff.status]}
+                  </span>
+                </td>
+                <td className="py-2 text-primary break-all">{diff.key}</td>
+                <td className={clsx('py-2 break-all', diff.status === 'removed' && 'text-red-400')}>
+                  {diff.current ?? '-'}
+                </td>
+                <td className={clsx('py-2 break-all', diff.status === 'added' && 'text-green-400')}>
+                  {diff.compare ?? '-'}
+                </td>
+              </tr>
+              {index < diffs.length - 1 && (
+                <tr aria-hidden>
+                  <td colSpan={4} className="p-0">
+                    <div className="h-px bg-border-subtle" />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -1227,6 +1242,10 @@ function HeadersTable({ headers, enableRaw = false }: { headers: Record<string, 
   const entries = Object.entries(headers)
   const [viewMode, setViewMode] = useState<'kv' | 'raw'>('kv')
   const [copied, setCopied] = useState(false)
+  const toggleButtonClass = (active: boolean) => clsx(
+    'btn !px-2 !py-1 !text-xs',
+    active ? 'btn-primary' : 'btn-secondary'
+  )
   const rawText = useMemo(
     () => entries.map(([key, value]) => `${key}: ${value}`).join('\n'),
     [entries]
@@ -1243,23 +1262,13 @@ function HeadersTable({ headers, enableRaw = false }: { headers: Record<string, 
           <div className="flex gap-2">
             <button
               onClick={() => setViewMode('kv')}
-              className={clsx(
-                'px-2 py-1 text-xs rounded',
-                viewMode === 'kv'
-                  ? 'bg-primary text-white'
-                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
-              )}
+              className={toggleButtonClass(viewMode === 'kv')}
             >
               键值
             </button>
             <button
               onClick={() => setViewMode('raw')}
-              className={clsx(
-                'px-2 py-1 text-xs rounded',
-                viewMode === 'raw'
-                  ? 'bg-primary text-white'
-                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
-              )}
+              className={toggleButtonClass(viewMode === 'raw')}
             >
               原始
             </button>

@@ -139,6 +139,10 @@ export function JSONViewer({
   buttonOrder = 'raw-first',
 }: JSONViewerProps) {
   const [viewMode, setViewMode] = useState<'tree' | 'raw'>(initialViewMode)
+  const toggleButtonClass = (active: boolean) => clsx(
+    'btn !px-2 !py-1 !text-xs',
+    active ? 'btn-primary' : 'btn-secondary'
+  )
 
   const parsedData = useMemo(() => {
     try {
@@ -165,23 +169,13 @@ export function JSONViewer({
           <>
             <button
               onClick={() => setViewMode('tree')}
-              className={clsx(
-                'px-2 py-1 text-xs rounded',
-                viewMode === 'tree'
-                  ? 'bg-primary text-white'
-                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
-              )}
+              className={toggleButtonClass(viewMode === 'tree')}
             >
               树形
             </button>
             <button
               onClick={() => setViewMode('raw')}
-              className={clsx(
-                'px-2 py-1 text-xs rounded',
-                viewMode === 'raw'
-                  ? 'bg-primary text-white'
-                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
-              )}
+              className={toggleButtonClass(viewMode === 'raw')}
             >
               原始
             </button>
@@ -190,23 +184,13 @@ export function JSONViewer({
           <>
             <button
               onClick={() => setViewMode('raw')}
-              className={clsx(
-                'px-2 py-1 text-xs rounded',
-                viewMode === 'raw'
-                  ? 'bg-primary text-white'
-                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
-              )}
+              className={toggleButtonClass(viewMode === 'raw')}
             >
               原始
             </button>
             <button
               onClick={() => setViewMode('tree')}
-              className={clsx(
-                'px-2 py-1 text-xs rounded',
-                viewMode === 'tree'
-                  ? 'bg-primary text-white'
-                  : 'bg-bg-light text-text-muted hover:bg-bg-lighter'
-              )}
+              className={toggleButtonClass(viewMode === 'tree')}
             >
               树形
             </button>
