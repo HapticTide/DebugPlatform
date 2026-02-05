@@ -560,7 +560,7 @@ export function HTTPEventDetail({
 
         <div className="mt-2">
           <div className="h-px bg-border-subtle" />
-          <div className="pt-2 flex items-center gap-2 mb-0 flex-nowrap">
+          <div className="pt-2 flex flex-wrap items-center gap-x-2 gap-y-2 mb-0">
           <span
             className={clsx(
               'inline-flex items-center justify-center h-6 px-2 rounded-full text-[10px] font-mono font-medium tracking-wider leading-none min-w-[40px] cursor-default select-none',
@@ -577,6 +577,11 @@ export function HTTPEventDetail({
           >
             {event.statusCode ?? 'ERR'}
           </span>
+          {chainLabel && (
+            <span className="inline-flex items-center h-6 px-2 rounded-full text-[10px] font-mono font-medium tracking-wider leading-none bg-cyan-500/15 text-cyan-300 border border-cyan-500/20 cursor-default select-none">
+              重定向 {chainLabel}
+            </span>
+          )}
           <div
             className={clsx(
               'relative inline-flex items-center h-6 px-2 rounded-full border border-border-subtle bg-bg-light min-w-[56px] cursor-default select-none',
@@ -623,13 +628,8 @@ export function HTTPEventDetail({
           )}
           </div>
         </div>
-        {(chainLabel || event.isMocked || event.timing?.connectionReused) && (
+        {(event.isMocked || event.timing?.connectionReused) && (
           <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
-            {chainLabel && (
-              <span className="inline-flex items-center h-6 px-2 rounded-full text-[10px] font-mono font-medium tracking-wider leading-none bg-cyan-500/15 text-cyan-300 border border-cyan-500/20 cursor-default select-none">
-                重定向 {chainLabel}
-              </span>
-            )}
             {event.isMocked && (
               <MockRulePopover
                 url={event.url}
