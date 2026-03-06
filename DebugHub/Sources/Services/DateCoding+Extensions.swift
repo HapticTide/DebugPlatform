@@ -14,14 +14,14 @@ import Foundation
 public enum ISO8601WithMilliseconds {
     /// 带毫秒的 ISO8601 格式化器
     /// - Note: 使用 nonisolated(unsafe) 允许在并发环境中使用，因为 ISO8601DateFormatter 是线程安全的
-    nonisolated(unsafe) public static let formatter: ISO8601DateFormatter = {
+    public nonisolated(unsafe) static let formatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
 
     /// 备用的 DateFormatter，用于解析不带毫秒的日期
-    nonisolated(unsafe) private static let fallbackFormatter: ISO8601DateFormatter = {
+    private nonisolated(unsafe) static let fallbackFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter

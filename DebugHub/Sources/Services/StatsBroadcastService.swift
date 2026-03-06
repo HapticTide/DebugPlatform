@@ -5,8 +5,8 @@
 // Copyright © 2025 Sun. All rights reserved.
 //
 
-import Foundation
 import Fluent
+import Foundation
 import Vapor
 
 /// 服务器统计数据广播服务
@@ -131,7 +131,8 @@ final class StatsBroadcastService: @unchecked Sendable {
             let fileManager = FileManager.default
             if
                 let attrs = try? fileManager.attributesOfItem(atPath: dbPath),
-                let fileSize = attrs[.size] as? Int64 {
+                let fileSize = attrs[.size] as? Int64
+            {
                 databaseSizeBytes = fileSize
             }
         }

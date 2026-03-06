@@ -194,7 +194,7 @@ final class EventIngestor: @unchecked Sendable {
         switch event.kind {
         case let .sessionCreated(session):
             print("[EventIngestor] WS sessionCreated: id=\(session.id), url=\(session.url.prefix(80))...")
-            
+
             // 检查 session 是否已存在（处理重连场景）
             if let existing = try await WSSessionModel.find(session.id, on: db) {
                 // 已存在，更新信息
@@ -251,7 +251,7 @@ final class EventIngestor: @unchecked Sendable {
                     closeCode: nil,
                     closeReason: nil
                 )
-                
+
                 // 使用 try? 忽略重复主键错误（竞态条件下可能另一个请求已经创建了）
                 do {
                     try await placeholderSession.save(on: db)

@@ -29,7 +29,7 @@ public struct DeviceInfoDTO: Content {
     public let isSimulator: Bool
     public let appIcon: String?
 
-    // 自定义解码以支持旧版本客户端
+    /// 自定义解码以支持旧版本客户端
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         deviceId = try container.decode(String.self, forKey: .deviceId)
@@ -279,8 +279,9 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
         do {
             if
                 let existingDevice = try await DeviceModel.query(on: db)
-                    .filter(\.$deviceId == deviceInfo.deviceId)
-                    .first() {
+                .filter(\.$deviceId == deviceInfo.deviceId)
+                .first()
+            {
                 // 更新现有设备信息
                 existingDevice.deviceName = deviceInfo.deviceName
                 existingDevice.deviceAlias = deviceInfo.deviceAlias
@@ -339,8 +340,9 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
         do {
             if
                 let session = try await DeviceSessionModel.query(on: db)
-                    .filter(\.$sessionId == sessionId)
-                    .first() {
+                .filter(\.$sessionId == sessionId)
+                .first()
+            {
                 session.disconnectedAt = Date()
                 try await session.save(on: db)
                 print("[DeviceRegistry] Session end recorded: \(sessionId)")
@@ -349,8 +351,9 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
             // 更新设备最后活动时间
             if
                 let device = try await DeviceModel.query(on: db)
-                    .filter(\.$deviceId == deviceId)
-                    .first() {
+                .filter(\.$deviceId == deviceId)
+                .first()
+            {
                 device.lastSeenAt = Date()
                 try await device.save(on: db)
             }
@@ -366,8 +369,9 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
         do {
             if
                 let device = try await DeviceModel.query(on: db)
-                    .filter(\.$deviceId == deviceId)
-                    .first() {
+                .filter(\.$deviceId == deviceId)
+                .first()
+            {
                 device.deviceAlias = deviceAlias
                 try await device.save(on: db)
                 print("[DeviceRegistry] Device alias updated: \(deviceId) -> \(deviceAlias ?? "nil")")
@@ -457,7 +461,7 @@ enum BridgeMessageDTO: Codable {
     case updateBreakpointRules([BreakpointRuleDTO])
     case breakpointHit(BreakpointHitDTO)
     case breakpointResume(BreakpointResumeDTO)
-    // 故障注入相关
+    /// 故障注入相关
     case updateChaosRules([ChaosRuleDTO])
     // 数据库检查相关
     case dbCommand(DBCommandDTO)
@@ -466,7 +470,7 @@ enum BridgeMessageDTO: Codable {
     case pluginCommand(PluginCommandDTO)
     case pluginCommandResponse(PluginCommandResponseDTO)
     case pluginEvent(PluginEventDTO)
-    // 插件状态变化
+    /// 插件状态变化
     case pluginStateChange(pluginId: String, isEnabled: Bool)
     // 设备信息更新（如别名变更）
     case updateDeviceInfo(DeviceInfoDTO)
@@ -630,7 +634,7 @@ enum BridgeMessageDTO: Codable {
     }
 }
 
-// Payload types
+/// Payload types
 private struct RegisterPayload: Codable {
     let deviceInfo: DeviceInfoDTO
     let token: String

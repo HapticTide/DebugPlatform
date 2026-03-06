@@ -121,7 +121,7 @@ public final class LogBackendPlugin: BackendPlugin, @unchecked Sendable {
         let events = try await query
             .sort(\.$timestamp, .descending)
             .sort(\.$seqNum, .descending)
-            .range((page - 1) * pageSize..<page * pageSize)
+            .range((page - 1) * pageSize ..< page * pageSize)
             .all()
 
         let items = events.map { PluginLogEventItemDTO(from: $0) }
@@ -307,7 +307,7 @@ public final class WebSocketBackendPlugin: BackendPlugin, @unchecked Sendable {
         let sessions = try await query
             .sort(\.$connectTime, .descending)
             .sort(\.$id, .descending)
-            .range((page - 1) * pageSize..<page * pageSize)
+            .range((page - 1) * pageSize ..< page * pageSize)
             .all()
 
         let items = sessions.map { WSSessionDTO(from: $0) }
@@ -351,7 +351,7 @@ public final class WebSocketBackendPlugin: BackendPlugin, @unchecked Sendable {
         let frames = try await query
             .sort(\.$timestamp, .descending)
             .sort(\.$seqNum, .descending)
-            .range((page - 1) * pageSize..<page * pageSize)
+            .range((page - 1) * pageSize ..< page * pageSize)
             .all()
 
         let items = frames.map { WSFrameDTO(from: $0) }
@@ -436,7 +436,7 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         db.post(":dbId", "search", "rows", use: fetchSearchRows)
     }
 
-    public func handleEvent(_ event: PluginEventDTO, from deviceId: String) async {
+    public func handleEvent(_ event: PluginEventDTO, from _: String) async {
         // 数据库插件接收响应事件
         if event.eventType == "db_response" {
             if let response = try? event.decodePayload(as: DBResponseDTO.self) {
@@ -779,7 +779,7 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
     }
 
     /// 解析 SQL 错误并生成友好的错误信息和建议
-    private func parseSQLError(originalError: String, query: String, dbId: String) -> PluginDBQueryError {
+    private func parseSQLError(originalError: String, query: String, dbId _: String) -> PluginDBQueryError {
         let lowercasedError = originalError.lowercased()
         let lowercasedQuery = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -797,7 +797,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         // 表不存在
         else if
             lowercasedError.contains("no such table") ||
-            (lowercasedError.contains("table") && lowercasedError.contains("not")) {
+            (lowercasedError.contains("table") && lowercasedError.contains("not"))
+        {
             errorType = "table_not_found"
             description = "指定的表不存在"
             suggestions = generateTableSuggestions(query: query, error: originalError)
@@ -805,7 +806,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         // 列不存在
         else if
             lowercasedError.contains("no such column") ||
-            (lowercasedError.contains("column") && lowercasedError.contains("not")) {
+            (lowercasedError.contains("column") && lowercasedError.contains("not"))
+        {
             errorType = "column_not_found"
             description = "指定的列不存在"
             suggestions = generateColumnSuggestions(query: query, error: originalError)
@@ -848,7 +850,7 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
     }
 
     /// 生成语法错误建议
-    private func generateSyntaxSuggestions(query: String, error: String) -> [String] {
+    private func generateSyntaxSuggestions(query: String, error _: String) -> [String] {
         var suggestions: [String] = []
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let lowercasedQuery = trimmedQuery.lowercased()
@@ -871,7 +873,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         let wherePattern = #"(?i)\bwhere\s+(limit|order|group|;|$)"#
         if
             let regex = try? NSRegularExpression(pattern: wherePattern),
-            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil {
+            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil
+        {
             suggestions.append("WHERE 子句后需要添加条件，例如: WHERE column = value")
             // 生成一个移除空 WHERE 的建议
             if let whereRemoveRegex = try? NSRegularExpression(pattern: #"(?i)\s+where\s+(?=limit|order|group|$)"#) {
@@ -890,7 +893,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         let orderByPattern = #"(?i)\border\s+by\s*(limit|group|where|;|$)"#
         if
             let regex = try? NSRegularExpression(pattern: orderByPattern),
-            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil {
+            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil
+        {
             suggestions.append("ORDER BY 后需要指定列名，例如: ORDER BY column_name ASC")
         }
 
@@ -898,7 +902,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         let groupByPattern = #"(?i)\bgroup\s+by\s*(limit|order|having|where|;|$)"#
         if
             let regex = try? NSRegularExpression(pattern: groupByPattern),
-            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil {
+            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil
+        {
             suggestions.append("GROUP BY 后需要指定列名，例如: GROUP BY column_name")
         }
 
@@ -906,7 +911,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         let limitPattern = #"(?i)\blimit\s*(order|group|where|;|$)"#
         if
             let regex = try? NSRegularExpression(pattern: limitPattern),
-            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil {
+            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil
+        {
             suggestions.append("LIMIT 后需要指定数量，例如: LIMIT 100")
         }
 
@@ -914,7 +920,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         let duplicateSelectPattern = #"(?i)\bselect\s+select\b"#
         if
             let regex = try? NSRegularExpression(pattern: duplicateSelectPattern),
-            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil {
+            regex.firstMatch(in: trimmedQuery, range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery)) != nil
+        {
             let fixed = trimmedQuery.replacingOccurrences(
                 of: #"(?i)\bselect\s+select\b"#,
                 with: "SELECT",
@@ -967,7 +974,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
                 regex.firstMatch(
                     in: lowercasedQuery,
                     range: NSRange(lowercasedQuery.startIndex..., in: lowercasedQuery)
-                ) != nil {
+                ) != nil
+            {
                 let fixed = regex.stringByReplacingMatches(
                     in: trimmedQuery,
                     range: NSRange(trimmedQuery.startIndex..., in: trimmedQuery),
@@ -1001,7 +1009,7 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
     }
 
     /// 生成表相关建议
-    private func generateTableSuggestions(query: String, error: String) -> [String] {
+    private func generateTableSuggestions(query _: String, error: String) -> [String] {
         var suggestions: [String] = []
 
         // 尝试从错误中提取表名
@@ -1009,7 +1017,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         if
             let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
             let match = regex.firstMatch(in: error, options: [], range: NSRange(error.startIndex..., in: error)),
-            let range = Range(match.range(at: 1), in: error) {
+            let range = Range(match.range(at: 1), in: error)
+        {
             let tableName = String(error[range])
             suggestions.append("表 '\(tableName)' 不存在，请检查表名是否正确")
             suggestions.append("使用左侧表列表查看可用的表名")
@@ -1022,7 +1031,7 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
     }
 
     /// 生成列相关建议
-    private func generateColumnSuggestions(query: String, error: String) -> [String] {
+    private func generateColumnSuggestions(query _: String, error: String) -> [String] {
         var suggestions: [String] = []
 
         // 尝试从错误中提取列名
@@ -1030,7 +1039,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         if
             let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
             let match = regex.firstMatch(in: error, options: [], range: NSRange(error.startIndex..., in: error)),
-            let range = Range(match.range(at: 1), in: error) {
+            let range = Range(match.range(at: 1), in: error)
+        {
             let columnName = String(error[range])
             suggestions.append("列 '\(columnName)' 不存在，请检查列名是否正确")
         }
@@ -1140,7 +1150,7 @@ public final class MockBackendPlugin: BackendPlugin, @unchecked Sendable {
         mock.delete(":ruleId", use: deleteRule)
     }
 
-    public func handleEvent(_ event: PluginEventDTO, from deviceId: String) async {
+    public func handleEvent(_: PluginEventDTO, from _: String) async {
         // Mock 插件不接收事件
     }
 
@@ -1151,7 +1161,7 @@ public final class MockBackendPlugin: BackendPlugin, @unchecked Sendable {
 
         let rules = try await MockRuleModel.query(on: req.db)
             .filter(\.$deviceId == deviceId)
-            .sort(\.$createdAt, .descending)  // 按创建时间倒序，最新的在前
+            .sort(\.$createdAt, .descending) // 按创建时间倒序，最新的在前
             .all()
 
         return rules.map { $0.toDTO() }
@@ -1343,9 +1353,9 @@ public final class BreakpointBackendPlugin: BackendPlugin, @unchecked Sendable {
 
         guard
             let model = try await BreakpointRuleModel.query(on: req.db)
-                .filter(\.$id == ruleId)
-                .filter(\.$deviceId == deviceId)
-                .first()
+            .filter(\.$id == ruleId)
+            .filter(\.$deviceId == deviceId)
+            .first()
         else {
             throw Abort(.notFound)
         }
@@ -1454,7 +1464,7 @@ public final class ChaosBackendPlugin: BackendPlugin, @unchecked Sendable {
         chaos.delete(":ruleId", use: deleteRule)
     }
 
-    public func handleEvent(_ event: PluginEventDTO, from deviceId: String) async {
+    public func handleEvent(_: PluginEventDTO, from _: String) async {
         // Chaos 插件不接收事件，只接收命令下发
     }
 
@@ -1512,9 +1522,9 @@ public final class ChaosBackendPlugin: BackendPlugin, @unchecked Sendable {
 
         guard
             let model = try await ChaosRuleModel.query(on: req.db)
-                .filter(\.$id == ruleId)
-                .filter(\.$deviceId == deviceId)
-                .first()
+            .filter(\.$id == ruleId)
+            .filter(\.$deviceId == deviceId)
+            .first()
         else {
             throw Abort(.notFound)
         }
@@ -1827,7 +1837,7 @@ struct PluginDBSQLResponse: Content {
     let affectedRows: Int?
 }
 
-// 使用 Plugin 前缀避免与现有 DTO 冲突
+/// 使用 Plugin 前缀避免与现有 DTO 冲突
 struct PluginMockRuleDTO: Content {
     let id: String
     let name: String

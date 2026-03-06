@@ -132,7 +132,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         guard
             let payloadData = try? encoder.encode(event),
-            let payload = String(data: payloadData, encoding: .utf8) else {
+            let payload = String(data: payloadData, encoding: .utf8)
+        else {
             return
         }
 
@@ -155,7 +156,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         guard
             let payloadData = try? encoder.encode(event),
-            let payload = String(data: payloadData, encoding: .utf8) else {
+            let payload = String(data: payloadData, encoding: .utf8)
+        else {
             return
         }
 
@@ -179,7 +181,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         guard
             let payloadData = try? encoder.encode(event),
-            let payload = String(data: payloadData, encoding: .utf8) else {
+            let payload = String(data: payloadData, encoding: .utf8)
+        else {
             return
         }
 
@@ -203,7 +206,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         guard
             let payloadData = try? encoder.encode(event),
-            let payload = String(data: payloadData, encoding: .utf8) else {
+            let payload = String(data: payloadData, encoding: .utf8)
+        else {
             return
         }
 
@@ -219,7 +223,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         guard
             let payloadData = try? encoder.encode(hit),
-            let payload = String(data: payloadData, encoding: .utf8) else {
+            let payload = String(data: payloadData, encoding: .utf8)
+        else {
             return
         }
 
@@ -306,7 +311,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
                         if
                             var kind = dict["kind"] as? [String: Any],
                             var frameWrapper = kind["frame"] as? [String: Any],
-                            var frameDict = frameWrapper["_0"] as? [String: Any] {
+                            var frameDict = frameWrapper["_0"] as? [String: Any]
+                        {
                             frameDict["seqNum"] = seqNum
                             frameWrapper["_0"] = frameDict
                             kind["frame"] = frameWrapper
@@ -383,7 +389,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
             if
                 let targetDeviceId = deviceId,
                 let subscriberDeviceId = subscriber.deviceId,
-                subscriberDeviceId != targetDeviceId {
+                subscriberDeviceId != targetDeviceId
+            {
                 continue
             }
 
@@ -401,7 +408,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         guard
             let payloadData = try? encoder.encode(event),
-            let payload = String(data: payloadData, encoding: .utf8) else {
+            let payload = String(data: payloadData, encoding: .utf8)
+        else {
             print("[RealtimeStream] Failed to encode plugin event")
             return
         }
@@ -415,7 +423,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         guard
             let wrapperData = try? JSONSerialization.data(withJSONObject: wrapper),
-            let json = String(data: wrapperData, encoding: .utf8) else {
+            let json = String(data: wrapperData, encoding: .utf8)
+        else {
             print("[RealtimeStream] Failed to wrap plugin event")
             return
         }
@@ -436,7 +445,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         guard
             let payloadData = try? JSONSerialization.data(withJSONObject: payload),
-            let payloadString = String(data: payloadData, encoding: .utf8) else {
+            let payloadString = String(data: payloadData, encoding: .utf8)
+        else {
             print("[RealtimeStream] Failed to encode plugin state change")
             return
         }
@@ -454,7 +464,8 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         guard
             let payloadData = try? encoder.encode(stats),
-            let payloadString = String(data: payloadData, encoding: .utf8) else {
+            let payloadString = String(data: payloadData, encoding: .utf8)
+        else {
             print("[RealtimeStream] Failed to encode server stats")
             return
         }

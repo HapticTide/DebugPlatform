@@ -241,8 +241,13 @@ final class BackendPluginContextImpl: BackendPluginContext, @unchecked Sendable 
     private var configurations: [String: Data] = [:]
     private let configLock = NSLock()
 
-    var database: Database { app.db }
-    var logger: Logger { app.logger }
+    var database: Database {
+        app.db
+    }
+
+    var logger: Logger {
+        app.logger
+    }
 
     init(app: Application) {
         self.app = app
@@ -315,11 +320,11 @@ final class BackendPluginContextImpl: BackendPluginContext, @unchecked Sendable 
 // MARK: - Vapor Lifecycle Integration
 
 extension BackendPluginRegistry: LifecycleHandler {
-    public func willBoot(_ app: Application) throws {
+    public func willBoot(_: Application) throws {
         // 插件在 configure 中手动启动
     }
 
-    public func shutdown(_ app: Application) {
+    public func shutdown(_: Application) {
         Task {
             await shutdownAll()
         }

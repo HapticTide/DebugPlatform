@@ -9,7 +9,7 @@ import Fluent
 import FluentSQL
 import Vapor
 
-// 用于解析 PostgreSQL pg_database_size 返回结果
+/// 用于解析 PostgreSQL pg_database_size 返回结果
 struct DatabaseSizeRow: Decodable {
     let size: Int64
 }
@@ -48,7 +48,8 @@ struct StatsController: RouteCollection {
             let fileManager = FileManager.default
             if
                 let attrs = try? fileManager.attributesOfItem(atPath: dbPath),
-                let fileSize = attrs[.size] as? Int64 {
+                let fileSize = attrs[.size] as? Int64
+            {
                 databaseSizeBytes = fileSize
             }
         } else {

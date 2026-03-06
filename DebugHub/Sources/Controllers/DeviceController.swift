@@ -281,8 +281,8 @@ extension DeviceController {
         // 软删除设备
         guard
             let device = try await DeviceModel.query(on: req.db)
-                .filter(\.$deviceId == deviceId)
-                .first()
+            .filter(\.$deviceId == deviceId)
+            .first()
         else {
             throw Abort(.notFound, reason: "Device not found")
         }

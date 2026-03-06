@@ -521,7 +521,7 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
 
         // 将数据分成前后两半进行对比
         let midIndex = metrics.count / 2
-        let firstHalf = Array(metrics[0..<midIndex])
+        let firstHalf = Array(metrics[0 ..< midIndex])
         let secondHalf = Array(metrics[midIndex...])
 
         // CPU 趋势分析
@@ -650,7 +650,7 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
         let total = try await query.count()
         let events = try await query
             .sort(\.$timestamp, .descending)
-            .range((page - 1) * pageSize..<page * pageSize)
+            .range((page - 1) * pageSize ..< page * pageSize)
             .all()
 
         let items = events.map { JankEventItemDTO(from: $0) }
@@ -842,7 +842,7 @@ public final class PerformanceBackendPlugin: BackendPlugin, @unchecked Sendable 
         let total = try await query.count()
         let alerts = try await query
             .sort(\.$timestamp, .descending)
-            .range((page - 1) * pageSize..<page * pageSize)
+            .range((page - 1) * pageSize ..< page * pageSize)
             .all()
 
         let items = alerts.map { AlertDTO(from: $0) }
@@ -1516,7 +1516,7 @@ public final class PerformanceMetricsModel: Model, @unchecked Sendable {
     @Field(key: "timestamp")
     public var timestamp: Date
 
-    // CPU
+    /// CPU
     @OptionalField(key: "cpu_usage")
     public var cpuUsage: Double?
 
@@ -1529,7 +1529,7 @@ public final class PerformanceMetricsModel: Model, @unchecked Sendable {
     @OptionalField(key: "thread_count")
     public var threadCount: Int?
 
-    // Memory
+    /// Memory
     @OptionalField(key: "memory_used")
     public var memoryUsed: UInt64?
 
@@ -1545,7 +1545,7 @@ public final class PerformanceMetricsModel: Model, @unchecked Sendable {
     @OptionalField(key: "memory_footprint_ratio")
     public var memoryFootprintRatio: Double?
 
-    // FPS
+    /// FPS
     @OptionalField(key: "fps")
     public var fps: Double?
 
@@ -2178,7 +2178,7 @@ extension PerformanceBackendPlugin {
         // 分页查询
         let items = try await query
             .sort(\.$startAt, .descending)
-            .range((page - 1) * pageSize..<page * pageSize)
+            .range((page - 1) * pageSize ..< page * pageSize)
             .all()
 
         return PageTimingListDTO(
@@ -2203,9 +2203,9 @@ extension PerformanceBackendPlugin {
 
         guard
             let event = try await PageTimingEventModel.query(on: db)
-                .filter(\.$id == eventId)
-                .filter(\.$deviceId == deviceId)
-                .first()
+            .filter(\.$id == eventId)
+            .filter(\.$deviceId == deviceId)
+            .first()
         else {
             throw Abort(.notFound, reason: "Page timing event not found")
         }

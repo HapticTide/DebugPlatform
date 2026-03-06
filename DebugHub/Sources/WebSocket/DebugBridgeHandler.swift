@@ -32,7 +32,7 @@ private final class DeviceIdHolder: @unchecked Sendable {
 final class DebugBridgeHandler: @unchecked Sendable {
     static let shared = DebugBridgeHandler()
 
-    // 认证 Token（可配置）
+    /// 认证 Token（可配置）
     private let validToken = ProcessInfo.processInfo.environment["DEBUG_HUB_TOKEN"] ?? "debug-token-2025"
 
     private init() {}
@@ -213,7 +213,8 @@ final class DebugBridgeHandler: @unchecked Sendable {
     private func handleHeartbeat(deviceId: String?) {
         guard
             let deviceId,
-            let session = DeviceRegistry.shared.getSession(deviceId: deviceId) else {
+            let session = DeviceRegistry.shared.getSession(deviceId: deviceId)
+        else {
             return
         }
         session.updateLastSeen()

@@ -174,7 +174,8 @@ enum SearchQueryParser {
                 // 移除值周围的引号
                 if
                     (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
-                    (value.hasPrefix("'") && value.hasSuffix("'")) {
+                    (value.hasPrefix("'") && value.hasSuffix("'"))
+                {
                     value = String(value.dropFirst().dropLast())
                 }
 
@@ -346,7 +347,8 @@ extension SearchFilter {
                 if
                     parts.count == 2,
                     let min = Int(parts[0]),
-                    let max = Int(parts[1]) {
+                    let max = Int(parts[1])
+                {
                     return ("(\(column) >= \(min) AND \(column) <= \(max))", nil)
                 }
             }

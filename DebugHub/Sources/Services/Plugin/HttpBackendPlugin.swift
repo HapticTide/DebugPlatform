@@ -227,7 +227,7 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
         let events = try await query
             .sort(\.$startTime, .descending)
             .sort(\.$seqNum, .descending)
-            .range((page - 1) * pageSize..<page * pageSize)
+            .range((page - 1) * pageSize ..< page * pageSize)
             .all()
 
         let items = events.map { event in
@@ -512,7 +512,7 @@ private func makeErrorInfo(
     isNetworkError: Bool?,
     message: String?
 ) -> PluginHTTPErrorInfoDTO? {
-    if domain == nil && code == nil && category == nil && isNetworkError == nil && message == nil {
+    if domain == nil, code == nil, category == nil, isNetworkError == nil, message == nil {
         return nil
     }
     return PluginHTTPErrorInfoDTO(
@@ -530,7 +530,7 @@ private func resolveRedirectToUrl(_ model: HTTPEventModel) -> String? {
         return normalizedExisting
     }
 
-    guard let statusCode = model.statusCode, (300...399).contains(statusCode) else {
+    guard let statusCode = model.statusCode, (300 ... 399).contains(statusCode) else {
         return normalizedExisting?.isEmpty == true ? nil : normalizedExisting
     }
 
@@ -547,7 +547,8 @@ private func resolveRedirectToUrl(_ model: HTTPEventModel) -> String? {
     }
 
     if let baseUrl = URL(string: model.url),
-       let resolved = URL(string: trimmedLocation, relativeTo: baseUrl)?.absoluteURL {
+       let resolved = URL(string: trimmedLocation, relativeTo: baseUrl)?.absoluteURL
+    {
         return resolved.absoluteString
     }
 

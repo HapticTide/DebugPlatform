@@ -32,7 +32,7 @@ final class DataCleanupService: LifecycleHandler, @unchecked Sendable {
         start(app: application)
     }
 
-    func shutdown(_ application: Application) {
+    func shutdown(_: Application) {
         stop()
     }
 

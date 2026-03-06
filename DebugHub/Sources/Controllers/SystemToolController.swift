@@ -5,8 +5,8 @@
 //  Created by Sun on 2025/12/16.
 //  系统工具 API，如在 Finder 中显示文件
 
-import Vapor
 import Foundation
+import Vapor
 
 struct SystemToolController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {

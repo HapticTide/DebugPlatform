@@ -100,7 +100,7 @@ public struct PluginCommandDTO: Codable, Sendable {
         self.pluginId = pluginId
         self.commandType = commandType
         self.commandId = commandId
-        self.payload = try encoder.encode(encodable)
+        payload = try encoder.encode(encodable)
     }
 }
 
@@ -180,9 +180,11 @@ public protocol BackendPlugin: AnyObject, Sendable {
 // MARK: - 默认实现
 
 public extension BackendPlugin {
-    var dependencies: [String] { [] }
+    var dependencies: [String] {
+        []
+    }
 
-    func handleCommandResponse(_ response: PluginCommandResponseDTO, from deviceId: String) async {
+    func handleCommandResponse(_: PluginCommandResponseDTO, from _: String) async {
         // 默认空实现
     }
 
@@ -236,11 +238,11 @@ public struct BackendPluginInfo: Content, Sendable {
     public let state: String
 
     public init(from plugin: BackendPlugin) {
-        self.pluginId = plugin.pluginId
-        self.displayName = plugin.displayName
-        self.version = plugin.version
-        self.description = plugin.pluginDescription
-        self.dependencies = plugin.dependencies
-        self.state = plugin.state.rawValue
+        pluginId = plugin.pluginId
+        displayName = plugin.displayName
+        version = plugin.version
+        description = plugin.pluginDescription
+        dependencies = plugin.dependencies
+        state = plugin.state.rawValue
     }
 }

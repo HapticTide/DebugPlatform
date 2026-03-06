@@ -65,7 +65,8 @@ func configure(_ app: Application) throws {
     app.lifecycle.use(DeviceRegistry.shared)
 
     // 设置新设备连接回调
-    DeviceRegistry.shared.onDeviceConnected = { deviceId, deviceName, sessionId, appSessionId, pluginStates in
+    DeviceRegistry.shared.onDeviceConnected = {
+        deviceId, deviceName, sessionId, appSessionId, pluginStates in
         RealtimeStreamHandler.shared.broadcastDeviceConnected(
             deviceId: deviceId,
             deviceName: deviceName,
@@ -224,7 +225,9 @@ func routes(_ app: Application) throws {
 
     // Debug Bridge WebSocket 端点
     // 设置最大帧大小为 200MB，以支持大日志文件传输
-    app.webSocket("debug-bridge", maxFrameSize: WebSocketMaxFrameSize(integerLiteral: 200 * 1024 * 1024)) { req, ws in
+    app.webSocket(
+        "debug-bridge", maxFrameSize: WebSocketMaxFrameSize(integerLiteral: 200 * 1024 * 1024)
+    ) { req, ws in
         // 设置 ping 间隔保持连接活跃（每 10 秒发送 ping）
         ws.pingInterval = .seconds(10)
         print("[DebugBridge] WebSocket configured with ping interval")
@@ -292,7 +295,9 @@ func getDataDirectory() -> String {
 /// - 环境变量 `SQLITE_PATH` 可指定 SQLite 数据库完整路径
 /// - 默认使用 PostgreSQL
 func configureDatabase(_ app: Application) throws {
-    let mode = Environment.get("DATABASE_MODE").flatMap { DatabaseMode(rawValue: $0.lowercased()) } ?? .postgres
+    let mode =
+        Environment.get("DATABASE_MODE").flatMap { DatabaseMode(rawValue: $0.lowercased()) }
+            ?? .postgres
 
     switch mode {
     case .postgres:
@@ -327,8 +332,9 @@ func configurePostgreSQL(_ app: Application) throws {
     }
 
     // 连接池配置
-    let maxConnectionsPerEventLoop = Environment.get("POSTGRES_MAX_CONNECTIONS")
-        .flatMap(Int.init) ?? 4
+    let maxConnectionsPerEventLoop =
+        Environment.get("POSTGRES_MAX_CONNECTIONS")
+            .flatMap(Int.init) ?? 2
 
     let configuration = SQLPostgresConfiguration(
         hostname: hostname,
@@ -343,7 +349,9 @@ func configurePostgreSQL(_ app: Application) throws {
         .postgres(
             configuration: configuration,
             maxConnectionsPerEventLoop: maxConnectionsPerEventLoop,
-            connectionPoolTimeout: .seconds(30)
+            connectionPoolTimeout: .seconds(30),
+            pruneInterval: .seconds(60),
+            maxIdleTimeBeforePruning: .seconds(300)
         ),
         as: .psql
     )

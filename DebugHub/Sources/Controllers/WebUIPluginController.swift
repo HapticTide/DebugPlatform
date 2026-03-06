@@ -93,7 +93,7 @@ struct WebUIPluginController: RouteCollection {
 
     // MARK: - Get All Plugin States
 
-    func getPluginStates(req: Request) async throws -> WebUIPluginStatesDTO {
+    func getPluginStates(req _: Request) async throws -> WebUIPluginStatesDTO {
         let states = await WebUIPluginStateManager.shared.getAllStates()
         return WebUIPluginStatesDTO(plugins: states)
     }
@@ -159,4 +159,3 @@ struct WebUIPluginController: RouteCollection {
         print("[WebUIPluginController] Broadcasted WebUI plugin states to all devices: \(states.count) plugins")
     }
 }
-
