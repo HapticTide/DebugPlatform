@@ -142,6 +142,20 @@ cd DebugPlatform/DebugHub
 ./deploy.sh --with-webui
 ```
 
+Ubuntu 服务器推荐使用仓库根目录下的 Linux 专用脚本，默认使用 SQLite，不依赖 Homebrew：
+
+```bash
+cd DebugPlatform
+
+./deploy-ubuntu.sh \
+  --install-deps \
+  --sqlite \
+  --data-dir /var/lib/debughub \
+  --host 127.0.0.1 \
+  --port 9527 \
+  --no-webui
+```
+
 服务启动后：
 - Web UI: http://localhost:9527
 - API 文档: http://localhost:9527/api-docs
