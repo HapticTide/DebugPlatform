@@ -16,7 +16,7 @@ import { ListLoadingOverlay } from './ListLoadingOverlay'
 import { TextPopover } from './TextPopover'
 import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, UnlockIcon, ArrowUpIcon, ArrowDownIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon, FolderIcon, CheckIcon, SQLIcon, ChevronDownIcon, ChevronRightIcon, ChevronLeftIcon, ClockIcon, TrashIcon } from './icons'
 import { useToastStore } from '@/stores/toastStore'
-import type { DatabaseLocation, DBInfo, DBQueryError, DBRow } from '@/types'
+import type { DatabaseLocation, DBInfo, DBQueryError, DBRow, DBTableInfo } from '@/types'
 import { fetchSearchRows } from '@/services/api'
 import { getDbSearchWarningThresholds } from '@/utils/dbSearchConfig'
 interface DBInspectorProps {
@@ -58,6 +58,12 @@ function highlightKeyword(text: string, keyword: string): React.ReactNode {
 }
 
 const SEARCH_MATCH_PAGE_SIZE = 50
+
+/// 表类型（缺省视为普通表，兼容不带 kind 字段的旧 Probe）
+function getTableKind(table: DBTableInfo): 'table' | 'virtual' | 'shadow' {
+    const kind = table.kind
+    return kind === 'virtual' || kind === 'shadow' ? kind : 'table'
+}
 
 // 格式化文件大小
 function formatBytes(bytes: number | null | undefined): string {
@@ -267,6 +273,11 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
     const [matchRowsLoadingByTable, setMatchRowsLoadingByTable] = useState<Record<string, boolean>>({})
     const [matchRowsErrorByTable, setMatchRowsErrorByTable] = useState<Record<string, string | null>>({})
 
+    // shadow 表折叠状态：key = parentTable（virtual 表名），默认全部折叠
+    const [expandedShadowParents, setExpandedShadowParents] = useState<Record<string, boolean>>({})
+    // 跨表搜索是否包含 shadow 表，默认不包含
+    const [includeShadowInSearch, setIncludeShadowInSearch] = useState(false)
+
     // Protobuf 配置
     const { descriptorMeta, getColumnConfig } = useProtobufStore()
     const [showProtobufConfig, setShowProtobufConfig] = useState(false)
@@ -294,13 +305,69 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         return () => clearTimeout(timer)
     }, [isSearchPanelOpen])
 
+    // 切换数据库时重置 shadow 折叠状态
+    useEffect(() => {
+        setExpandedShadowParents({})
+    }, [selectedDb])
+
+    /// 表清单按 shadow 归并：shadow 表折叠到其 parentTable 之下
+    /// parentTable 不在本库表清单里的孤儿 shadow 表退化为普通行，避免被静默吞掉
+    const tableTree = useMemo(() => {
+        const shadowByParent = new Map<string, DBTableInfo[]>()
+        const visible: DBTableInfo[] = []
+
+        for (const table of tables) {
+            const parent = table.parentTable
+            if (getTableKind(table) === 'shadow' && parent) {
+                const list = shadowByParent.get(parent) ?? []
+                list.push(table)
+                shadowByParent.set(parent, list)
+            } else {
+                visible.push(table)
+            }
+        }
+
+        const visibleNames = new Set(visible.map(table => table.name))
+        for (const [parent, list] of Array.from(shadowByParent.entries())) {
+            if (!visibleNames.has(parent)) {
+                shadowByParent.delete(parent)
+                visible.push(...list)
+            }
+        }
+
+        let shadowCount = 0
+        shadowByParent.forEach(list => { shadowCount += list.length })
+
+        return { visible, shadowByParent, shadowCount }
+    }, [tables])
+
+    /// 当前库中所有 shadow 表名，用于跨表搜索默认过滤
+    const shadowTableNames = useMemo(() => {
+        return new Set(tables.filter(table => getTableKind(table) === 'shadow').map(table => table.name))
+    }, [tables])
+
     const searchTableResults = useMemo(() => {
         const rawResults = globalSearchResult?.tableResults ?? []
-        return rawResults.map(result => ({
-            ...result,
-            matchRowIds: result.matchRowIds ?? [],
-        }))
-    }, [globalSearchResult])
+        return rawResults
+            // 默认不含 shadow 表（FTS5 的 _data/_idx 等内部表对人类无意义）
+            .filter(result => includeShadowInSearch || !shadowTableNames.has(result.tableName))
+            .map(result => ({
+                ...result,
+                matchRowIds: result.matchRowIds ?? [],
+            }))
+    }, [globalSearchResult, includeShadowInSearch, shadowTableNames])
+
+    /// 被 shadow 过滤规则隐藏掉的结果表数量（用于给用户一个可见出口）
+    const hiddenShadowResultCount = useMemo(() => {
+        if (includeShadowInSearch) return 0
+        const rawResults = globalSearchResult?.tableResults ?? []
+        return rawResults.filter(result => shadowTableNames.has(result.tableName)).length
+    }, [globalSearchResult, includeShadowInSearch, shadowTableNames])
+
+    /// 当前可见结果的匹配总数（与列表一致，避免「总数 30、列表只有 2 条」的错觉）
+    const visibleMatchTotal = useMemo(() => {
+        return searchTableResults.reduce((sum, result) => sum + result.matchCount, 0)
+    }, [searchTableResults])
 
     const searchWarning = useMemo(() => {
         if (!globalSearchResult) return null
@@ -1009,22 +1076,18 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                         <span className="opacity-60">({sharedDbs.length})</span>
                                     </button>
                                     {sharedDbExpanded && (
-                                        <div className="mt-1 space-y-1">
-                                            {sharedDbs.map((db) => (
-                                                <DatabaseItem
-                                                    key={db.descriptor.id}
-                                                    db={db}
-                                                    isSelected={selectedDb === db.descriptor.id}
-                                                    pathPopupDbId={pathPopupDbId}
-                                                    pathCopied={pathCopied}
-                                                    onSelect={handleSelectDb}
-                                                    onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
-                                                    onClosePathPopup={() => setPathPopupDbId(null)}
-                                                    onCopyPath={handleCopyPath}
-                                                    getDisplayPath={getDisplayPath}
-                                                />
-                                            ))}
-                                        </div>
+                                        <DatabaseGroupList
+                                            groupKey="shared"
+                                            dbs={sharedDbs}
+                                            selectedDb={selectedDb}
+                                            pathPopupDbId={pathPopupDbId}
+                                            pathCopied={pathCopied}
+                                            onSelect={handleSelectDb}
+                                            onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
+                                            onClosePathPopup={() => setPathPopupDbId(null)}
+                                            onCopyPath={handleCopyPath}
+                                            getDisplayPath={getDisplayPath}
+                                        />
                                     )}
                                 </div>
                             )
@@ -1049,22 +1112,18 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                         <span className="opacity-60">({currentUserDbs.length})</span>
                                     </button>
                                     {currentUserDbExpanded && (
-                                        <div className="mt-1 space-y-1">
-                                            {currentUserDbs.map((db) => (
-                                                <DatabaseItem
-                                                    key={db.descriptor.id}
-                                                    db={db}
-                                                    isSelected={selectedDb === db.descriptor.id}
-                                                    pathPopupDbId={pathPopupDbId}
-                                                    pathCopied={pathCopied}
-                                                    onSelect={handleSelectDb}
-                                                    onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
-                                                    onClosePathPopup={() => setPathPopupDbId(null)}
-                                                    onCopyPath={handleCopyPath}
-                                                    getDisplayPath={getDisplayPath}
-                                                />
-                                            ))}
-                                        </div>
+                                        <DatabaseGroupList
+                                            groupKey="currentUser"
+                                            dbs={currentUserDbs}
+                                            selectedDb={selectedDb}
+                                            pathPopupDbId={pathPopupDbId}
+                                            pathCopied={pathCopied}
+                                            onSelect={handleSelectDb}
+                                            onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
+                                            onClosePathPopup={() => setPathPopupDbId(null)}
+                                            onCopyPath={handleCopyPath}
+                                            getDisplayPath={getDisplayPath}
+                                        />
                                     )}
                                 </div>
                             )
@@ -1115,20 +1174,18 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                                                     : (ownerId.length > 20 ? `${ownerId.slice(0, 8)}...${ownerId.slice(-8)}` : ownerId)}
                                                             </div>
                                                         </TextPopover>
-                                                        {dbs.map((db) => (
-                                                            <DatabaseItem
-                                                                key={db.descriptor.id}
-                                                                db={db}
-                                                                isSelected={selectedDb === db.descriptor.id}
-                                                                pathPopupDbId={pathPopupDbId}
-                                                                pathCopied={pathCopied}
-                                                                onSelect={handleSelectDb}
-                                                                onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
-                                                                onClosePathPopup={() => setPathPopupDbId(null)}
-                                                                onCopyPath={handleCopyPath}
-                                                                getDisplayPath={getDisplayPath}
-                                                            />
-                                                        ))}
+                                                        <DatabaseGroupList
+                                                            groupKey={`other:${ownerId}`}
+                                                            dbs={dbs}
+                                                            selectedDb={selectedDb}
+                                                            pathPopupDbId={pathPopupDbId}
+                                                            pathCopied={pathCopied}
+                                                            onSelect={handleSelectDb}
+                                                            onTogglePathPopup={(id) => setPathPopupDbId(pathPopupDbId === id ? null : id)}
+                                                            onClosePathPopup={() => setPathPopupDbId(null)}
+                                                            onCopyPath={handleCopyPath}
+                                                            getDisplayPath={getDisplayPath}
+                                                        />
                                                     </div>
                                                 )
                                             })}
@@ -1144,7 +1201,12 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                 <div className="flex-1 overflow-auto p-3">
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xs font-medium text-text-muted uppercase tracking-wider">
-                            表 {tables.length > 0 && `(${tables.length})`}
+                            表 {tables.length > 0 && `(${tableTree.visible.length})`}
+                            {tableTree.shadowCount > 0 && (
+                                <span className="ml-1 normal-case tracking-normal text-text-muted/60" title={`另有 ${tableTree.shadowCount} 张 shadow 表已折叠到所属虚拟表下`}>
+                                    +{tableTree.shadowCount} shadow
+                                </span>
+                            )}
                         </h3>
                         <div className="flex items-center gap-1">
                             {selectedDb && (
@@ -1176,7 +1238,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                             跨表搜索
                             {globalSearchResult && (
                                 <span className="ml-1 px-1.5 py-0.5 rounded bg-bg-darkest/20 text-[10px]">
-                                    {globalSearchResult.totalMatches}
+                                    {visibleMatchTotal}
                                 </span>
                             )}
                         </button>
@@ -1188,28 +1250,44 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                         </div>
                     ) : selectedDb ? (
                         <div className="space-y-1">
-                            {tables.map((table) => (
-                                <button
-                                    key={table.name}
-                                    onClick={() => handleSelectTable(table.name)}
-                                    className={clsx(
-                                        'w-full px-3 py-2 rounded-lg text-left text-xs transition-all',
-                                        selectedTable === table.name
-                                            ? 'bg-accent-blue text-white shadow-sm shadow-accent-blue/30'
-                                            : 'text-text-secondary hover:bg-bg-light'
-                                    )}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <span className="font-mono truncate">{table.name}</span>
-                                        <span className={clsx(
-                                            'tabular-nums',
-                                            selectedTable === table.name ? 'text-white/70' : 'text-text-muted'
-                                        )}>
-                                            {table.rowCount !== null ? table.rowCount.toLocaleString() : '?'}
-                                        </span>
+                            {tableTree.visible.map((table) => {
+                                const shadowChildren = tableTree.shadowByParent.get(table.name) ?? []
+                                const shadowExpanded = !!expandedShadowParents[table.name]
+                                return (
+                                    <div key={table.name} className="space-y-1">
+                                        <TableListRow
+                                            table={table}
+                                            isSelected={selectedTable === table.name}
+                                            onSelect={handleSelectTable}
+                                        />
+                                        {shadowChildren.length > 0 && (
+                                            <div className="ml-3 pl-2 border-l border-border/60 space-y-1">
+                                                <button
+                                                    onClick={() => setExpandedShadowParents(prev => ({
+                                                        ...prev,
+                                                        [table.name]: !prev[table.name],
+                                                    }))}
+                                                    className="w-full flex items-center gap-1 px-2 py-1 rounded text-2xs text-text-muted hover:text-text-secondary hover:bg-bg-light transition-colors"
+                                                    title={`${table.name} 的 FTS/rtree 内部表，通常不需要直接查看`}
+                                                >
+                                                    {shadowExpanded ? <ChevronDownIcon size={10} /> : <ChevronRightIcon size={10} />}
+                                                    <span>shadow 表</span>
+                                                    <span className="opacity-60">({shadowChildren.length})</span>
+                                                </button>
+                                                {shadowExpanded && shadowChildren.map((shadowTable) => (
+                                                    <TableListRow
+                                                        key={shadowTable.name}
+                                                        table={shadowTable}
+                                                        isSelected={selectedTable === shadowTable.name}
+                                                        onSelect={handleSelectTable}
+                                                        dimmed
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                </button>
-                            ))}
+                                )
+                            })}
                         </div>
                     ) : (
                         <p className="text-xs text-text-muted text-center py-4">
@@ -1353,13 +1431,30 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
 
                         {globalSearchResult && (
                             <div className="h-full flex flex-col bg-bg-light border border-border rounded-lg overflow-hidden">
-                                <div className="px-3 py-2 border-b border-border bg-bg-tertiary flex items-center justify-between">
-                                    <span className="text-xs font-medium text-primary">
-                                        找到 {globalSearchResult.totalMatches} 条匹配
-                                    </span>
-                                    <span className="text-2xs text-text-muted">
-                                        {globalSearchResult.searchDurationMs.toFixed(0)}ms
-                                    </span>
+                                <div className="px-3 py-2 border-b border-border bg-bg-tertiary">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-medium text-primary">
+                                            找到 {visibleMatchTotal} 条匹配
+                                        </span>
+                                        <span className="text-2xs text-text-muted">
+                                            {globalSearchResult.searchDurationMs.toFixed(0)}ms
+                                        </span>
+                                    </div>
+                                    {/* shadow 表默认不参与跨表搜索结果展示，但保留一个可见出口 */}
+                                    {(hiddenShadowResultCount > 0 || includeShadowInSearch || shadowTableNames.size > 0) && (
+                                        <label className="mt-1.5 flex items-center gap-1.5 text-2xs text-text-muted hover:text-text-secondary cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={includeShadowInSearch}
+                                                onChange={(e) => setIncludeShadowInSearch(e.target.checked)}
+                                                className="w-3 h-3 accent-primary cursor-pointer"
+                                            />
+                                            <span>包含 shadow 表</span>
+                                            {hiddenShadowResultCount > 0 && (
+                                                <span className="opacity-70">（已隐藏 {hiddenShadowResultCount} 张）</span>
+                                            )}
+                                        </label>
+                                    )}
                                 </div>
                                 <div className="flex-1 overflow-auto p-2 space-y-2">
                                     {searchWarning && (
@@ -2206,6 +2301,15 @@ function DatabaseItem({
     onCopyPath,
     getDisplayPath,
 }: DatabaseItemProps) {
+    // 库族语义：行主标题优先 familyRole，副行显示 familyNote；旧 Probe 不带这些字段时完全保持原样
+    const familyRole = db.descriptor.familyRole?.trim() || null
+    const familyNote = db.descriptor.familyNote?.trim() || null
+    const primaryTitle = familyRole || db.descriptor.name
+    // 用 familyRole 顶掉文件名时，把真实文件名 + 备注一起塞进 tooltip，信息不丢
+    const primaryTooltip = [familyRole ? db.descriptor.name : null, familyNote]
+        .filter(Boolean)
+        .join(' · ') || db.descriptor.name
+
     return (
         <div className="relative">
             <button
@@ -2222,9 +2326,20 @@ function DatabaseItem({
                         {getDbKindIcon(db.descriptor.kind)}
                     </span>
                     <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">
-                            {db.descriptor.name}
+                        <div className="font-medium truncate" title={primaryTooltip}>
+                            {primaryTitle}
                         </div>
+                        {familyNote && (
+                            <div
+                                className={clsx(
+                                    'text-2xs truncate',
+                                    isSelected ? 'text-bg-darkest/60' : 'text-text-muted/80'
+                                )}
+                                title={familyNote}
+                            >
+                                {familyNote}
+                            </div>
+                        )}
                         <div className={clsx(
                             'text-2xs',
                             isSelected ? 'text-bg-darkest/70' : 'text-text-muted'
@@ -2326,5 +2441,167 @@ function DatabaseItem({
                 </div>
             )}
         </div>
+    )
+}
+
+// MARK: - 库族分组列表
+
+interface DatabaseGroupListProps {
+    /** 所属账户分组的唯一 key，用于隔离各分组的子组折叠状态 */
+    groupKey: string
+    dbs: DBInfo[]
+    selectedDb: string | null
+    pathPopupDbId: string | null
+    pathCopied: boolean
+    onSelect: (id: string) => void
+    onTogglePathPopup: (id: string) => void
+    onClosePathPopup: () => void
+    onCopyPath: (db: DBInfo) => void
+    getDisplayPath: (db: DBInfo) => string
+}
+
+/// 在账户分组内再按 descriptor.family 分子组：
+/// - 同 family 的库聚成一个可折叠子组，子组内按 familyOrder 升序、再按名称
+/// - 没有 family 的库保持现状，平铺在该分组末尾（旧 Probe 即此路径）
+function DatabaseGroupList({
+    groupKey,
+    dbs,
+    selectedDb,
+    pathPopupDbId,
+    pathCopied,
+    onSelect,
+    onTogglePathPopup,
+    onClosePathPopup,
+    onCopyPath,
+    getDisplayPath,
+}: DatabaseGroupListProps) {
+    // 子组默认展开；只记录被用户手动折叠的 family
+    const [collapsedFamilies, setCollapsedFamilies] = useState<Record<string, boolean>>({})
+
+    const { families, looseDbs } = useMemo(() => {
+        // 保持 family 首次出现的顺序（外层已按用户选择的排序方式排好）
+        const buckets = new Map<string, DBInfo[]>()
+        const loose: DBInfo[] = []
+
+        for (const db of dbs) {
+            const family = db.descriptor.family?.trim()
+            if (family) {
+                const list = buckets.get(family) ?? []
+                list.push(db)
+                buckets.set(family, list)
+            } else {
+                loose.push(db)
+            }
+        }
+
+        const sorted = Array.from(buckets.entries()).map(([family, list]) => ({
+            family,
+            dbs: [...list].sort((a, b) => {
+                // familyOrder 缺省的排在带 order 的之后
+                const orderA = a.descriptor.familyOrder ?? Number.MAX_SAFE_INTEGER
+                const orderB = b.descriptor.familyOrder ?? Number.MAX_SAFE_INTEGER
+                if (orderA !== orderB) return orderA - orderB
+                return a.descriptor.name.localeCompare(b.descriptor.name)
+            }),
+        }))
+
+        return { families: sorted, looseDbs: loose }
+    }, [dbs])
+
+    const renderItem = (db: DBInfo) => (
+        <DatabaseItem
+            key={db.descriptor.id}
+            db={db}
+            isSelected={selectedDb === db.descriptor.id}
+            pathPopupDbId={pathPopupDbId}
+            pathCopied={pathCopied}
+            onSelect={onSelect}
+            onTogglePathPopup={onTogglePathPopup}
+            onClosePathPopup={onClosePathPopup}
+            onCopyPath={onCopyPath}
+            getDisplayPath={getDisplayPath}
+        />
+    )
+
+    return (
+        <div className="mt-1 space-y-1">
+            {families.map(({ family, dbs: familyDbs }) => {
+                const stateKey = `${groupKey}:${family}`
+                const isCollapsed = !!collapsedFamilies[stateKey]
+                return (
+                    <div key={stateKey} className="space-y-1">
+                        <button
+                            onClick={() => setCollapsedFamilies(prev => ({ ...prev, [stateKey]: !prev[stateKey] }))}
+                            className="w-full flex items-center gap-1 px-2 py-0.5 text-2xs text-text-muted/80 font-medium hover:text-text-secondary transition-colors"
+                            title={`库族 ${family}`}
+                        >
+                            {isCollapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} />}
+                            <span className="font-mono truncate">{family}</span>
+                            <span className="opacity-60">({familyDbs.length})</span>
+                        </button>
+                        {!isCollapsed && (
+                            <div className="ml-2 pl-1.5 border-l border-border/60 space-y-1">
+                                {familyDbs.map(renderItem)}
+                            </div>
+                        )}
+                    </div>
+                )
+            })}
+            {looseDbs.map(renderItem)}
+        </div>
+    )
+}
+
+// MARK: - 表列表行
+
+interface TableListRowProps {
+    table: DBTableInfo
+    isSelected: boolean
+    onSelect: (name: string) => void
+    /** shadow 表用更弱的视觉权重 */
+    dimmed?: boolean
+}
+
+/// 单个表行：virtual 表额外带一个模块标签（如 FTS5）
+function TableListRow({ table, isSelected, onSelect, dimmed = false }: TableListRowProps) {
+    const kind = getTableKind(table)
+    const moduleLabel = kind === 'virtual' ? (table.module?.trim() || 'virtual').toUpperCase() : null
+
+    return (
+        <button
+            onClick={() => onSelect(table.name)}
+            className={clsx(
+                'w-full rounded-lg text-left text-xs transition-all',
+                dimmed ? 'px-2 py-1.5' : 'px-3 py-2',
+                isSelected
+                    ? 'bg-accent-blue text-white shadow-sm shadow-accent-blue/30'
+                    : dimmed
+                        ? 'text-text-muted hover:bg-bg-light hover:text-text-secondary'
+                        : 'text-text-secondary hover:bg-bg-light'
+            )}
+            title={kind === 'shadow' && table.parentTable ? `${table.name}（${table.parentTable} 的 shadow 表）` : table.name}
+        >
+            <div className="flex items-center justify-between gap-1">
+                <span className="font-mono truncate">{table.name}</span>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                    {moduleLabel && (
+                        <span className={clsx(
+                            'text-[10px] px-1 py-0.5 rounded border leading-none',
+                            isSelected
+                                ? 'border-white/40 text-white/80'
+                                : 'border-accent-blue/40 text-accent-blue bg-accent-blue/10'
+                        )}>
+                            {moduleLabel}
+                        </span>
+                    )}
+                    <span className={clsx(
+                        'tabular-nums',
+                        isSelected ? 'text-white/70' : 'text-text-muted'
+                    )}>
+                        {table.rowCount !== null && table.rowCount !== undefined ? table.rowCount.toLocaleString() : '?'}
+                    </span>
+                </div>
+            </div>
+        </button>
     )
 }

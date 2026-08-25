@@ -54,6 +54,19 @@ struct DatabaseDescriptorDTO: Content {
     let isEncrypted: Bool
     /// 加密类型（如 "SQLCipher"、"SQLite SEE" 等）
     let encryptionType: String?
+
+    // MARK: - 库族（多库分组）字段
+    // 以下四个字段由 App 侧填充（语义来自宿主 App 自己的领域模型），Probe 与 Hub 仅透传，
+    // Hub 不做任何语义处理。全部 Optional：旧 Probe 不带这些字段时保持既有行为。
+
+    /// 库族标识；同一账户下相同 family 的库在 UI 里归为一组，如 "im"
+    let family: String?
+    /// 该文件在库族中的角色（短标签，UI 直接显示），如 "主库" / "FTS 索引" / "归档分片 0"
+    let familyRole: String?
+    /// 语义备注（UI 作为副标题/tooltip），如 "不可再生 · 必须备份"
+    let familyNote: String?
+    /// 库族内排序权重，越小越靠前（main=0, search_index=1, archive_N=100+N）
+    let familyOrder: Int?
 }
 
 // MARK: - Encryption Status
@@ -87,6 +100,16 @@ struct DBInfoDTO: Content {
 struct DBTableInfoDTO: Content {
     let name: String
     let rowCount: Int?
+
+    // MARK: - 表类型字段（virtual / shadow 识别）
+    // 由 Probe 侧解析 sqlite_master 得出，Hub 仅透传。全部 Optional，缺省即旧行为。
+
+    /// "table" / "virtual" / "shadow"；缺省视为 "table"
+    let kind: String?
+    /// virtual 表的模块名，如 "fts5"（小写）
+    let module: String?
+    /// shadow 表所属的 virtual 表名
+    let parentTable: String?
 }
 
 // MARK: - Column Info DTO

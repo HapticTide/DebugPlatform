@@ -402,6 +402,18 @@ export interface DatabaseDescriptor {
   isEncrypted: boolean
   /** 加密类型（如 "SQLCipher"、"SQLite SEE" 等） */
   encryptionType: string | null
+
+  // ---- 库族（多库分组）字段：由 App 侧填充，Probe / Hub 透传 ----
+  // 全部 Optional：旧 Probe 不带这些字段时 UI 保持现状（平铺、显示 name）
+
+  /** 库族标识；同一账户下相同 family 的库在 UI 里归为一组，如 "im" */
+  family?: string | null
+  /** 该文件在库族中的角色（短标签，行主标题），如 "主库" / "FTS 索引" / "归档分片 0" */
+  familyRole?: string | null
+  /** 语义备注（副标题 + tooltip），如 "不可再生 · 必须备份" */
+  familyNote?: string | null
+  /** 库族内排序权重，越小越靠前（main=0, search_index=1, archive_N=100+N） */
+  familyOrder?: number | null
 }
 
 /** 加密数据库的解锁状态 */
@@ -416,9 +428,18 @@ export interface DBInfo {
   encryptionStatus: EncryptionStatus
 }
 
+/** 表类型：普通表 / 虚拟表（FTS5 等）/ 虚拟表的 shadow 表 */
+export type DBTableKind = 'table' | 'virtual' | 'shadow'
+
 export interface DBTableInfo {
   name: string
   rowCount: number | null
+  /** "table" / "virtual" / "shadow"；缺省视为 "table"（旧 Probe 不带此字段） */
+  kind?: DBTableKind | null
+  /** virtual 表的模块名，如 "fts5"（小写） */
+  module?: string | null
+  /** shadow 表所属的 virtual 表名 */
+  parentTable?: string | null
 }
 
 export interface DBColumnInfo {

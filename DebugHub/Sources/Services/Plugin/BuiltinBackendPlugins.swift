@@ -1751,6 +1751,18 @@ struct PluginDBInfoDTO: Content {
     let id: String
     let name: String
     let tableCount: Int
+
+    // MARK: - 库族（多库分组）字段
+    // 与 DatabaseDescriptorDTO 保持同名同义，Hub 仅透传、不做语义处理。全部 Optional。
+
+    /// 库族标识，如 "im"
+    let family: String?
+    /// 该文件在库族中的角色（短标签），如 "主库"
+    let familyRole: String?
+    /// 语义备注（UI 副标题/tooltip）
+    let familyNote: String?
+    /// 库族内排序权重，越小越靠前
+    let familyOrder: Int?
 }
 
 struct PluginDBTablesResponse: Content {
