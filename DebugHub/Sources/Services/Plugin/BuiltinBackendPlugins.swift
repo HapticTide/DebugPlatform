@@ -1742,33 +1742,6 @@ struct WSFrameListResponse: Content {
     let pageSize: Int
 }
 
-struct DBListResponse: Content {
-    let pending: Bool
-    let databases: [PluginDBInfoDTO]
-}
-
-struct PluginDBInfoDTO: Content {
-    let id: String
-    let name: String
-    let tableCount: Int
-
-    // MARK: - 库族（多库分组）字段
-    // 与 DatabaseDescriptorDTO 保持同名同义，Hub 仅透传、不做语义处理。全部 Optional。
-
-    /// 库族标识，如 "im"
-    let family: String?
-    /// 该文件在库族中的角色（短标签），如 "主库"
-    let familyRole: String?
-    /// 语义备注（UI 副标题/tooltip）
-    let familyNote: String?
-    /// 库族内排序权重，越小越靠前
-    let familyOrder: Int?
-}
-
-struct PluginDBTablesResponse: Content {
-    let tables: [String]
-}
-
 struct PluginDBColumnInfo: Content {
     let name: String
     let type: String?
@@ -1842,11 +1815,6 @@ struct PluginDBQueryError: Content {
     let description: String
     /// SQL 语句建议（如果能推断出用户意图）
     let suggestions: [String]?
-}
-
-struct PluginDBSQLResponse: Content {
-    let success: Bool
-    let affectedRows: Int?
 }
 
 /// 使用 Plugin 前缀避免与现有 DTO 冲突
