@@ -1,0 +1,8 @@
+# 不要把本地构建产物带进镜像，避免污染 + 拖慢上下文传输
+.build/
+.swiftpm/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.DS_Store

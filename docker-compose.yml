@@ -1,0 +1,88 @@
+# =============================================================================
+# DebugPlatform — VPS 部署编排（DebugHub + PostgreSQL）
+#
+#   1. cp deploy.docker.env.example .env  并修改其中的密码 / Token
+#   2. docker compose up -d --build
+#   3. 服务监听在宿主机 127.0.0.1:9527，由 Cloudflare（Tunnel 或反代）对外暴露
+#
+# 安全要点：
+#   - debughub 只绑定 127.0.0.1，不直接暴露公网；公网入口交给 Cloudflare
+#   - 设备探针走 /debug-bridge (WebSocket)，无法做邮箱 OTP，需在 Cloudflare Access
+#     给该路径配 Bypass / Service Token，依赖 DEBUG_HUB_TOKEN 鉴权
+#   - OTP 只罩 WebUI 与管理 API（/、/api/*、/ws/live）
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-debug_hub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?must set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-debug_hub}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-debug_hub} -d ${POSTGRES_DB:-debug_hub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # 仅容器内网可达，不映射到宿主机端口
+    networks:
+      - debughub
+
+  debughub:
+    build:
+      context: ./DebugHub
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_MODE: postgres
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-debug_hub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?must set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-debug_hub}
+      # 容器内网连接，无需 TLS
+      POSTGRES_SSL: "false"
+      # 设备连接鉴权 Token —— 公网必须改成强随机值
+      DEBUG_HUB_TOKEN: ${DEBUG_HUB_TOKEN:?must set DEBUG_HUB_TOKEN in .env}
+    # 只绑定回环地址，公网入口交给 Cloudflare（见下方 cloudflared 可选服务）
+    ports:
+      - "127.0.0.1:9527:9527"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9527/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - debughub
+
+  # ---------------------------------------------------------------------------
+  # 可选：Cloudflare Tunnel —— 无需开放任何公网端口 / 配置 DNS A 记录
+  # 在 Cloudflare Zero Trust 后台创建 Tunnel，把 token 填进 .env 的 CF_TUNNEL_TOKEN
+  # 然后 `docker compose --profile cloudflared up -d`
+  # Tunnel 的 Public Hostname 指向 http://debughub:9527
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ["cloudflared"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
+    depends_on:
+      - debughub
+    networks:
+      - debughub
+
+volumes:
+  pgdata:
+
+networks:
+  debughub:
+    driver: bridge
