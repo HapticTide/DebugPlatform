@@ -318,40 +318,35 @@ struct AddHTTPEventReplay: AsyncMigration {
 // MARK: - Add HTTP Event Redirect Fields
 
 struct AddHTTPEventRedirect: AsyncMigration {
+    // 逐列执行：SQLite 的 ALTER TABLE 一次只能 ADD 一列，把多列合成一条语句会语法错误
+    // （本地 DATABASE_MODE=sqlite 起不来）。PostgreSQL 下逐列与合并完全等价。
     func prepare(on database: Database) async throws {
-        try await database.schema("http_events")
-            .field("redirect_from_id", .string)
-            .field("redirect_to_url", .string)
-            .update()
+        try await database.schema("http_events").field("redirect_from_id", .string).update()
+        try await database.schema("http_events").field("redirect_to_url", .string).update()
     }
 
     func revert(on database: Database) async throws {
-        try await database.schema("http_events")
-            .deleteField("redirect_from_id")
-            .deleteField("redirect_to_url")
-            .update()
+        try await database.schema("http_events").deleteField("redirect_from_id").update()
+        try await database.schema("http_events").deleteField("redirect_to_url").update()
     }
 }
 
 // MARK: - Add HTTP Event Error Info Fields
 
 struct AddHTTPEventErrorInfo: AsyncMigration {
+    // 逐列执行，理由同 AddHTTPEventRedirect
     func prepare(on database: Database) async throws {
-        try await database.schema("http_events")
-            .field("error_domain", .string)
-            .field("error_code", .int)
-            .field("error_category", .string)
-            .field("is_network_error", .bool)
-            .update()
+        try await database.schema("http_events").field("error_domain", .string).update()
+        try await database.schema("http_events").field("error_code", .int).update()
+        try await database.schema("http_events").field("error_category", .string).update()
+        try await database.schema("http_events").field("is_network_error", .bool).update()
     }
 
     func revert(on database: Database) async throws {
-        try await database.schema("http_events")
-            .deleteField("error_domain")
-            .deleteField("error_code")
-            .deleteField("error_category")
-            .deleteField("is_network_error")
-            .update()
+        try await database.schema("http_events").deleteField("error_domain").update()
+        try await database.schema("http_events").deleteField("error_code").update()
+        try await database.schema("http_events").deleteField("error_category").update()
+        try await database.schema("http_events").deleteField("is_network_error").update()
     }
 }
 
@@ -460,13 +455,34 @@ struct CreatePageTimingEvent: AsyncMigration {
             .field("seq_num", .int64, .required, .sql(.default(0)))
             .create()
 
-        // 创建索引
-        try await database.schema("page_timing_events")
-            .unique(on: "id")
-            .update()
+        // 不再单独加 .unique(on: "id")：id 已是 .identifier(auto: false) 主键，主键本身唯一
+        // （同 CreateHTTPEvent 的处理）。且 SQLite 的 ALTER TABLE 只支持加列，加约束会直接报错。
     }
 
     func revert(on database: Database) async throws {
         try await database.schema("page_timing_events").delete()
+    }
+}
+
+// MARK: - Proto Bundle Migration
+
+struct CreateProtoBundle: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema("proto_bundles")
+            .field("id", .string, .identifier(auto: false))
+            .field("name", .string, .required)
+            .field("descriptor_data", .data, .required)
+            .field("descriptor_filename", .string, .required)
+            .field("rules_json", .string)
+            .field("rules_filename", .string)
+            .field("is_active", .bool, .required, .sql(.default(false)))
+            .field("note", .string)
+            .field("created_at", .datetime)
+            .field("updated_at", .datetime)
+            .create()
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema("proto_bundles").delete()
     }
 }

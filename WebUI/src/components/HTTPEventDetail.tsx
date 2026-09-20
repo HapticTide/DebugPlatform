@@ -24,8 +24,10 @@ import clsx from 'clsx'
 import { MockIcon, ClipboardIcon, CheckIcon, ArrowPathIcon, RefreshIcon, ChevronDownIcon, ChevronRightIcon } from './icons'
 import { BinaryPreview } from './BinaryPreview'
 import {
+  decodeBase64ToBytes,
   decodeBodyForDisplay,
   getHeaderValue,
+  isBodyStillCompressed,
   parseContentDispositionFilename,
   type BodyDisplayResult,
 } from '@/utils/httpBody'
@@ -233,8 +235,24 @@ export function HTTPEventDetail({
   )
   const isImageResponse = isImageContentType(responseContentType)
   const isProtobufResponse = isProtobufContentType(responseContentType)
-  const canPreviewImageResponse = isImageResponse && !hasResponseEncoding
-  const canPreviewProtobufResponse = isProtobufResponse && !hasResponseEncoding
+
+  // 以字节为准判断是否还压缩着，而不是只看 Content-Encoding 头：探针上报的通常是系统
+  // 网络栈已解压的 body，而头被原样保留。只信头会把已解压的 protobuf / 图片误判成压缩
+  // 内容，掉进纯文本路径显示成一屏乱码（br 尤其常见）。
+  const responseStillCompressed = useMemo(() => {
+    if (!hasResponseEncoding) return false
+    if (!event?.responseBody) return true
+    try {
+      // 嗅探只看开头几十字节，不必解码整个 body
+      const head = decodeBase64ToBytes(event.responseBody, 64)
+      return isBodyStillCompressed(head, responseContentEncoding)
+    } catch {
+      return true
+    }
+  }, [hasResponseEncoding, event?.responseBody, responseContentEncoding])
+
+  const canPreviewImageResponse = isImageResponse && !responseStillCompressed
+  const canPreviewProtobufResponse = isProtobufResponse && !responseStillCompressed
   const isResponsePending = Boolean(
     event?.responseBody && !canPreviewImageResponse && !canPreviewProtobufResponse && !decodedResponse && !isDecodingResponse
   )
@@ -753,6 +771,8 @@ export function HTTPEventDetail({
                     <ProtobufViewer
                       base64Data={event.requestBody}
                       contentType={requestContentType}
+                      url={event.url}
+                      direction="req"
                     />
                   ) : isDecodingRequest || isRequestPending ? (
                     <div className="text-text-muted text-sm">解析中...</div>
@@ -823,6 +843,8 @@ export function HTTPEventDetail({
                     <ProtobufViewer
                       base64Data={event.responseBody}
                       contentType={responseContentType}
+                      url={event.url}
+                      direction="rsp"
                     />
                   ) : isDecodingResponse || isResponsePending ? (
                     <div className="text-text-muted text-sm">解析中...</div>

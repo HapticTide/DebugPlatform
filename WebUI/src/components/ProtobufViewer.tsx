@@ -7,9 +7,11 @@
  * 2. Schema 解析：使用用户提供的 .proto 定义进行友好展示
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import clsx from 'clsx'
 import { PackageIcon } from './icons'
+import { ProtoSchemaViewer } from './ProtoSchemaViewer'
+import { useProtoBundleStore } from '@/stores/protoBundleStore'
 
 // Protobuf wire types
 enum WireType {
@@ -327,14 +329,28 @@ interface ProtobufViewerProps {
   base64Data: string
   contentType?: string | null
   className?: string
+  /** 请求 URL：有解码包时用它在规则表里查消息类型 */
+  url?: string
+  /** 查表方向，决定取请求体还是响应体的类型 */
+  direction?: 'req' | 'rsp' | 'deliver'
 }
 
 /**
  * Protobuf 查看器组件
  */
-export function ProtobufViewer({ base64Data, contentType, className }: ProtobufViewerProps) {
+export function ProtobufViewer({ base64Data, contentType, className, url, direction }: ProtobufViewerProps) {
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<'parsed' | 'hex'>('parsed')
+  // null 表示「用户还没选过」，此时按有没有解码包决定默认视图
+  const [viewMode, setViewMode] = useState<'schema' | 'parsed' | 'hex' | null>(null)
+
+  const activeBundle = useProtoBundleStore((s) => s.active)
+  const loadBundle = useProtoBundleStore((s) => s.load)
+
+  useEffect(() => {
+    void loadBundle()
+  }, [loadBundle])
+
+  const effectiveMode = viewMode ?? (activeBundle ? 'schema' : 'parsed')
 
   const parseResult = useMemo(() => {
     try {
@@ -379,10 +395,21 @@ export function ProtobufViewer({ base64Data, contentType, className }: ProtobufV
         </div>
         <div className="flex gap-1">
           <button
-            onClick={() => setViewMode('parsed')}
+            onClick={() => setViewMode('schema')}
+            title="使用托管的 descriptor 按字段名解析"
             className={clsx(
               'px-2 py-1 text-xs rounded transition-colors',
-              viewMode === 'parsed' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text-primary'
+              effectiveMode === 'schema' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text-primary'
+            )}
+          >
+            Schema
+          </button>
+          <button
+            onClick={() => setViewMode('parsed')}
+            title="无需 schema，按 wire format 显示字段编号"
+            className={clsx(
+              'px-2 py-1 text-xs rounded transition-colors',
+              effectiveMode === 'parsed' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text-primary'
             )}
           >
             Parsed
@@ -391,7 +418,7 @@ export function ProtobufViewer({ base64Data, contentType, className }: ProtobufV
             onClick={() => setViewMode('hex')}
             className={clsx(
               'px-2 py-1 text-xs rounded transition-colors',
-              viewMode === 'hex' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text-primary'
+              effectiveMode === 'hex' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text-primary'
             )}
           >
             Hex
@@ -401,6 +428,10 @@ export function ProtobufViewer({ base64Data, contentType, className }: ProtobufV
 
       {/* Content */}
       <div className="p-3 max-h-96 overflow-auto">
+        {effectiveMode === 'schema' ? (
+          <ProtoSchemaViewer base64Data={base64Data} url={url} direction={direction} />
+        ) : (
+          <>
         {parseResult.errors.length > 0 && (
           <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
             {parseResult.errors.map((error, i) => (
@@ -409,7 +440,7 @@ export function ProtobufViewer({ base64Data, contentType, className }: ProtobufV
           </div>
         )}
 
-        {viewMode === 'parsed' ? (
+        {effectiveMode === 'parsed' ? (
           parseResult.fields.length > 0 ? (
             <FieldList fields={parseResult.fields} expandedFields={expandedFields} toggleField={toggleField} />
           ) : (
@@ -417,6 +448,8 @@ export function ProtobufViewer({ base64Data, contentType, className }: ProtobufV
           )
         ) : (
           <HexView bytes={rawBytes} />
+        )}
+          </>
         )}
       </div>
     </div>

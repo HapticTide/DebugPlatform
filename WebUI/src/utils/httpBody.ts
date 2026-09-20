@@ -376,6 +376,38 @@ function getEncodings(contentEncoding: string | null): string[] {
     .filter((part) => part.length > 0 && part !== 'identity')
 }
 
+/**
+ * 判断 body 是否**实际上**还处于压缩状态。
+ *
+ * `Content-Encoding` 只说明服务端发出时压缩过，不代表抓到的字节仍是压缩的：探针拿到的
+ * 通常是系统网络栈（URLSession / OkHttp）已经解压的数据，而响应头被原样保留下来。
+ * 只信这个头，会把已经解压的 protobuf、图片误判成压缩内容，让它们掉进纯文本展示路径，
+ * 显示成一屏乱码。
+ *
+ * 所以这里以字节为准，复用与文本解码同一套嗅探。多层编码只看最外层——那是最后施加、
+ * 也是最先需要剥掉的一层。
+ *
+ * 注意边界：body 若**确实**还是压缩的，这里返回 true，调用方会退回文本路径（那条路径
+ * 会先解压）。目前不支持「先解压再按 protobuf 预览」，探针普遍上报解压后数据，暂不需要。
+ */
+export function isBodyStillCompressed(bytes: Uint8Array, contentEncoding: string | null): boolean {
+  const encodings = getEncodings(contentEncoding)
+  if (encodings.length === 0) return false
+
+  const outermost = encodings[encodings.length - 1]
+  switch (outermost) {
+    case 'gzip':
+      return isGzipBytes(bytes)
+    case 'deflate':
+      return isZlibBytes(bytes)
+    case 'br':
+      return isBrotliBytes(bytes)
+    default:
+      // 不认识的编码，保守当作仍是压缩的，交给文本路径去处理
+      return true
+  }
+}
+
 async function readStreamWithLimit(
   stream: ReadableStream<Uint8Array>,
   maxBytes: number

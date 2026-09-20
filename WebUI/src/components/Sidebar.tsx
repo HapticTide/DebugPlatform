@@ -570,6 +570,18 @@ export function Sidebar() {
           >
             <ColorfulTrafficLightIcon size={16} />
           </Link>
+          <Link
+            to="/proto-bundles"
+            className={clsx(
+              "w-8 h-8 flex items-center justify-center rounded transition-colors",
+              location.pathname === '/proto-bundles'
+                ? "text-primary bg-primary/10"
+                : "text-text-muted hover:text-purple-400 hover:bg-bg-light"
+            )}
+            title="Protobuf 解码包"
+          >
+            <PackageIcon size={16} />
+          </Link>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
@@ -591,6 +603,19 @@ export function Sidebar() {
               >
                 <CheckIcon size={12} />
                 <span>健康</span>
+              </Link>
+              <Link
+                to="/proto-bundles"
+                className={clsx(
+                  "flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors",
+                  location.pathname === '/proto-bundles'
+                    ? "text-primary bg-primary/10"
+                    : "text-text-muted hover:text-purple-400 hover:bg-bg-light"
+                )}
+                title="Protobuf 解码包"
+              >
+                <PackageIcon size={12} />
+                <span>Proto</span>
               </Link>
             </div>
             <Link

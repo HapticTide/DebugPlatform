@@ -56,6 +56,7 @@ func configure(_ app: Application) throws {
     app.migrations.add(CreateAppLaunchEvent())
     app.migrations.add(AddDeviceAlias())
     app.migrations.add(CreatePageTimingEvent())
+    app.migrations.add(CreateProtoBundle())
 
     // 运行迁移
     try app.autoMigrate().wait()
@@ -210,6 +211,9 @@ func routes(_ app: Application) throws {
 
     // 系统工具 API
     try api.register(collection: SystemToolController())
+
+    // Protobuf 解码包 API
+    try api.register(collection: ProtoBundleController())
 
     // Token 验证 API
     api.post("auth", "verify") { req async throws -> TokenVerifyResponse in

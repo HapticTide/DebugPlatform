@@ -6,6 +6,7 @@ import { DeviceListPage } from '@/pages/DeviceListPage'
 import { ApiDocsPage } from '@/pages/ApiDocsPage'
 import { HealthPage } from '@/pages/HealthPage'
 import { RulesPage } from '@/pages/RulesPage'
+import { ProtoBundlePage } from '@/pages/ProtoBundlePage'
 import { ToastContainer } from '@/components/ToastContainer'
 import { BreakpointHitNotification } from '@/components/BreakpointHitNotification'
 import { RefreshIndicator } from '@/components/RefreshIndicator'
@@ -47,6 +48,7 @@ function AppContent() {
             <Route path="/" element={<DeviceListPage />} />
             <Route path="/device/:deviceId" element={<DeviceDetailPage />} />
             <Route path="/rules" element={<RulesPage />} />
+            <Route path="/proto-bundles" element={<ProtoBundlePage />} />
             <Route path="/api-docs" element={<ApiDocsPage />} />
             <Route path="/health" element={<HealthPage />} />
           </Routes>

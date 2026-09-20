@@ -13,6 +13,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import clsx from 'clsx'
 import { useProtobufStore } from '@/stores/protobufStore'
+import { useProtoBundleStore } from '@/stores/protoBundleStore'
+import { presentDecoded } from '@/utils/protoDecodeEngine'
 import { WarningIcon, PackageIcon, SparklesIcon, ClipboardIcon, CheckIcon } from './icons'
 import { tryAutoDecode, formatDecodedMessage } from '@/utils/protobufDescriptor'
 import { GroupedFilterSelect } from './GroupedFilterSelect'
@@ -62,6 +64,16 @@ export function BlobCell({
         getMessageTypeByMapping,
     } = useProtobufStore()
 
+    // 全局解码包：列没有单独配置 descriptor 时的兜底来源，省掉逐表重复上传
+    const globalBundle = useProtoBundleStore((s) => s.active)
+    const globalMessageTypes = useProtoBundleStore((s) => s.messageTypes)
+    const decodeWithGlobalBundle = useProtoBundleStore((s) => s.decode)
+    const loadGlobalBundle = useProtoBundleStore((s) => s.load)
+
+    useEffect(() => {
+        void loadGlobalBundle()
+    }, [loadGlobalBundle])
+
     const [isExpanded, setIsExpanded] = useState(false)
     const [viewMode, setViewMode] = useState<ViewMode>('decoded')
     const [decodedData, setDecodedData] = useState<Record<string, unknown> | null>(null)
@@ -100,10 +112,15 @@ export function BlobCell({
     // 是否配置了类型映射
     const hasTypeMapping = !!(columnConfig?.typeSourceColumn && columnConfig?.typeMappings?.length)
 
-    // 获取描述符的所有消息类型
+    // 本列是否落在全局解码包上（没有为这一列单独配过 descriptor）
+    const usingGlobalBundle = !descriptorName && !!globalBundle
+
+    // 获取可选的消息类型：列自己的描述符优先，否则用全局解码包的
     const availableMessageTypes = descriptorName
         ? getDescriptorMessageTypes(descriptorName)
-        : []
+        : usingGlobalBundle
+            ? globalMessageTypes
+            : []
 
     // 当前使用的类型：手动选择 > 映射类型 > 自动检测（禁用时都为空）
     const currentMessageType = disableDescriptorDecode ? '' : (manualSelectedType || mappedType || autoDetectedType || '')
@@ -169,6 +186,20 @@ export function BlobCell({
                 return
             }
 
+            // 这一列没配 descriptor，但有全局解码包：用它按手选的类型解
+            if (typeToUse && usingGlobalBundle) {
+                const outcome = decodeWithGlobalBundle(typeToUse, value)
+                setIsLoading(false)
+                if (outcome.ok) {
+                    setDecodedData(presentDecoded(outcome.value) as Record<string, unknown>)
+                    setDecodeError(null)
+                } else {
+                    setDecodedData(null)
+                    setDecodeError(outcome.error)
+                }
+                return
+            }
+
             // 尝试 Wire Format 解析
             const autoDecoded = tryAutoDecode(value)
             setDecodedData(autoDecoded)
@@ -177,7 +208,7 @@ export function BlobCell({
         }
 
         decodeWithType()
-    }, [value, isExpanded, viewMode, manualSelectedType, mappedType, autoDetectedType, descriptorName, disableDescriptorDecode, decodeBlobWithType])
+    }, [value, isExpanded, viewMode, manualSelectedType, mappedType, autoDetectedType, descriptorName, disableDescriptorDecode, decodeBlobWithType, usingGlobalBundle, decodeWithGlobalBundle])
 
     // 处理选择类型（包括选择"自动匹配"选项）
     const handleTypeChange = (type: string) => {

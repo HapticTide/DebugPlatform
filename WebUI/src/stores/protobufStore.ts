@@ -16,6 +16,8 @@ import {
     loadMappingTableFromFile, 
     matchWithProtobufTypes,
 } from '@/utils/typeMappingTable'
+import { decodeWithRules, presentDecoded } from '@/utils/protoDecodeEngine'
+import { useProtoBundleStore, base64ToBytes } from '@/stores/protoBundleStore'
 
 /** 描述符元信息（关联到表） */
 interface DescriptorMeta {
@@ -342,7 +344,27 @@ export const useProtobufStore = create<ProtobufState>()(
                     return { success: false, error: `描述符 "${descriptorName}" 未找到` }
                 }
 
-                return decodeBlob(descriptor, messageType, blobData)
+                // 走递归引擎：BLOB 里嵌的 bytes 字段（信封套信封）也能一并展开。
+                // 规则取自全局解码包；没有规则时引擎退化为单层解码，与旧行为一致。
+                const rules = useProtoBundleStore.getState().rules
+                try {
+                    const outcome = decodeWithRules(
+                        descriptor.root,
+                        messageType,
+                        base64ToBytes(blobData),
+                        rules
+                    )
+                    if (!outcome.ok) {
+                        return { success: false, error: outcome.error }
+                    }
+                    return {
+                        success: true,
+                        data: presentDecoded(outcome.value) as Record<string, unknown>,
+                    }
+                } catch {
+                    // base64 解不开等输入问题，退回原先的单层实现处理
+                    return decodeBlob(descriptor, messageType, blobData)
+                }
             },
 
             getMessageTypeByMapping: (config: ColumnConfig, rowData: Record<string, unknown>) => {
