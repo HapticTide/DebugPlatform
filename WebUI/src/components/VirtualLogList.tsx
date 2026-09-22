@@ -5,7 +5,7 @@
 // Copyright © 2025 Sun. All rights reserved.
 //
 
-import { useRef, useEffect, useCallback, useMemo, useState } from 'react'
+import { useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { LogEvent, LogLevel } from '@/types'
 import { formatSmartTime, getLogLevelClass } from '@/utils/format'
@@ -18,6 +18,12 @@ import { LoadMoreButton } from './LoadMoreButton'
 
 // 最小行高度（像素）
 const MIN_ROW_HEIGHT = 36
+
+// 判定"停在顶部"的容差（像素）
+const TOP_THRESHOLD = 10
+
+// 程序触发的滚动多久没有新的 scroll 事件即视为结束（毫秒）
+const PROGRAMMATIC_SCROLL_SETTLE_MS = 150
 
 // Log 表格列配置
 const LOG_COLUMNS: ColumnConfig[] = [
@@ -82,6 +88,13 @@ export function VirtualLogList({
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null)
   const lastFirstItemRef = useRef<string | null>(null)
+  // 是否跟随最新日志：只有视口停在顶部才跟随，用户往下翻看历史即暂停
+  const followLatestRef = useRef(true)
+  // 程序触发的滚动（跟随、顶部/底部按钮）不能被误判成用户翻看历史
+  const programmaticScrollRef = useRef(false)
+  const programmaticTimerRef = useRef<number | null>(null)
+  // 暂停跟随时的锚点：视口顶部那条日志的 id，以及它相对视口顶边的偏移
+  const anchorRef = useRef<{ id: string; offset: number } | null>(null)
   const [isAtTop, setIsAtTop] = useState(true)
   const [isAtBottom, setIsAtBottom] = useState(false)
 
@@ -94,12 +107,6 @@ export function VirtualLogList({
   // 跟踪新增项高亮
   const { isNewItem } = useNewItemHighlight(events)
 
-  // 生成稳定的 key
-  const virtualizerKey = useMemo(() => {
-    const firstId = events[0]?.id || 'empty'
-    return `${firstId}-${events.length}`
-  }, [events])
-
   // 虚拟滚动器 - 使用动态大小
   const virtualizer = useVirtualizer({
     count: events.length,
@@ -111,6 +118,36 @@ export function VirtualLogList({
 
   const virtualItems = virtualizer.getVirtualItems()
 
+  // 记录视口顶部那条日志，作为暂停跟随时的位置锚点
+  const captureAnchor = useCallback(() => {
+    const scrollElement = parentRef.current
+    if (!scrollElement) return
+    const scrollTop = scrollElement.scrollTop
+    const items = virtualizer.getVirtualItems()
+    const anchorItem = items.find((item) => item.end > scrollTop) ?? items[0]
+    anchorRef.current = anchorItem
+      ? { id: String(anchorItem.key), offset: anchorItem.start - scrollTop }
+      : null
+  }, [virtualizer])
+
+  // 按当前滚动位置刷新跟随状态：停在顶部才跟随最新，否则记锚点
+  const syncFollowState = useCallback(() => {
+    const scrollElement = parentRef.current
+    if (!scrollElement) return
+    const atTop = scrollElement.scrollTop <= TOP_THRESHOLD
+    followLatestRef.current = atTop
+    if (atTop) {
+      anchorRef.current = null
+    } else {
+      captureAnchor()
+    }
+  }, [captureAnchor])
+
+  // 标记接下来的滚动由程序触发，滚动停下来后再按落点刷新跟随状态
+  const markProgrammaticScroll = useCallback(() => {
+    programmaticScrollRef.current = true
+  }, [])
+
   // 滚动位置监听
   useEffect(() => {
     const scrollElement = parentRef.current
@@ -118,29 +155,56 @@ export function VirtualLogList({
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = scrollElement
-      const atTop = scrollTop <= 10
+      const atTop = scrollTop <= TOP_THRESHOLD
       const atBottom = scrollTop + clientHeight >= scrollHeight - 10
       setIsAtTop(atTop)
       setIsAtBottom(atBottom)
+
+      // 程序滚动期间不改跟随状态，等滚动停下来再按落点判定
+      if (programmaticScrollRef.current) {
+        if (programmaticTimerRef.current !== null) {
+          window.clearTimeout(programmaticTimerRef.current)
+        }
+        programmaticTimerRef.current = window.setTimeout(() => {
+          programmaticTimerRef.current = null
+          programmaticScrollRef.current = false
+          syncFollowState()
+        }, PROGRAMMATIC_SCROLL_SETTLE_MS)
+        return
+      }
+
+      syncFollowState()
     }
 
     // 初始状态
     handleScroll()
 
     scrollElement.addEventListener('scroll', handleScroll, { passive: true })
-    return () => scrollElement.removeEventListener('scroll', handleScroll)
-  }, [])
+    return () => {
+      scrollElement.removeEventListener('scroll', handleScroll)
+      if (programmaticTimerRef.current !== null) {
+        window.clearTimeout(programmaticTimerRef.current)
+        programmaticTimerRef.current = null
+      }
+    }
+  }, [syncFollowState])
 
   // 滚动控制函数
   const scrollToTop = useCallback(() => {
+    // 用户主动回到顶部 = 要求重新跟随最新日志
+    followLatestRef.current = true
+    anchorRef.current = null
+    markProgrammaticScroll()
     virtualizer.scrollToIndex(0, { align: 'start', behavior: 'smooth' })
-  }, [virtualizer])
+  }, [virtualizer, markProgrammaticScroll])
 
   const scrollToBottom = useCallback(() => {
     if (events.length > 0) {
+      followLatestRef.current = false
+      markProgrammaticScroll()
       virtualizer.scrollToIndex(events.length - 1, { align: 'end', behavior: 'smooth' })
     }
-  }, [virtualizer, events.length])
+  }, [virtualizer, events.length, markProgrammaticScroll])
 
   // 暴露滚动控制给父组件
   useEffect(() => {
@@ -154,23 +218,33 @@ export function VirtualLogList({
     }
   }, [onScrollControlsReady, scrollToTop, scrollToBottom, isAtTop, isAtBottom])
 
-  // 当数据变化时强制重新计算
-  useEffect(() => {
-    virtualizer.measure()
-  }, [virtualizerKey, virtualizer])
+  // 新事件插到列表头部后：跟随时滚回顶部，暂停跟随时把视口锚回用户正在看的那条
+  useLayoutEffect(() => {
+    const scrollElement = parentRef.current
+    const firstId = events[0]?.id ?? null
+    const previousFirstId = lastFirstItemRef.current
+    const hasNewItem = firstId !== null && firstId !== previousFirstId
+    lastFirstItemRef.current = firstId
 
-  // 当有新事件添加到列表头部时自动滚动到顶部
-  useEffect(() => {
-    const firstEvent = events[0]
-    const firstId = firstEvent?.id ?? null
-    const hasNewItem = firstId !== null && firstId !== lastFirstItemRef.current
+    if (!scrollElement || !hasNewItem || previousFirstId === null) return
 
-    if (autoScroll && hasNewItem) {
-      virtualizer.scrollToIndex(0, { align: 'start', behavior: 'smooth' })
+    if (autoScroll && followLatestRef.current) {
+      markProgrammaticScroll()
+      // 跟随用瞬时滚动：日志高频到达时 smooth 动画会互相打断
+      virtualizer.scrollToIndex(0, { align: 'start' })
+      return
     }
 
-    lastFirstItemRef.current = firstId
-  }, [events, autoScroll, virtualizer])
+    // 用户正在翻看历史：头部插入的新日志会把视口内容顶下去，按锚点补偿回来
+    const anchor = anchorRef.current
+    if (!anchor) return
+    const anchorIndex = events.findIndex((event) => event.id === anchor.id)
+    if (anchorIndex < 0) return
+    const anchorPlacement = virtualizer.getOffsetForIndex(anchorIndex, 'start')
+    if (!anchorPlacement) return
+    markProgrammaticScroll()
+    scrollElement.scrollTop = anchorPlacement[0] - anchor.offset
+  }, [events, autoScroll, virtualizer, markProgrammaticScroll])
 
   // 渲染行内容
   const renderRowContent = useCallback((event: LogEvent, index: number) => {
@@ -317,7 +391,6 @@ export function VirtualLogList({
       <div ref={parentRef} className="flex-1 overflow-auto font-mono text-sm">
         {events.length > 0 ? (
           <div
-            key={virtualizerKey}
             style={{
               height: `${virtualizer.getTotalSize() + (onLoadMore ? 60 : 0)}px`,
               width: '100%',
@@ -326,10 +399,10 @@ export function VirtualLogList({
           >
             {virtualItems.map((virtualItem) => {
               const event = events[virtualItem.index]
-              const rowKey = `${event.id}-${virtualItem.index}`
               return (
                 <div
-                  key={rowKey}
+                  // key 只用 id：带上 index 会让头部插入新日志时整屏行重建，行高缓存随之作废
+                  key={event.id}
                   data-index={virtualItem.index}
                   ref={virtualizer.measureElement}
                   style={{
