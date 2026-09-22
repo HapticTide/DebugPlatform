@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import protobuf from 'protobufjs'
 import {
+    buildDecodeEvidence,
     decodeWithRules,
     extractPath,
     isUndecodedBytes,
@@ -47,6 +48,19 @@ message TextLeaf {
 message NumberLeaf {
   int64 amount = 1;
 }
+
+enum Mode {
+  MODE_PLAIN = 0;
+  MODE_SEALED = 1;
+}
+
+/* 与 Carrier 同形，但开关字段是 enum、条件字段有 explicit presence */
+message Tagged {
+  int32 kind = 1;
+  optional bool sealed = 2;
+  bytes content = 3;
+  Mode mode = 4;
+}
 `
 
 const root = protobuf.parse(SCHEMA).root
@@ -73,7 +87,34 @@ const rules: DecodeRules = {
             field: 'content',
             rules: [{ switchField: 'kind', when: { field: 'sealed', equals: false } }],
         },
+        {
+            parent: 'sample.Tagged',
+            field: 'content',
+            rules: [{ switchField: 'kind', when: { field: 'sealed', equals: false } }],
+        },
     ],
+}
+
+/**
+ * 按 proto3 语义编码：标量默认值**不上线 wire**。
+ *
+ * 不能用 `encode(type.create({ sealed: false }))` 代替——protobufjs 按 hasOwnProperty
+ * 决定写不写，显式赋的 `false` 会被写进 wire，于是夹具比真实 wire 多了一个字段，
+ * 本文件下面那条「条件按默认值成立」的用例就恒绿，而现网恒黑。
+ */
+function encodeProto3(typeName: string, payload: Record<string, unknown>): Uint8Array {
+    const type = root.lookupType(typeName)
+    const trimmed: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(payload)) {
+        const field = type.fields[key]
+        if (field) {
+            field.resolve()
+            // 与标量默认值相等的项整条丢掉，等价于 SwiftProtobuf / Java protobuf 的行为
+            if (!field.repeated && !field.map && String(value) === String(field.typeDefault)) continue
+        }
+        trimmed[key] = value
+    }
+    return type.encode(type.create(trimmed)).finish()
 }
 
 function encode(typeName: string, payload: Record<string, unknown>): Uint8Array {
@@ -107,6 +148,55 @@ describe('decodeWithRules', () => {
 
         expect(outcome.stats.expanded).toBe(2)
         expect(outcome.stats.undecoded).toBe(0)
+    })
+
+    /**
+     * 这条守的是现网真正踩到的那个坑：`e2eeFlag = false` 不上线 wire，
+     * `toObject({ defaults: false })` 里没有这个键，于是 `when e2eeFlag=false`
+     * 永远不成立，明文信封被一路报成「不满足解码条件」。
+     *
+     * 判据只能是「解开了」：报错文案与 stats 都不足以区分「条件真不成立」
+     * 和「条件字段被 wire 省略了」——两者都是 undecoded + 同一句原因。
+     */
+    it('条件字段被 proto3 省略时按 schema 默认值判定，明文段照样解开', () => {
+        const leaf = encodeProto3('sample.TextLeaf', { text: 'hello' })
+        // sealed=false 不上线，与 SwiftProtobuf / Java protobuf 的真实 wire 一致
+        const carrier = encodeProto3('sample.Carrier', { kind: 1, sealed: false, content: leaf })
+        const bytes = encodeProto3('sample.Container', {
+            items: [{ route: '/demo/text', payload: carrier }],
+        })
+
+        // 前提：这段字节里确实没有 sealed 字段，否则本用例守的东西已不存在
+        const decodedCarrier = root.lookupType('sample.Carrier').decode(carrier)
+        expect(Object.prototype.hasOwnProperty.call(decodedCarrier, 'sealed')).toBe(false)
+
+        const outcome = decodeWithRules(root, 'sample.Container', bytes, rules)
+        expect(outcome.ok).toBe(true)
+        if (!outcome.ok) return
+
+        const item = (outcome.value.items as Record<string, unknown>[])[0]
+        const content = (item.payload as Record<string, unknown>).content as Record<string, unknown>
+        expect(content[TYPE_KEY]).toBe('sample.TextLeaf')
+        expect(content.text).toBe('hello')
+        expect(outcome.stats.undecoded).toBe(0)
+    })
+
+    /**
+     * 反向：有 explicit presence 的字段（proto3 `optional` / oneof 成员）缺失
+     * 是可观测语义「未设置」，不能替它补 false——补了就等于把 unset 当成明文，
+     * 拿着规则去硬解一段可能是密文的字节。
+     */
+    it('有 explicit presence 的条件字段缺失时不补默认值，保持未解码', () => {
+        const leaf = encodeProto3('sample.TextLeaf', { text: 'hello' })
+        const tagged = encodeProto3('sample.Tagged', { kind: 1, content: leaf })
+
+        const outcome = decodeWithRules(root, 'sample.Tagged', tagged, rules)
+        expect(outcome.ok).toBe(true)
+        if (!outcome.ok) return
+
+        expect(isUndecodedBytes(outcome.value.content)).toBe(true)
+        if (!isUndecodedBytes(outcome.value.content)) return
+        expect(outcome.value.content.reason).toContain('sealed=false')
     })
 
     it('when 条件不满足时保留原始字节，并说明原因', () => {
@@ -221,6 +311,66 @@ describe('decodeWithRules', () => {
             'items[0].payload.content',
         ])
         expect(outcome.stats.trace.every((t) => t.ok)).toBe(true)
+    })
+})
+
+describe('buildDecodeEvidence', () => {
+    /**
+     * 证据是拿去和服务端对账的，所以「没解开的那几段」必须是结构化的、带 hex 头的，
+     * 而不是界面上那句给人看的 `⟨未解码 …⟩`——对方要凭头几个字节的 tag 认形态。
+     */
+    it('把未解段导成结构化条目，并带上原始 base64 与版本标记', () => {
+        const bytes = buildNestedContainer({ sealed: true })
+        const outcome = decodeWithRules(root, 'sample.Container', bytes, rules)
+        expect(outcome.ok).toBe(true)
+        if (!outcome.ok) return
+
+        const base64 = btoa(String.fromCharCode(...bytes))
+        const json = JSON.parse(
+            buildDecodeEvidence({
+                messageType: outcome.messageType,
+                value: outcome.value,
+                stats: outcome.stats,
+                base64,
+                sizeBytes: bytes.length,
+                url: '/demo/text?imAcctId=1',
+                direction: 'deliver',
+                descriptor: 'sample_desc',
+                rules: 'sample@deadbee',
+            })
+        )
+
+        expect(json.messageType).toBe('sample.Container')
+        expect(json.descriptor).toBe('sample_desc')
+        expect(json.rules).toBe('sample@deadbee')
+        expect(json.raw.base64).toBe(base64)
+
+        expect(json.undecoded).toHaveLength(1)
+        expect(json.undecoded[0].path).toBe('items[0].payload.content')
+        expect(json.undecoded[0].reason).toContain('sealed=false')
+
+        const content = json.decoded.items[0].payload.content
+        expect(content['@undecoded']).toBe(true)
+        expect(content.sizeBytes).toBeGreaterThan(0)
+        expect(content.hexPreview).toMatch(/^[0-9a-f]{2}( [0-9a-f]{2})*$/)
+    })
+
+    it('全部解开时未解段清单为空数组而不是缺键', () => {
+        const bytes = buildNestedContainer({ sealed: false })
+        const outcome = decodeWithRules(root, 'sample.Container', bytes, rules)
+        expect(outcome.ok).toBe(true)
+        if (!outcome.ok) return
+
+        const json = JSON.parse(
+            buildDecodeEvidence({
+                messageType: outcome.messageType,
+                value: outcome.value,
+                stats: outcome.stats,
+                base64: btoa(String.fromCharCode(...bytes)),
+                sizeBytes: bytes.length,
+            })
+        )
+        expect(json.undecoded).toEqual([])
     })
 })
 

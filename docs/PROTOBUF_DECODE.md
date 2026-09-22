@@ -67,6 +67,22 @@ descriptor 只说某个字段是 `bytes`，不说里面装的是什么。真正�
 
 `oneof` 字段不需要写规则，解码器会自动展开。
 
+### `when` 条件按 schema 默认值判定
+
+proto3 的标量默认值**不上线 wire**：`e2eeFlag = false` 编码时整个字段被省略，报文里
+根本没有这个字节。所以 `when` 的取值判定是「字段在场就用在场的值，不在场就用 descriptor
+声明的默认值」——否则 `when encrypted=false` 这类条件**永远不成立**，本该解开的明文段
+会被一路报成「不满足解码条件（需 encrypted=false）」。
+
+例外是有 explicit presence 的字段：真 `oneof` 成员、proto3 `optional` 合成的 oneof。
+它们的「不在场」是可观测语义（未设置），不补默认值——补了就等于把 unset 当成了 `false`，
+拿着规则去硬解一段可能是密文的字节。
+
+> 这个坑在自造夹具上照不出来。protobufjs 自己编码时会把显式赋的 `false` 写上线
+> （它按 `hasOwnProperty` 决定写不写），而 SwiftProtobuf / Java protobuf 按 proto3 语义
+> 省略。只有真实 wire 才触发，所以 `protoDecodeEngine.test.ts` 里的回归用例必须自己
+> 构造「默认值不上线」的字节。
+
 这份 JSON 一般由 proto 仓在生成 descriptor 时一并产出，不要手写维护——两处各写一份必然漂移。
 
 ## 解不开的东西会如实标出来
@@ -87,3 +103,22 @@ descriptor 只说某个字段是 `bytes`，不说里面装的是什么。真正�
 
 **路径匹配**：`pathTypes` 按 URL 的 path 精确匹配，query 和 host 会被忽略。
 没命中时不会去猜，而是让你手动选类型。
+
+**复制 JSON**：Schema 模式右上角的「复制 JSON」把这一次解码打包成一份可以直接贴给
+服务端的证据：
+
+```jsonc
+{
+  "url": "...", "direction": "deliver",
+  "messageType": "pkg.RspBody",        // 按哪个类型解的——决定字段名是否可信
+  "descriptor": "improto_desc_xxx",    // descriptor 版本
+  "rules": "im-proto@xxxxxxx",         // 规则表版本
+  "sizeBytes": 1852,
+  "decoded": { /* 解出来的树；未展开的段是结构化对象，带 hexPreview */ },
+  "undecoded": [ { "path": "items[0].body", "reason": "..." } ],
+  "raw": { "base64": "..." }           // 原始字节，对方可自行重解
+}
+```
+
+带版本与原始字节是刻意的：少了版本，两边按不同 proto 解出的字段名不可比；少了原始
+字节，对方只能信这边的截图，没法自己重解一遍——争的就从字节变成了截图。

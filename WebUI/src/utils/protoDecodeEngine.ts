@@ -89,6 +89,47 @@ function looseEquals(actual: unknown, expected: string | number | boolean): bool
     return String(actual) === String(expected)
 }
 
+/**
+ * 取 `when` 条件里那个字段的值——**缺键时回落到 schema 声明的默认值**。
+ *
+ * proto3 的标量默认值不上线 wire：`e2eeFlag = false` 编码时整个字段被省略，
+ * 于是 `toObject({ defaults: false })` 的结果里根本没有这个键。直接读会拿到
+ * `undefined`，让 `when e2eeFlag=false` 这类条件**永远不成立**——本该解开的
+ * 明文信封被一路报成「不满足解码条件（需 e2eeFlag=false）」。
+ *
+ * 这个坑在自造夹具上照不出来：protobufjs 自己编码时会把显式赋的 `false`
+ * 写上线（它按 hasOwnProperty 决定写不写），而 SwiftProtobuf / Java protobuf
+ * 按 proto3 语义省略。只有真实 wire 才触发，所以回归测试必须构造「默认值不
+ * 上线」的字节，见 protoDecodeEngine.test.ts。
+ *
+ * 有 explicit presence 的字段除外：真 `oneof` 成员、proto3 `optional` 合成的
+ * oneof，它们的「缺失」本身就是可观测语义（未设置），替它补一个默认值等于
+ * 把 unset 当成了 0 / false。消息类型字段同理，没有隐式默认值。
+ */
+function conditionValue(
+    type: protobuf.Type,
+    siblings: Record<string, unknown>,
+    fieldName: string
+): unknown {
+    if (Object.prototype.hasOwnProperty.call(siblings, fieldName)) return siblings[fieldName]
+
+    const field = type.fields[fieldName]
+    if (!field) return undefined
+
+    field.resolve()
+    if (field.partOf || field.repeated || field.map) return undefined
+    if (field.resolvedType instanceof protobuf.Type) return undefined
+
+    // 枚举在 `enums: String` 下是名字，默认值也要换成名字，否则与字段在场时的形态比不上
+    if (field.resolvedType instanceof protobuf.Enum) {
+        const values = field.resolvedType.values
+        const name = Object.keys(values).find((key) => values[key] === field.typeDefault)
+        return name ?? field.typeDefault
+    }
+
+    return field.typeDefault
+}
+
 function toHexPreview(bytes: Uint8Array): string {
     return Array.from(bytes.slice(0, 16))
         .map((b) => b.toString(16).padStart(2, '0'))
@@ -123,32 +164,39 @@ function asBytes(value: unknown): Uint8Array | null {
     return null
 }
 
-/** 在规则表里找「这个 message 的这个字段」该怎么解 */
+/**
+ * 在规则表里找「这个 message 的这个字段」该怎么解。
+ *
+ * `parent` 既给规则表当键，也用来读同级字段的 schema 默认值——见 conditionValue。
+ */
 function resolveTargetType(
     rules: DecodeRules,
-    parentType: string,
+    parent: protobuf.Type,
     fieldName: string,
     siblings: Record<string, unknown>
 ): { type: string } | { skip: string } {
+    const parentType = normalizeTypeName(parent.fullName)
     const entry = rules.nested.find((n) => n.parent === parentType && n.field === fieldName)
     if (!entry) return { skip: '无解码规则' }
 
+    const sibling = (name: string) => conditionValue(parent, siblings, name)
+
     for (const rule of entry.rules) {
-        if (rule.when && !looseEquals(siblings[rule.when.field], rule.when.equals)) continue
+        if (rule.when && !looseEquals(sibling(rule.when.field), rule.when.equals)) continue
 
         if (rule.decodeAs) return { type: rule.decodeAs }
 
         if (rule.switchField) {
             const table = rules.switchTables[rule.switchField]
             if (!table) return { skip: `开关表 ${rule.switchField} 不存在` }
-            const key = String(siblings[rule.switchField] ?? '')
+            const key = String(sibling(rule.switchField) ?? '')
             const target = table[key]
             if (!target) return { skip: `${rule.switchField}=${key || '(空)'} 未注册类型` }
             return { type: target }
         }
 
         if (rule.byPath) {
-            const path = siblings[rule.byPath.field]
+            const path = sibling(rule.byPath.field)
             if (typeof path !== 'string' || path.length === 0) {
                 return { skip: `${rule.byPath.field} 为空，无法按 path 查表` }
             }
@@ -234,7 +282,6 @@ function expandMessage(
     basePath: string,
     depth: number
 ): Record<string, unknown> {
-    const parentType = normalizeTypeName(type.fullName)
     const result: Record<string, unknown> = { ...object }
 
     for (const field of type.fieldsArray) {
@@ -249,7 +296,7 @@ function expandMessage(
                 if (!bytes) return raw
                 if (bytes.length === 0) return raw
 
-                const resolved = resolveTargetType(ctx.rules, parentType, field.name, object)
+                const resolved = resolveTargetType(ctx.rules, type, field.name, object)
                 if ('skip' in resolved) {
                     ctx.stats.undecoded++
                     ctx.stats.trace.push({ path, messageType: null, ok: false, reason: resolved.skip })
@@ -376,6 +423,99 @@ export function presentDecoded(value: unknown): unknown {
         return out
     }
     return value
+}
+
+/**
+ * 一份可以直接贴给服务端的解码证据。
+ *
+ * 只贴一棵解出来的树是不够的：对方要复核「这段字节到底是什么」，需要知道**按哪个类型
+ * 解的**（决定了字段名是否可信）、**规则表与 descriptor 是哪一版**（两侧不同版本时结论
+ * 不可比），以及**原始 base64**（能自己重解一遍）。少任何一项，争的就变成各自的截图。
+ */
+export interface DecodeEvidence {
+    /** 抓到这段字节的请求 URL */
+    url?: string
+    /** 查表方向 */
+    direction?: 'req' | 'rsp' | 'deliver'
+    /** 实际用来解的消息类型 */
+    messageType: string
+    /** descriptor 包名（哪一版 proto） */
+    descriptor?: string
+    /** 规则表的来源标记（`im-proto@<commit>`） */
+    rules?: string
+    sizeBytes: number
+    /** 解码前是否剥掉了一层 base64 */
+    doubleEncodedBase64?: boolean
+    /** 解出来的树；未展开的 bytes 段是结构化对象而不是一句话 */
+    decoded: unknown
+    /** 没能展开的段落清单——这通常正是要交给服务端看的那部分 */
+    undecoded: Array<{ path: string; messageType: string | null; reason: string }>
+    /** 原始字节，供对方自行重解 */
+    raw: { base64: string }
+}
+
+/**
+ * 导出用的 bytes 段呈现：给机器读，所以结构化，而不是 presentDecoded 的那句 `⟨…⟩`。
+ *
+ * 保留 `hexPreview` 是刻意的——服务端往往只凭头几个字节的 tag / wire type 就能认出
+ * 自己投的是哪种形态（例：顶层第一个字段是 13 还是 1，正是投递体与裸信封之差）。
+ */
+function presentForExport(value: unknown): unknown {
+    if (isUndecodedBytes(value)) {
+        return {
+            '@undecoded': true,
+            sizeBytes: value.size,
+            reason: value.reason,
+            hexPreview: value.preview,
+        }
+    }
+    if (Array.isArray(value)) {
+        return value.map(presentForExport)
+    }
+    if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {}
+        for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+            out[key] = presentForExport(item)
+        }
+        return out
+    }
+    return value
+}
+
+/** 把一次成功的解码打包成证据 JSON 文本（缩进 2，可直接贴进工单）。 */
+export function buildDecodeEvidence(input: {
+    messageType: string
+    value: Record<string, unknown>
+    stats: DecodeStats
+    base64: string
+    sizeBytes: number
+    url?: string
+    direction?: 'req' | 'rsp' | 'deliver'
+    descriptor?: string
+    rules?: string
+    doubleEncodedBase64?: boolean
+}): string {
+    const evidence: DecodeEvidence = {
+        url: input.url,
+        direction: input.direction,
+        messageType: input.messageType,
+        descriptor: input.descriptor,
+        rules: input.rules,
+        sizeBytes: input.sizeBytes,
+        doubleEncodedBase64: input.doubleEncodedBase64,
+        decoded: presentForExport(input.value),
+        undecoded: input.stats.trace
+            .filter((entry) => !entry.ok)
+            .map((entry) => ({
+                path: entry.path,
+                messageType: entry.messageType,
+                reason: entry.reason ?? '未说明',
+            })),
+        raw: { base64: input.base64 },
+    }
+
+    // undefined 的键由 JSON.stringify 自动省略，不必手动清
+    return JSON.stringify(evidence, null, 2)
 }
 
 /**

@@ -9,9 +9,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { JSONTree } from './JSONTree'
-import { PackageIcon } from './icons'
+import { CheckIcon, ClipboardIcon, PackageIcon } from './icons'
 import { useProtoBundleStore, base64ToBytes } from '@/stores/protoBundleStore'
+import { copyToClipboard } from '@/utils/clipboard'
 import {
+    buildDecodeEvidence,
     presentDecoded,
     unwrapBase64Layer,
     type DecodeOutcome,
@@ -34,6 +36,7 @@ export function ProtoSchemaViewer({ base64Data, url, direction = 'req', classNam
 
     const [manualType, setManualType] = useState<string>('')
     const [typeFilter, setTypeFilter] = useState('')
+    const [copied, setCopied] = useState(false)
 
     useEffect(() => {
         void load()
@@ -75,6 +78,35 @@ export function ProtoSchemaViewer({ base64Data, url, direction = 'req', classNam
         if (!root || !effectiveType) return null
         return decode(effectiveType, payload.base64)
     }, [root, effectiveType, payload.base64, decode])
+
+    /**
+     * 把这一次解码打包成证据 JSON 送进剪贴板。
+     *
+     * 带上 descriptor 与规则表版本、原始 base64，是因为这份 JSON 的用途就是拿去和服务端
+     * 对账「这段字节到底是什么」：少了版本，两边按不同 proto 解出的字段名不可比；少了
+     * 原始字节，对方只能信我们的截图，没法自己重解一遍。
+     */
+    const handleCopyJSON = async () => {
+        if (!outcome?.ok) return
+
+        const json = buildDecodeEvidence({
+            messageType: outcome.messageType,
+            value: outcome.value,
+            stats: outcome.stats,
+            base64: payload.base64,
+            sizeBytes: payload.size,
+            url,
+            direction,
+            descriptor: active?.name,
+            rules: rules?.generatedFrom,
+            doubleEncodedBase64: payload.doubleEncoded || undefined,
+        })
+
+        if (await copyToClipboard(json)) {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+        }
+    }
 
     const filteredTypes = useMemo(() => {
         if (!typeFilter) return messageTypes.slice(0, 200)
@@ -128,6 +160,19 @@ export function ProtoSchemaViewer({ base64Data, url, direction = 'req', classNam
                     <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400">
                         已剥离外层 base64
                     </span>
+                )}
+
+                {outcome?.ok && (
+                    <button
+                        onClick={handleCopyJSON}
+                        title="复制解码结果 JSON（含消息类型、descriptor / 规则表版本、未解段清单与原始 base64，可直接贴给服务端）"
+                        className="ml-auto inline-flex items-center gap-1 h-6 px-2 rounded-full bg-gray-800
+                                   border border-gray-700 text-gray-400 hover:text-gray-200 hover:bg-gray-700
+                                   transition-colors leading-none whitespace-nowrap"
+                    >
+                        {copied ? <CheckIcon size={11} /> : <ClipboardIcon size={11} />}
+                        <span>{copied ? '已复制' : '复制 JSON'}</span>
+                    </button>
                 )}
             </div>
 
