@@ -598,6 +598,7 @@ import type {
   DBQueryResponse,
   DBSearchResponse,
   DBTableRowsResponse,
+  DBColumnFilter,
 } from '@/types'
 
 export async function listDatabases(deviceId: string): Promise<DBListDatabasesResponse> {
@@ -622,6 +623,8 @@ export interface FetchTablePageParams {
   orderBy?: string
   ascending?: boolean
   targetRowId?: string
+  /** 列筛选条件，下推到设备端 SQL，分页与计数都只统计命中的行 */
+  filters?: DBColumnFilter[]
 }
 
 export async function fetchTablePage(
@@ -636,6 +639,7 @@ export async function fetchTablePage(
   if (params?.orderBy) searchParams.set('orderBy', params.orderBy)
   if (params?.ascending !== undefined) searchParams.set('ascending', params.ascending.toString())
   if (params?.targetRowId) searchParams.set('targetRowId', params.targetRowId)
+  if (params?.filters?.length) searchParams.set('filters', JSON.stringify(params.filters))
 
   const queryString = searchParams.toString()
   const url = `${API_BASE}/devices/${deviceId}/databases/${dbId}/tables/${table}/rows${queryString ? '?' + queryString : ''}`

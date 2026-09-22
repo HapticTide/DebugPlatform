@@ -130,6 +130,17 @@ struct DBRowDTO: Content {
     let values: [String: String?]
 }
 
+// MARK: - Column Filter DTO
+
+/// 列筛选条件
+///
+/// 由 Web 端下发、设备端拼成 SQL WHERE：`value` 为 "null"（不区分大小写）
+/// 时匹配 NULL 单元格，否则做大小写不敏感的包含匹配
+struct DBColumnFilterDTO: Content {
+    let column: String
+    let value: String
+}
+
 // MARK: - Table Page Result DTO
 
 /// 分页查询结果
@@ -139,6 +150,8 @@ struct DBTablePageResultDTO: Content {
     let page: Int
     let pageSize: Int
     let totalRows: Int?
+    /// 命中列筛选的行数；没有筛选条件时为 nil。分页页数按它算
+    let filteredTotalRows: Int?
     let columns: [DBColumnInfoDTO]
     let rows: [DBRowDTO]
 }
@@ -171,6 +184,7 @@ struct DBCommandDTO: Content {
     let maxResultsPerTable: Int? // 每表最大结果数
     let targetRowId: String? // 目标行 ID（用于跳转定位）
     let rowIds: [String]? // 批量 rowid
+    let filters: [DBColumnFilterDTO]? // 列筛选条件（下推成 SQL WHERE）
 
     init(
         requestId: String,
@@ -185,7 +199,8 @@ struct DBCommandDTO: Content {
         keyword: String? = nil,
         maxResultsPerTable: Int? = nil,
         targetRowId: String? = nil,
-        rowIds: [String]? = nil
+        rowIds: [String]? = nil,
+        filters: [DBColumnFilterDTO]? = nil
     ) {
         self.requestId = requestId
         self.kind = kind
@@ -200,6 +215,7 @@ struct DBCommandDTO: Content {
         self.maxResultsPerTable = maxResultsPerTable
         self.targetRowId = targetRowId
         self.rowIds = rowIds
+        self.filters = filters
     }
 }
 

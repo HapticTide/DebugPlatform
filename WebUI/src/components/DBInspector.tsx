@@ -192,6 +192,9 @@ function SQLQueryErrorDisplay({ error, onApplySuggestion }: SQLQueryErrorDisplay
     )
 }
 
+// 列筛选输入的防抖时长（毫秒）：筛选会打到设备端执行 SQL，不能每敲一个字符就发一次
+const FILTER_DEBOUNCE_MS = 350
+
 export function DBInspector({ deviceId }: DBInspectorProps) {
     const {
         // State
@@ -239,6 +242,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         setShowSchema,
         setSortAndReload,
         setPageAndReload,
+        setColumnFiltersAndReload,
         // SQL 查询 Actions
         setQueryMode,
         setQueryInput,
@@ -519,6 +523,25 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         setColumnFilters({})
         setExpandedFilterColumn(null)
         setExpandedBlobCell(null)
+    }, [selectedTable])
+
+    // 列筛选下推到设备端 SQL：防抖，避免每敲一个字符就查一次设备
+    const appliedFiltersRef = useRef<string>('{}')
+    useEffect(() => {
+        const serialized = JSON.stringify(columnFilters)
+        if (serialized === appliedFiltersRef.current) return
+
+        const timer = setTimeout(() => {
+            appliedFiltersRef.current = serialized
+            void setColumnFiltersAndReload(deviceId, columnFilters)
+        }, FILTER_DEBOUNCE_MS)
+
+        return () => clearTimeout(timer)
+    }, [columnFilters, deviceId, setColumnFiltersAndReload])
+
+    // 切表后 store 已清空筛选，本地记号也要跟着回到初始值
+    useEffect(() => {
+        appliedFiltersRef.current = '{}'
     }, [selectedTable])
 
     // 自动滚动到高亮行并在一段时间后清除高亮
@@ -955,9 +978,13 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         }
     }, [getDisplayPath, copyToClipboard, toast])
 
-    // 根据筛选条件过滤数据（客户端筛选）
+    // 筛选已下推到设备端 SQL 时（响应带 filteredTotalRows），返回的行就是命中行，不再二次过滤；
+    // 设备端 SDK 版本过旧、认不得 filters 参数时退回客户端过滤当前页
+    const isServerFiltered = tableData?.filteredTotalRows !== null && tableData?.filteredTotalRows !== undefined
     const filteredRows = useMemo(() => {
         if (!tableData?.rows) return []
+        if (isServerFiltered) return tableData.rows
+
         const filterEntries = Object.entries(columnFilters)
         if (filterEntries.length === 0) return tableData.rows
 
@@ -970,7 +997,11 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                 return String(cellValue).toLowerCase().includes(filterValue.toLowerCase())
             })
         })
-    }, [tableData?.rows, columnFilters])
+    }, [tableData?.rows, columnFilters, isServerFiltered])
+
+    // 分页按命中筛选的行数算，没有筛选时才是整表行数
+    const effectiveTotalRows = tableData?.filteredTotalRows ?? tableData?.totalRows ?? null
+    const totalPages = effectiveTotalRows !== null ? Math.ceil(effectiveTotalRows / pageSize) : 0
 
     if (dbLoading) {
         return (
@@ -1675,7 +1706,9 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                 <h3 className="font-mono text-sm text-text-primary">{selectedTable}</h3>
                                 {tableData && (
                                     <span className="text-xs text-text-muted">
-                                        {tableData.totalRows?.toLocaleString() ?? '?'} 行
+                                        {isServerFiltered
+                                            ? `命中 ${(effectiveTotalRows ?? 0).toLocaleString()} / ${tableData.totalRows?.toLocaleString() ?? '?'} 行`
+                                            : `${tableData.totalRows?.toLocaleString() ?? '?'} 行`}
                                     </span>
                                 )}
                             </div>
@@ -1994,7 +2027,9 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                     <SearchIcon size={14} className="flex-shrink-0" />
                                     <span className="flex-shrink-0">
                                         已筛选 {Object.keys(columnFilters).length} 列，
-                                        显示 {filteredRows.length} / {tableData?.rows.length ?? 0} 行
+                                        {isServerFiltered
+                                            ? `命中 ${effectiveTotalRows ?? 0} 行`
+                                            : `显示 ${filteredRows.length} / ${tableData?.rows.length ?? 0} 行`}
                                     </span>
                                     <span className="text-text-muted mx-1">|</span>
                                     <div className="flex items-center gap-2 flex-wrap">
@@ -2237,11 +2272,12 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                             )}
                         </div>
 
-                        {/* 分页 */}
-                        {tableData && tableData.totalRows !== null && tableData.totalRows > pageSize && (
+                        {/* 分页：有筛选时按命中行数算页数 */}
+                        {tableData && effectiveTotalRows !== null && effectiveTotalRows > pageSize && (
                             <div className="px-4 py-2 border-t border-border bg-bg-dark/50 flex items-center justify-between">
                                 <span className="text-xs text-text-muted">
-                                    第 {page} 页 / 共 {Math.ceil(tableData.totalRows / pageSize)} 页
+                                    第 {page} 页 / 共 {totalPages} 页
+                                    {isServerFiltered && `（命中 ${effectiveTotalRows} 行）`}
                                 </span>
                                 <div className="flex items-center gap-2">
                                     <button
@@ -2253,7 +2289,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                     </button>
                                     <button
                                         onClick={() => handlePageChange(page + 1)}
-                                        disabled={page >= Math.ceil(tableData.totalRows / pageSize) || isJumpingToMatch}
+                                        disabled={page >= totalPages || isJumpingToMatch}
                                         className="px-3 py-1 bg-bg-light text-text-secondary rounded text-xs hover:bg-bg-lighter disabled:opacity-50 transition-colors"
                                     >
                                         下一页

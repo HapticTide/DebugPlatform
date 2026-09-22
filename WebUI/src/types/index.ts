@@ -454,12 +454,21 @@ export interface DBRow {
   values: Record<string, string | null>
 }
 
+/** 列筛选条件：值为 "null"（不区分大小写）时匹配 NULL 单元格，否则做大小写不敏感的包含匹配 */
+export interface DBColumnFilter {
+  column: string
+  value: string
+}
+
 export interface DBTablePageResult {
   dbId: string
   table: string
   page: number
   pageSize: number
+  /** 整表行数，与筛选无关 */
   totalRows: number | null
+  /** 命中列筛选的行数；没有筛选条件、或设备端 SDK 版本过旧时缺省。分页页数按它算 */
+  filteredTotalRows?: number | null
   columns: DBColumnInfo[]
   rows: DBRow[]
 }

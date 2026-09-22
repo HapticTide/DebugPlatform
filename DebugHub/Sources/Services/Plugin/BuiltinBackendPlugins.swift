@@ -558,6 +558,7 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         let orderBy = req.query[String.self, at: "orderBy"]
         let ascending = req.query[Bool.self, at: "ascending"] ?? true
         let targetRowId = req.query[String.self, at: "targetRowId"]
+        let filters = try parseColumnFilters(req.query[String.self, at: "filters"])
 
         guard DeviceRegistry.shared.getSession(deviceId: deviceId) != nil else {
             throw Abort(.notFound, reason: "Device not connected")
@@ -572,7 +573,8 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
             pageSize: pageSize,
             orderBy: orderBy,
             ascending: ascending,
-            targetRowId: targetRowId
+            targetRowId: targetRowId,
+            filters: filters
         )
 
         let response = try await sendCommandAndWaitResponse(command: command, to: deviceId, timeout: 15)
@@ -592,6 +594,22 @@ public final class DatabaseBackendPlugin: BackendPlugin, @unchecked Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601WithMilliseconds
         return try decoder.decode(DBTablePageResultDTO.self, from: payload)
+    }
+
+    /// 解析 `filters` 查询参数（URL 编码的 JSON 数组），空值返回 nil
+    private func parseColumnFilters(_ raw: String?) throws -> [DBColumnFilterDTO]? {
+        guard let raw, !raw.isEmpty else { return nil }
+
+        guard let data = raw.data(using: .utf8) else {
+            throw Abort(.badRequest, reason: "Invalid filters parameter")
+        }
+
+        do {
+            let filters = try JSONDecoder().decode([DBColumnFilterDTO].self, from: data)
+            return filters.isEmpty ? nil : filters
+        } catch {
+            throw Abort(.badRequest, reason: "Invalid filters parameter")
+        }
     }
 
     func executeQuery(req: Request) async throws -> PluginDBQueryResponse {

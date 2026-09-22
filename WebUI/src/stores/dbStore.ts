@@ -6,7 +6,7 @@
 //
 
 import { create } from 'zustand'
-import type { DBInfo, DBTableInfo, DBColumnInfo, DBTablePageResult, DBQueryResponse, DBQueryError, DBSearchResponse } from '@/types'
+import type { DBInfo, DBTableInfo, DBColumnInfo, DBTablePageResult, DBQueryResponse, DBQueryError, DBSearchResponse, DBColumnFilter } from '@/types'
 import * as api from '@/services/api'
 
 // 数据库排序方式
@@ -42,6 +42,8 @@ interface DBState {
     pageSize: number
     orderBy: string | null
     ascending: boolean
+    /** 已生效的列筛选：columnName -> filterValue，下推到设备端 SQL */
+    columnFilters: Record<string, string>
 
     // SQL 查询
     queryMode: boolean
@@ -73,6 +75,7 @@ interface DBState {
     setSort: (column: string) => void
     setSortAndReload: (deviceId: string, column: string) => Promise<void>
     setPageAndReload: (deviceId: string, page: number) => Promise<void>
+    setColumnFiltersAndReload: (deviceId: string, filters: Record<string, string>) => Promise<void>
 
     // 数据库排序 Actions
     setDbSortOrder: (order: DBSortOrder) => void
@@ -119,6 +122,7 @@ const initialState = {
     dataError: null,
     page: 1,
     pageSize: 100,
+    columnFilters: {},
     orderBy: null,
     ascending: true,
     // SQL 查询
@@ -136,6 +140,13 @@ const initialState = {
     highlightRowId: null,
     pendingTargetRowId: null,
     isJumpingToMatch: false,
+}
+
+/** 把列筛选状态转成请求参数；无筛选时返回 undefined */
+function toFilterParams(columnFilters: Record<string, string>): DBColumnFilter[] | undefined {
+    const entries = Object.entries(columnFilters).filter(([, value]) => value !== '')
+    if (entries.length === 0) return undefined
+    return entries.map(([column, value]) => ({ column, value }))
 }
 
 export const useDBStore = create<DBState>((set, get) => ({
@@ -196,7 +207,7 @@ export const useDBStore = create<DBState>((set, get) => ({
     },
 
     loadTableData: async (deviceId: string, dbId: string, table: string, targetRowId?: string) => {
-        const { page, pageSize, orderBy, ascending, tables } = get()
+        const { page, pageSize, orderBy, ascending, tables, columnFilters } = get()
         set({ dataLoading: true, dataError: null })
         try {
             const result = await api.fetchTablePage(deviceId, dbId, table, {
@@ -205,6 +216,7 @@ export const useDBStore = create<DBState>((set, get) => ({
                 orderBy: orderBy ?? undefined,
                 ascending,
                 targetRowId,
+                filters: toFilterParams(columnFilters),
             })
             
             // 如果使用了 targetRowId，更新当前页码
@@ -267,6 +279,7 @@ export const useDBStore = create<DBState>((set, get) => ({
                 tableData: null,
                 page: 1,
                 orderBy: null,
+                columnFilters: {},
                 // 切换表时重置面板展开状态
                 showSchema: false,
                 queryMode: false,
@@ -305,7 +318,7 @@ export const useDBStore = create<DBState>((set, get) => ({
 
     // 带自动重载的排序
     setSortAndReload: async (deviceId: string, column: string) => {
-        const { orderBy, ascending, selectedDb, selectedTable, pageSize } = get()
+        const { orderBy, ascending, selectedDb, selectedTable, pageSize, columnFilters } = get()
 
         let newOrderBy: string | null = column
         let newAscending = true
@@ -336,6 +349,7 @@ export const useDBStore = create<DBState>((set, get) => ({
                     pageSize: pageSize,
                     orderBy: newOrderBy ?? undefined,
                     ascending: newAscending,
+                    filters: toFilterParams(columnFilters),
                 })
                 set({ tableData: result, dataLoading: false })
             } catch (error) {
@@ -347,7 +361,7 @@ export const useDBStore = create<DBState>((set, get) => ({
 
     // 带自动重载的分页
     setPageAndReload: async (deviceId: string, newPage: number) => {
-        const { selectedDb, selectedTable, pageSize, orderBy, ascending } = get()
+        const { selectedDb, selectedTable, pageSize, orderBy, ascending, columnFilters } = get()
         set({ page: newPage, dataLoading: true })
 
         if (selectedDb && selectedTable) {
@@ -357,12 +371,37 @@ export const useDBStore = create<DBState>((set, get) => ({
                     pageSize,
                     orderBy: orderBy ?? undefined,
                     ascending,
+                    filters: toFilterParams(columnFilters),
                 })
                 set({ tableData: result, dataLoading: false })
             } catch (error) {
                 console.error('Failed to load table data:', error)
                 set({ dataLoading: false })
             }
+        }
+    },
+
+    // 列筛选：条件变化后回到第 1 页重查，页数按命中行数算
+    setColumnFiltersAndReload: async (deviceId: string, filters: Record<string, string>) => {
+        const { selectedDb, selectedTable, pageSize, orderBy, ascending } = get()
+        set({ columnFilters: filters, page: 1 })
+
+        if (!selectedDb || !selectedTable) return
+
+        set({ dataLoading: true, dataError: null })
+        try {
+            const result = await api.fetchTablePage(deviceId, selectedDb, selectedTable, {
+                page: 1,
+                pageSize,
+                orderBy: orderBy ?? undefined,
+                ascending,
+                filters: toFilterParams(filters),
+            })
+            set({ tableData: result, dataLoading: false })
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Failed to load table data'
+            console.error('Failed to load table data:', error)
+            set({ dataLoading: false, dataError: errorMsg })
         }
     },
 
