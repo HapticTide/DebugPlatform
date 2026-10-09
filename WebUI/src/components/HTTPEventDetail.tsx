@@ -763,6 +763,11 @@ export function HTTPEventDetail({
               <HeadersTable headers={event.queryItems || {}} />
             </Section>
 
+            {/* Headers（默认收起，给 Body 让出空间） */}
+            <Section title="Headers" collapsible>
+              <HeadersTable headers={event.requestHeaders} enableRaw />
+            </Section>
+
             {/* Body */}
             <Section title="Body">
               <div className="space-y-2">
@@ -820,16 +825,19 @@ export function HTTPEventDetail({
               </div>
             </Section>
 
-            {/* Headers */}
-            <Section title="Headers">
-              <HeadersTable headers={event.requestHeaders} enableRaw />
-            </Section>
           </div>
         )}
 
         {/* Response Tab */}
         {activeTab === 'response' && (
           <div className="space-y-6">
+            {/* Headers（默认收起，给 Body 让出空间） */}
+            {event.responseHeaders && (
+              <Section title="Headers" collapsible>
+                <HeadersTable headers={event.responseHeaders} enableRaw />
+              </Section>
+            )}
+
             {/* Body */}
             <Section title="Body">
               <div className="space-y-2">
@@ -899,12 +907,6 @@ export function HTTPEventDetail({
               </div>
             </Section>
 
-            {/* Headers */}
-            {event.responseHeaders && (
-              <Section title="Headers">
-                <HeadersTable headers={event.responseHeaders} enableRaw />
-              </Section>
-            )}
 
             {/* Error */}
             {(errorMessage || event.error) && (
@@ -1039,11 +1041,54 @@ function TabButton({
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const SECTION_COLLAPSE_KEY = 'httpDetail.collapsedSections'
+
+function readCollapsed(title: string): boolean {
+  try {
+    const map = JSON.parse(localStorage.getItem(SECTION_COLLAPSE_KEY) ?? '{}')
+    return map[title] ?? true
+  } catch {
+    return true
+  }
+}
+
+function writeCollapsed(title: string, collapsed: boolean) {
+  try {
+    const map = JSON.parse(localStorage.getItem(SECTION_COLLAPSE_KEY) ?? '{}')
+    map[title] = collapsed
+    localStorage.setItem(SECTION_COLLAPSE_KEY, JSON.stringify(map))
+  } catch {
+    // 存储不可用时只影响记忆，不影响展示
+  }
+}
+
+function Section({ title, children, collapsible = false }: { title: string; children: React.ReactNode; collapsible?: boolean }) {
+  // 可收起的 Section 默认收起，折叠状态按标题记忆
+  const [collapsed, setCollapsed] = useState(() => collapsible && readCollapsed(title))
+  const toggle = () => {
+    setCollapsed((prev) => {
+      writeCollapsed(title, !prev)
+      return !prev
+    })
+  }
   return (
     <div className="bg-bg-dark rounded-lg border border-border">
-      <h4 className="text-xs uppercase text-text-muted px-3 py-2 border-b border-border font-medium">{title}</h4>
-      <div className="p-3">{children}</div>
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={toggle}
+          className={clsx(
+            'w-full flex items-center gap-1 text-xs uppercase text-text-muted px-3 py-2 font-medium hover:text-text-primary',
+            !collapsed && 'border-b border-border'
+          )}
+        >
+          {collapsed ? <ChevronRightIcon size={12} /> : <ChevronDownIcon size={12} />}
+          {title}
+        </button>
+      ) : (
+        <h4 className="text-xs uppercase text-text-muted px-3 py-2 border-b border-border font-medium">{title}</h4>
+      )}
+      {!collapsed && <div className="p-3">{children}</div>}
     </div>
   )
 }

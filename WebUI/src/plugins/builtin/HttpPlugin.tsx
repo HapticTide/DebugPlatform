@@ -1,7 +1,7 @@
 // HTTP 请求监控前端插件
 // 包含子功能：Mock 规则、断点调试、混沌工程
 
-import React, { useEffect, useCallback, useState, useMemo } from 'react'
+import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
     FrontendPlugin,
@@ -519,6 +519,47 @@ function HTTPRequestsContent({
     // 滚动控制状态
     const [scrollControls, setScrollControls] = useState<ScrollControls | null>(null)
 
+    // 详情面板宽度（px）；null = 默认 45%。拖动后记忆到 localStorage
+    const splitRef = useRef<HTMLDivElement>(null)
+    const [detailWidth, setDetailWidthState] = useState<number | null>(() => {
+        try {
+            const v = Number(localStorage.getItem('httpDetail.width'))
+            return v > 0 ? v : null
+        } catch {
+            return null
+        }
+    })
+    const setDetailWidth = useCallback((w: number | null) => {
+        setDetailWidthState(w)
+        try {
+            if (w == null) localStorage.removeItem('httpDetail.width')
+            else localStorage.setItem('httpDetail.width', String(Math.round(w)))
+        } catch {
+            // 存储不可用时只影响记忆
+        }
+    }, [])
+    const startResizeDetail = useCallback((e: React.MouseEvent) => {
+        e.preventDefault()
+        const container = splitRef.current
+        if (!container) return
+        const onMove = (ev: MouseEvent) => {
+            const rect = container.getBoundingClientRect()
+            // 左侧列表至少留 300px，详情至少 400px
+            const w = Math.min(Math.max(rect.right - ev.clientX, 400), rect.width - 300)
+            setDetailWidth(w)
+        }
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove)
+            document.removeEventListener('mouseup', onUp)
+            document.body.style.cursor = ''
+            document.body.style.userSelect = ''
+        }
+        document.body.style.cursor = 'col-resize'
+        document.body.style.userSelect = 'none'
+        document.addEventListener('mousemove', onMove)
+        document.addEventListener('mouseup', onUp)
+    }, [setDetailWidth])
+
     return (
         <div className="h-full flex flex-col">
             {/* Toolbar */}
@@ -830,8 +871,8 @@ function HTTPRequestsContent({
             </div>
 
             {/* Split Panel */}
-            <div className="flex-1 flex overflow-hidden min-h-0">
-                <div className="flex-1 min-w-[400px] border-r border-border flex flex-col relative min-h-0">
+            <div ref={splitRef} className="flex-1 flex overflow-hidden min-h-0">
+                <div className="flex-1 min-w-[300px] flex flex-col relative min-h-0 overflow-hidden">
                     {/* 刷新加载覆盖层 */}
                     <ListLoadingOverlay isLoading={httpStore.isLoading} text="刷新 HTTP 列表..." />
 
@@ -907,7 +948,17 @@ function HTTPRequestsContent({
                         </div>
                     )}
                 </div>
-                <div className="w-[45%] min-w-[400px] bg-bg-dark/50">
+                {/* 可拖动分割线：左右拖动调整列表 / 详情宽度 */}
+                <div
+                    onMouseDown={startResizeDetail}
+                    onDoubleClick={() => setDetailWidth(null)}
+                    className="w-1 shrink-0 cursor-col-resize bg-border hover:bg-primary/60 transition-colors"
+                    title="拖动调整宽度，双击恢复默认"
+                />
+                <div
+                    className={clsx('min-w-[400px] bg-bg-dark/50 shrink-0', detailWidth == null && 'w-[45%]')}
+                    style={detailWidth != null ? { width: detailWidth } : undefined}
+                >
                     <HTTPEventDetail
                         event={httpStore.selectedEvent}
                         deviceId={deviceId}
