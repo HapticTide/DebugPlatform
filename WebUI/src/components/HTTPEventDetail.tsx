@@ -769,8 +769,9 @@ export function HTTPEventDetail({
             </Section>
 
             {/* Body */}
+            {/* Body 不封顶：去掉内部查看器的 max-h-96，随详情面板整体滚动到底 */}
             <Section title="Body">
-              <div className="space-y-2">
+              <div className="space-y-2 [&_.max-h-96]:max-h-none">
                 {event.requestBody ? (
                   isProtobufRequest ? (
                     <ProtobufViewer
@@ -839,8 +840,9 @@ export function HTTPEventDetail({
             )}
 
             {/* Body */}
+            {/* Body 不封顶：去掉内部查看器的 max-h-96，随详情面板整体滚动到底 */}
             <Section title="Body">
-              <div className="space-y-2">
+              <div className="space-y-2 [&_.max-h-96]:max-h-none">
                 {event.responseBody ? (
                   canPreviewImageResponse ? (
                     <ImagePreview
