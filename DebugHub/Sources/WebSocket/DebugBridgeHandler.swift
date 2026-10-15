@@ -241,7 +241,8 @@ final class DebugBridgeHandler: @unchecked Sendable {
             RealtimeStreamHandler.shared.broadcast(
                 events: nonPerformanceEvents,
                 deviceId: deviceId,
-                seqNumMap: result.seqNumMap
+                seqNumMap: result.seqNumMap,
+                appSessionId: result.appSessionId
             )
 
             // 将 performance 事件路由到 PerformanceBackendPlugin

@@ -57,6 +57,7 @@ func configure(_ app: Application) throws {
     app.migrations.add(AddDeviceAlias())
     app.migrations.add(CreatePageTimingEvent())
     app.migrations.add(CreateProtoBundle())
+    app.migrations.add(AddAppSessionId())
 
     // 运行迁移
     try app.autoMigrate().wait()

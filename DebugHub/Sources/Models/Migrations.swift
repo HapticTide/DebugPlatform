@@ -350,6 +350,22 @@ struct AddHTTPEventErrorInfo: AsyncMigration {
     }
 }
 
+// MARK: - Add App Session Id
+
+/// HTTP / Log 事件记录入库时设备所处的 App 启动会话，供「仅显示本次启动」按会话而非时间戳筛选
+struct AddAppSessionId: AsyncMigration {
+    // 逐列执行，理由同 AddHTTPEventRedirect
+    func prepare(on database: Database) async throws {
+        try await database.schema("http_events").field("app_session_id", .string).update()
+        try await database.schema("log_events").field("app_session_id", .string).update()
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema("http_events").deleteField("app_session_id").update()
+        try await database.schema("log_events").deleteField("app_session_id").update()
+    }
+}
+
 // MARK: - Add Sequence Number Migration
 
 /// 为 HTTP 事件、Log 事件、WebSocket 帧添加序号字段

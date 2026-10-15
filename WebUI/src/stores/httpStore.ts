@@ -4,6 +4,7 @@ import * as api from '@/services/api'
 import { useRuleStore } from './ruleStore'
 import { useFavoriteUrlStore } from './favoriteUrlStore'
 import { isHTTPEventError } from '@/utils/httpEvent'
+import { isInCurrentSession } from '@/utils/appSession'
 
 // 分组模式
 export type GroupMode = 'none' | 'domain' | 'path'
@@ -102,6 +103,7 @@ interface FilterOptions {
   clearedBeforeTimestamp?: string | null
   showCurrentSessionOnly?: boolean
   sessionStartTimestamp?: string | null
+  currentAppSessionId?: string | null
 }
 
 // 过滤逻辑 - 现在只处理 HTTP 事件，不再包含会话分隔符
@@ -127,9 +129,9 @@ function filterItems(
       if (event.startTime < options.clearedBeforeTimestamp) return false
     }
 
-    // 本次启动过滤：只显示会话开始时间之后的请求
-    if (options?.showCurrentSessionOnly && options?.sessionStartTimestamp && event.startTime) {
-      if (event.startTime < options.sessionStartTimestamp) return false
+    // 本次启动过滤
+    if (options?.showCurrentSessionOnly && !isInCurrentSession(event.appSessionId, event.startTime, options)) {
+      return false
     }
 
     // 方法过滤
@@ -191,8 +193,8 @@ function filterItems(
 
 // 辅助函数：获取当前的清屏过滤选项
 const getFilterOptions = (get: () => HTTPState): FilterOptions => {
-  const { clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
-  return { clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp }
+  const { clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp, currentAppSessionId } = get()
+  return { clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp, currentAppSessionId }
 }
 
 // 辅助函数：重新应用过滤
@@ -201,6 +203,7 @@ const reapplyFilters = (state: HTTPState) => {
     clearedBeforeTimestamp: state.clearedBeforeTimestamp,
     showCurrentSessionOnly: state.showCurrentSessionOnly,
     sessionStartTimestamp: state.sessionStartTimestamp,
+    currentAppSessionId: state.currentAppSessionId,
   })
 }
 
@@ -249,11 +252,12 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
 
       const events = response.items
 
-      const { showCurrentSessionOnly, clearedBeforeTimestamp, sessionStartTimestamp } = get()
+      const { showCurrentSessionOnly, clearedBeforeTimestamp, sessionStartTimestamp, currentAppSessionId } = get()
       const filteredItems = filterItems(events, filters, deviceId, {
         clearedBeforeTimestamp,
         showCurrentSessionOnly,
         sessionStartTimestamp,
+        currentAppSessionId,
       })
 
       // 检查 selectedEventId 是否还在新列表中，如果不在则清除选中
@@ -363,6 +367,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
           clearedBeforeTimestamp: state.clearedBeforeTimestamp,
           showCurrentSessionOnly: state.showCurrentSessionOnly,
           sessionStartTimestamp: state.sessionStartTimestamp,
+          currentAppSessionId: state.currentAppSessionId,
         })
 
         return {
@@ -391,6 +396,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { events, listItems, filteredItems, total: state.total + 1 }
     })
@@ -425,6 +431,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { filters: newFilters, filteredItems }
     })
@@ -441,6 +448,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { filters: newFilters, filteredItems }
     })
@@ -453,6 +461,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { filters: newFilters, filteredItems }
     })
@@ -482,6 +491,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return {
         events,
@@ -531,7 +541,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   },
 
   batchDelete: async (deviceId: string) => {
-    const { selectedIds, events, listItems, filters, currentDeviceId, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
+    const { selectedIds, events, listItems, filters, currentDeviceId, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp, currentAppSessionId } = get()
     if (selectedIds.size === 0) return
 
     try {
@@ -545,6 +555,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         clearedBeforeTimestamp,
         showCurrentSessionOnly,
         sessionStartTimestamp,
+        currentAppSessionId,
       })
       set({
         events: newEvents,
@@ -559,7 +570,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   },
 
   batchFavorite: async (deviceId: string, isFavorite: boolean) => {
-    const { selectedIds, events, listItems, filters, currentDeviceId, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
+    const { selectedIds, events, listItems, filters, currentDeviceId, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp, currentAppSessionId } = get()
     if (selectedIds.size === 0) return
 
     try {
@@ -581,6 +592,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         clearedBeforeTimestamp,
         showCurrentSessionOnly,
         sessionStartTimestamp,
+        currentAppSessionId,
       })
       set({ filteredItems })
 
@@ -611,6 +623,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: value,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { showCurrentSessionOnly: value, filteredItems }
     })
@@ -623,13 +636,22 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: timestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { sessionStartTimestamp: timestamp, filteredItems }
     })
   },
 
   setCurrentAppSessionId: (sessionId: string | null) => {
-    set({ currentAppSessionId: sessionId })
+    set((state) => {
+      const filteredItems = filterItems(state.listItems, state.filters, state.currentDeviceId ?? undefined, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: sessionId,
+      })
+      return { currentAppSessionId: sessionId, filteredItems }
+    })
   },
 }
 ))

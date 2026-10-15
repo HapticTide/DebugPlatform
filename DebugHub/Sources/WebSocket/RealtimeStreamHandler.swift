@@ -260,7 +260,12 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
         }
     }
 
-    func broadcast(events: [DebugEventDTO], deviceId: String, seqNumMap: [String: Int64] = [:]) {
+    func broadcast(
+        events: [DebugEventDTO],
+        deviceId: String,
+        seqNumMap: [String: Int64] = [:],
+        appSessionId: String? = nil
+    ) {
         lock.lock()
         let currentSubscribers = Array(subscribers.values)
         lock.unlock()
@@ -299,6 +304,9 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
                     if let seqNum = seqNumMap[httpEvent.request.id] {
                         dict["seqNum"] = seqNum
                     }
+                    if let appSessionId {
+                        dict["appSessionId"] = appSessionId
+                    }
                     let enrichedData = try JSONSerialization.data(withJSONObject: dict)
                     payloadJSON = String(data: enrichedData, encoding: .utf8) ?? "{}"
 
@@ -329,6 +337,9 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
                     var dict = try JSONSerialization.jsonObject(with: encoder.encode(logEvent)) as? [String: Any] ?? [:]
                     if let seqNum = seqNumMap[logEvent.id] {
                         dict["seqNum"] = seqNum
+                    }
+                    if let appSessionId {
+                        dict["appSessionId"] = appSessionId
                     }
                     let enrichedData = try JSONSerialization.data(withJSONObject: dict)
                     payloadJSON = String(data: enrichedData, encoding: .utf8) ?? "{}"

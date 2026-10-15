@@ -15,6 +15,8 @@ struct IngestResult {
     let extraEvents: [DebugEventDTO]
     /// 事件序号映射：事件 ID -> seqNum
     let seqNumMap: [String: Int64]
+    /// 本批 HTTP / Log 事件入库时打上的 App 启动会话
+    let appSessionId: String?
 }
 
 /// 事件接收器，负责将事件写入数据库
@@ -26,6 +28,9 @@ final class EventIngestor: @unchecked Sendable {
     /// 入库事件并返回入库结果
     /// - Returns: 入库结果，包含额外事件和序号映射
     func ingest(events: [DebugEventDTO], deviceId: String, db: Database) async -> IngestResult {
+        // Probe 事件本身不带启动会话，按入库时设备连着的会话打标：
+        // 上次启动落盘、本次连上后补发的事件会被标成本次（多显示，不会被藏掉）
+        let appSessionId = DeviceRegistry.shared.getSession(deviceId: deviceId)?.deviceInfo.appSessionId
         var extraEvents: [DebugEventDTO] = []
         var seqNumMap: [String: Int64] = [:]
 
@@ -33,7 +38,12 @@ final class EventIngestor: @unchecked Sendable {
             do {
                 switch event {
                 case let .http(httpEvent):
-                    let seqNum = try await ingestHTTPEvent(httpEvent, deviceId: deviceId, db: db)
+                    let seqNum = try await ingestHTTPEvent(
+                        httpEvent,
+                        deviceId: deviceId,
+                        appSessionId: appSessionId,
+                        db: db
+                    )
                     seqNumMap[httpEvent.request.id] = seqNum
 
                 case let .webSocket(wsEvent):
@@ -46,7 +56,12 @@ final class EventIngestor: @unchecked Sendable {
                     }
 
                 case let .log(logEvent):
-                    let seqNum = try await ingestLogEvent(logEvent, deviceId: deviceId, db: db)
+                    let seqNum = try await ingestLogEvent(
+                        logEvent,
+                        deviceId: deviceId,
+                        appSessionId: appSessionId,
+                        db: db
+                    )
                     seqNumMap[logEvent.id] = seqNum
 
                 case .stats:
@@ -63,12 +78,17 @@ final class EventIngestor: @unchecked Sendable {
             }
         }
 
-        return IngestResult(extraEvents: extraEvents, seqNumMap: seqNumMap)
+        return IngestResult(extraEvents: extraEvents, seqNumMap: seqNumMap, appSessionId: appSessionId)
     }
 
     // MARK: - HTTP Event
 
-    private func ingestHTTPEvent(_ event: HTTPEventDTO, deviceId: String, db: Database) async throws -> Int64 {
+    private func ingestHTTPEvent(
+        _ event: HTTPEventDTO,
+        deviceId: String,
+        appSessionId: String?,
+        db: Database
+    ) async throws -> Int64 {
         let encoder = JSONEncoder()
 
         // 编码 timing 数据
@@ -130,7 +150,8 @@ final class EventIngestor: @unchecked Sendable {
             redirectFromId: event.redirectFromId,
             redirectToUrl: event.redirectToUrl,
             isReplay: event.isReplay ?? false,
-            seqNum: seqNum
+            seqNum: seqNum,
+            appSessionId: appSessionId
         )
 
         try await model.save(on: db)
@@ -296,7 +317,12 @@ final class EventIngestor: @unchecked Sendable {
 
     // MARK: - Log Event
 
-    private func ingestLogEvent(_ event: LogEventDTO, deviceId: String, db: Database) async throws -> Int64 {
+    private func ingestLogEvent(
+        _ event: LogEventDTO,
+        deviceId: String,
+        appSessionId: String?,
+        db: Database
+    ) async throws -> Int64 {
         let encoder = JSONEncoder()
 
         // 获取下一个序号
@@ -318,7 +344,8 @@ final class EventIngestor: @unchecked Sendable {
             message: event.message,
             tags: String(data: encoder.encode(event.tags), encoding: .utf8) ?? "[]",
             traceId: event.traceId,
-            seqNum: seqNum
+            seqNum: seqNum,
+            appSessionId: appSessionId
         )
 
         try await model.save(on: db)

@@ -147,6 +147,7 @@ export function parseHTTPEvent(payload: string): HTTPEventSummary {
     redirectFromId: data.redirectFromId ?? null,
     redirectToUrl: data.redirectToUrl ?? null,
     seqNum: data.seqNum ?? 0,
+    appSessionId: data.appSessionId ?? null,
   }
 }
 

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { LogEvent, LogLevel } from '@/types'
 import * as api from '@/services/api'
 import { parseLogSearchQuery, filterLogsWithSearch } from '@/utils/logSearch'
+import { isInCurrentSession } from '@/utils/appSession'
 
 // 日志级别优先级（从低到高）: verbose < debug < info < warning < error
 // 选中某个级别时，显示该级别及更高级别的日志
@@ -27,6 +28,7 @@ interface FilterOptions {
   clearedBeforeTimestamp?: string | null
   showCurrentSessionOnly?: boolean
   sessionStartTimestamp?: string | null
+  currentAppSessionId?: string | null
 }
 
 // 基础过滤逻辑（不含高级搜索）
@@ -39,9 +41,9 @@ function basicFilterEvents(events: LogEvent[], filters: Filters, options?: Filte
       if (event.timestamp < options.clearedBeforeTimestamp) return false
     }
 
-    // 本次启动过滤：只显示会话开始时间之后的日志
-    if (options?.showCurrentSessionOnly && options?.sessionStartTimestamp && event.timestamp) {
-      if (event.timestamp < options.sessionStartTimestamp) return false
+    // 本次启动过滤
+    if (options?.showCurrentSessionOnly && !isInCurrentSession(event.appSessionId, event.timestamp, options)) {
+      return false
     }
 
     // Level 过滤: 只显示大于等于最低级别的日志
@@ -174,7 +176,7 @@ export const useLogStore = create<LogState>((set, get) => ({
   },
 
   fetchEvents: async (deviceId: string) => {
-    const { pageSize, showCurrentSessionOnly, clearedBeforeTimestamp, sessionStartTimestamp } = get()
+    const { pageSize, showCurrentSessionOnly, clearedBeforeTimestamp, sessionStartTimestamp, currentAppSessionId } = get()
     set({ isLoading: true })
 
     try {
@@ -185,6 +187,7 @@ export const useLogStore = create<LogState>((set, get) => ({
         clearedBeforeTimestamp,
         showCurrentSessionOnly,
         sessionStartTimestamp,
+        currentAppSessionId,
       })
       set({
         events: response.items,
@@ -220,6 +223,7 @@ export const useLogStore = create<LogState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { events, filteredEvents, total: state.total + 1 }
     })
@@ -245,6 +249,7 @@ export const useLogStore = create<LogState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { filters: newFilters, filteredEvents }
     })
@@ -257,6 +262,7 @@ export const useLogStore = create<LogState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { filters: newFilters, filteredEvents }
     })
@@ -269,6 +275,7 @@ export const useLogStore = create<LogState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { filters: newFilters, filteredEvents }
     })
@@ -280,6 +287,7 @@ export const useLogStore = create<LogState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       }),
     }))
   },
@@ -329,7 +337,7 @@ export const useLogStore = create<LogState>((set, get) => ({
   },
 
   batchDelete: async (deviceId: string) => {
-    const { selectedIds, events, filters, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
+    const { selectedIds, events, filters, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp, currentAppSessionId } = get()
     if (selectedIds.size === 0) return
 
     try {
@@ -341,6 +349,7 @@ export const useLogStore = create<LogState>((set, get) => ({
           clearedBeforeTimestamp,
           showCurrentSessionOnly,
           sessionStartTimestamp,
+          currentAppSessionId,
         }),
         selectedIds: new Set(),
         total: get().total - selectedIds.size,
@@ -369,6 +378,7 @@ export const useLogStore = create<LogState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: value,
         sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { showCurrentSessionOnly: value, filteredEvents }
     })
@@ -381,17 +391,26 @@ export const useLogStore = create<LogState>((set, get) => ({
         clearedBeforeTimestamp: state.clearedBeforeTimestamp,
         showCurrentSessionOnly: state.showCurrentSessionOnly,
         sessionStartTimestamp: timestamp,
+        currentAppSessionId: state.currentAppSessionId,
       })
       return { sessionStartTimestamp: timestamp, filteredEvents }
     })
   },
 
   setCurrentAppSessionId: (sessionId: string | null) => {
-    set({ currentAppSessionId: sessionId })
+    set((state) => {
+      const filteredEvents = filterEvents(state.events, state.filters, {
+        clearedBeforeTimestamp: state.clearedBeforeTimestamp,
+        showCurrentSessionOnly: state.showCurrentSessionOnly,
+        sessionStartTimestamp: state.sessionStartTimestamp,
+        currentAppSessionId: sessionId,
+      })
+      return { currentAppSessionId: sessionId, filteredEvents }
+    })
   },
 
   loadMore: async (deviceId: string) => {
-    const { pageSize, page, total, events, filters, isLoading, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp } = get()
+    const { pageSize, page, total, events, filters, isLoading, clearedBeforeTimestamp, showCurrentSessionOnly, sessionStartTimestamp, currentAppSessionId } = get()
 
     // 如果正在加载或已经加载完所有数据，不再加载
     if (isLoading || events.length >= total) return
@@ -407,6 +426,7 @@ export const useLogStore = create<LogState>((set, get) => ({
         clearedBeforeTimestamp,
         showCurrentSessionOnly,
         sessionStartTimestamp,
+        currentAppSessionId,
       })
 
       set({

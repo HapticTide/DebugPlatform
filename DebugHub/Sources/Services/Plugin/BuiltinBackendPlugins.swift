@@ -96,7 +96,8 @@ public final class LogBackendPlugin: BackendPlugin, @unchecked Sendable {
             line: event.line,
             message: event.message,
             tags: event.tags.joined(separator: ","),
-            traceId: event.traceId
+            traceId: event.traceId,
+            appSessionId: DeviceRegistry.shared.getSession(deviceId: deviceId)?.deviceInfo.appSessionId
         )
 
         try await model.save(on: db)
@@ -1616,6 +1617,7 @@ struct PluginLogEventItemDTO: Content {
     let subsystem: String?
     let category: String?
     let seqNum: Int64
+    let appSessionId: String?
 
     init(from model: LogEventModel) {
         id = model.id ?? ""
@@ -1625,6 +1627,7 @@ struct PluginLogEventItemDTO: Content {
         subsystem = model.subsystem
         category = model.category
         seqNum = model.seqNum
+        appSessionId = model.appSessionId
     }
 }
 

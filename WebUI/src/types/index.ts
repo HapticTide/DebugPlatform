@@ -68,6 +68,8 @@ export interface HTTPEventSummary {
   redirectFromId: string | null
   redirectToUrl: string | null
   seqNum: number
+  /** Hub 入库时设备所处的 App 启动会话，旧数据为空 */
+  appSessionId?: string | null
 }
 
 export interface HTTPErrorInfo {
@@ -144,6 +146,8 @@ export interface LogEvent {
   tags: string[]
   traceId: string | null
   seqNum: number
+  /** 同 HTTPEventSummary.appSessionId */
+  appSessionId?: string | null
 }
 
 export interface LogEventListResponse {

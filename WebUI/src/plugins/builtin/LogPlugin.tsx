@@ -26,6 +26,7 @@ import { DynamicSearchInput } from '@/components/DynamicSearchInput'
 import { deleteAllLogs, downloadLogs } from '@/services/api'
 import { LogEvent } from '@/types'
 import clsx from 'clsx'
+import { isInCurrentSession } from '@/utils/appSession'
 
 // 插件实现类
 class LogPluginImpl implements FrontendPlugin {
@@ -141,7 +142,7 @@ function LogPluginView({ context, isActive }: PluginRenderProps) {
             const state = useLogStore.getState()
             if (!state.hasMore()) break
             const oldestEvent = state.events[state.events.length - 1]
-            if (!oldestEvent?.timestamp || oldestEvent.timestamp < sessionStartTimestamp) break
+            if (!oldestEvent || !isInCurrentSession(oldestEvent.appSessionId, oldestEvent.timestamp, state)) break
             await state.loadMore(deviceId)
             attempts += 1
         }

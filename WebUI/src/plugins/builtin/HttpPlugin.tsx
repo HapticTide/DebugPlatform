@@ -33,6 +33,7 @@ import { getExportHTTPUrl, getExportHARUrl, deleteAllHTTPEvents } from '@/servic
 import { Checkbox } from '@/components/Checkbox'
 import { Toggle } from '@/components/Toggle'
 import clsx from 'clsx'
+import { isInCurrentSession } from '@/utils/appSession'
 
 // 导入子功能视图组件
 import { MockPluginContent } from './HttpMockPlugin'
@@ -263,7 +264,7 @@ function HttpPluginView({ context, isActive }: PluginRenderProps) {
             const state = useHTTPStore.getState()
             if (!state.hasMore()) break
             const oldestEvent = state.events[state.events.length - 1]
-            if (!oldestEvent?.startTime || oldestEvent.startTime < httpStore.sessionStartTimestamp) break
+            if (!oldestEvent || !isInCurrentSession(oldestEvent.appSessionId, oldestEvent.startTime, state)) break
             await state.loadMore(deviceId)
             attempts += 1
         }

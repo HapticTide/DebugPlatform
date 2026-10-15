@@ -149,7 +149,8 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
             timingJSON: timingJSON,
             redirectFromId: event.redirectFromId,
             redirectToUrl: event.redirectToUrl,
-            isReplay: event.isReplay ?? false
+            isReplay: event.isReplay ?? false,
+            appSessionId: DeviceRegistry.shared.getSession(deviceId: deviceId)?.deviceInfo.appSessionId
         )
 
         try await model.save(on: db)
@@ -251,7 +252,8 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
                 isReplay: event.isReplay,
                 seqNum: event.seqNum,
                 redirectFromId: event.redirectFromId,
-                redirectToUrl: redirectToUrl
+                redirectToUrl: redirectToUrl,
+                appSessionId: event.appSessionId
             )
         }
 
@@ -433,6 +435,7 @@ struct PluginHTTPEventSummaryDTO: Content {
     let seqNum: Int64
     let redirectFromId: String?
     let redirectToUrl: String?
+    let appSessionId: String?
 }
 
 struct PluginHTTPEventDetailDTO: Content {

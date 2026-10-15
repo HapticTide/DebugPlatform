@@ -98,6 +98,10 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
     @Field(key: "seq_num")
     var seqNum: Int64
 
+    /// 入库时设备所处的 App 启动会话；迁移前的旧行和不上报该字段的旧版 Probe 为 nil
+    @OptionalField(key: "app_session_id")
+    var appSessionId: String?
+
     init() {
         // Fluent 需要一个空的初始化器
         // 非 Optional Bool 类型需要默认值
@@ -132,7 +136,8 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
         redirectToUrl: String? = nil,
         isFavorite: Bool = false,
         isReplay: Bool = false,
-        seqNum: Int64 = 0
+        seqNum: Int64 = 0,
+        appSessionId: String? = nil
     ) {
         self.id = id
         self.deviceId = deviceId
@@ -162,6 +167,7 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
         self.isFavorite = isFavorite
         self.isReplay = isReplay
         self.seqNum = seqNum
+        self.appSessionId = appSessionId
     }
 }
 
@@ -495,6 +501,10 @@ final class LogEventModel: Model, Content, @unchecked Sendable {
     @Field(key: "seq_num")
     var seqNum: Int64
 
+    /// 同 HTTPEventModel.appSessionId
+    @OptionalField(key: "app_session_id")
+    var appSessionId: String?
+
     init() {}
 
     init(
@@ -513,7 +523,8 @@ final class LogEventModel: Model, Content, @unchecked Sendable {
         message: String,
         tags: String,
         traceId: String?,
-        seqNum: Int64 = 0
+        seqNum: Int64 = 0,
+        appSessionId: String? = nil
     ) {
         self.id = id
         self.deviceId = deviceId
@@ -531,6 +542,7 @@ final class LogEventModel: Model, Content, @unchecked Sendable {
         self.tags = tags
         self.traceId = traceId
         self.seqNum = seqNum
+        self.appSessionId = appSessionId
     }
 }
 
